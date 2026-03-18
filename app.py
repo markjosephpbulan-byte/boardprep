@@ -524,10 +524,20 @@ def delete_note(user_id, note_id):
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin1234")
 
 
+def check_admin_auth():
+    # Check password from header (sent with every request) OR session
+    header_pw = request.headers.get("X-Admin-Password", "")
+    if header_pw and header_pw == ADMIN_PASSWORD:
+        return True
+    if session.get("is_admin"):
+        return True
+    return False
+
+
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("is_admin"):
+        if not check_admin_auth():
             return jsonify({"error": "Admin access required"}), 403
         return f(*args, **kwargs)
 
@@ -551,7 +561,7 @@ def admin_logout():
 
 @app.route("/api/admin/me", methods=["GET"])
 def admin_me():
-    if not session.get("is_admin"):
+    if not check_admin_auth():
         return jsonify({"error": "Not logged in"}), 401
     return jsonify({"ok": True, "is_admin": True})
 

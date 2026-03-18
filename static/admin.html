@@ -274,14 +274,18 @@
 
 <script>
 let pendingDeleteId = null;
+let adminPassword = '';  // stored in memory after login
+
+// Helper — every admin API call includes the password as a header
+function adminFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}), 'X-Admin-Password': adminPassword };
+  return fetch(url, { ...options, headers });
+}
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 async function boot() {
-  try {
-    const r = await fetch('/api/admin/me');
-    if (r.ok) { showPanel(); loadUsers(); return; }
-  } catch(e) {}
-  // not logged in — show login screen
+  // Can't auto-restore password from memory on page load — always show login
+  // (This is intentional: admin must re-enter password each visit for security)
 }
 
 // ── Login ────────────────────────────────────────────────────────────────────
@@ -300,6 +304,7 @@ async function doAdminLogin() {
     });
     const d = await r.json();
     if (!r.ok) { errEl.textContent = d.error; return; }
+    adminPassword = pw;  // store in memory — sent with every request
     showPanel();
     loadUsers();
   } catch(e) {
@@ -310,7 +315,8 @@ async function doAdminLogin() {
 }
 
 async function doAdminLogout() {
-  await fetch('/api/admin/logout', { method: 'POST' });
+  await adminFetch('/api/admin/logout', { method: 'POST' });
+  adminPassword = '';  // clear from memory
   document.getElementById('adminPanel').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('adminPwInput').value = '';
@@ -325,7 +331,7 @@ function showPanel() {
 async function loadUsers() {
   const tbody = document.getElementById('usersTableBody');
   try {
-    const r = await fetch('/api/admin/users');
+    const r = await adminFetch('/api/admin/users');
     if (!r.ok) { tbody.innerHTML = '<tr><td colspan="5" class="empty-users">Failed to load users.</td></tr>'; return; }
     const users = await r.json();
 
@@ -398,7 +404,7 @@ async function executeDelete() {
   if (btn) { btn.textContent = 'Deleting…'; btn.disabled = true; }
 
   try {
-    const r = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+    const r = await adminFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
     if (!r.ok) { showToast('❌ Delete failed. Try again.'); return; }
     document.getElementById(`row-${id}`)?.remove();
     showToast('✅ Profile deleted successfully.');

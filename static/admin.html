@@ -398,19 +398,28 @@ function closeConfirm() {
 
 async function executeDelete() {
   if (!pendingDeleteId) return;
+
+  // Save id FIRST before closeConfirm() nulls it out
+  const id = pendingDeleteId;
   closeConfirm();
-  const id  = pendingDeleteId;
+
   const btn = document.querySelector(`#row-${id} .btn-danger-sm`);
   if (btn) { btn.textContent = 'Deleting…'; btn.disabled = true; }
 
   try {
     const r = await adminFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
-    if (!r.ok) { showToast('❌ Delete failed. Try again.'); return; }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showToast(`❌ Failed (${r.status}): ${d.error || 'Try again.'}`);
+      if (btn) { btn.textContent = '🗑️ Delete'; btn.disabled = false; }
+      return;
+    }
     document.getElementById(`row-${id}`)?.remove();
     showToast('✅ Profile deleted successfully.');
-    loadUsers(); // refresh stats
+    loadUsers();
   } catch(e) {
-    showToast('❌ Connection error.');
+    showToast('❌ Connection error: ' + e.message);
+    if (btn) { btn.textContent = '🗑️ Delete'; btn.disabled = false; }
   }
 }
 

@@ -93,18 +93,38 @@ async function doRegister() {
   const display_name = document.getElementById('reg-display').value.trim();
   const password     = document.getElementById('reg-password').value;
   const errEl        = document.getElementById('reg-error');
+  const btn          = document.getElementById('reg-btn');
   errEl.textContent  = '';
 
-  const r = await fetch('/api/auth/register', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ username, display_name, password })
-  });
-  const data = await r.json();
-  if (!r.ok) { errEl.textContent = data.error; return; }
+  // Basic client-side checks first
+  if (!username)        { errEl.textContent = 'Please enter a username.'; return; }
+  if (username.length < 3) { errEl.textContent = 'Username must be at least 3 characters.'; return; }
+  if (!password)        { errEl.textContent = 'Please enter a password.'; return; }
+  if (password.length < 4) { errEl.textContent = 'Password must be at least 4 characters.'; return; }
 
-  currentUser = data;
-  subjects = []; notes = [];
-  await enterTracker();
+  // Show loading
+  btn.textContent = 'Creating…';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/auth/register', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, display_name, password })
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      errEl.textContent = data.error || 'Something went wrong. Please try again.';
+      return;
+    }
+    currentUser = data;
+    subjects = []; notes = [];
+    await enterTracker();
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please check your internet and try again.';
+  } finally {
+    btn.textContent = 'Create Profile';
+    btn.disabled = false;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -130,17 +150,32 @@ async function doLogin() {
   if (!loginTarget) return;
   const password = document.getElementById('login-password').value;
   const errEl    = document.getElementById('login-error');
+  const btn      = document.querySelector('#view-login .btn-primary');
   errEl.textContent = '';
 
-  const r = await fetch('/api/auth/login', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ username: loginTarget.username, password })
-  });
-  const data = await r.json();
-  if (!r.ok) { errEl.textContent = data.error; return; }
+  if (!password) { errEl.textContent = 'Please enter your password.'; return; }
 
-  currentUser = data;
-  await enterTracker();
+  btn.textContent = 'Unlocking…';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username: loginTarget.username, password })
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      errEl.textContent = data.error || 'Incorrect password.';
+      return;
+    }
+    currentUser = data;
+    await enterTracker();
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+  } finally {
+    btn.textContent = 'Unlock Profile';
+    btn.disabled = false;
+  }
 }
 
 async function doLogout() {

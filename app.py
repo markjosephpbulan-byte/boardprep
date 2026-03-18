@@ -21,7 +21,12 @@ def load_data():
     if not os.path.exists(DATA_FILE):
         return {"users": []}
     with open(DATA_FILE, "r") as f:
-        return json.load(f)
+        data = json.load(f)
+    # Migrate old format (had "subjects"/"notes" at root) to new format
+    if "users" not in data:
+        data = {"users": []}
+        save_data(data)
+    return data
 
 
 def save_data(data):

@@ -46,13 +46,16 @@
       <div class="auth-form">
         <label>Username</label>
         <input type="text" id="reg-username" placeholder="e.g. juandelacruz" maxlength="30"
-               oninput="this.value=this.value.replace(/\s/g,'')" />
+               oninput="this.value=this.value.replace(/\s/g,'')"
+               onkeydown="if(event.key==='Enter') doRegister()" />
         <label>Display Name <span class="opt">(optional)</span></label>
-        <input type="text" id="reg-display" placeholder="e.g. Juan dela Cruz" maxlength="40"/>
+        <input type="text" id="reg-display" placeholder="e.g. Juan dela Cruz" maxlength="40"
+               onkeydown="if(event.key==='Enter') doRegister()"/>
         <label>Password</label>
-        <input type="password" id="reg-password" placeholder="Min. 4 characters"/>
+        <input type="password" id="reg-password" placeholder="Min. 4 characters"
+               onkeydown="if(event.key==='Enter') doRegister()"/>
         <div class="auth-error" id="reg-error"></div>
-        <button class="btn-primary btn-full" onclick="doRegister()">Create Profile</button>
+        <button class="btn-primary btn-full" id="reg-btn" onclick="doRegister()">Create Profile</button>
         <div class="auth-switch">Already have a profile? <a href="#" onclick="showView('landing')">Go back</a></div>
       </div>
     </div>

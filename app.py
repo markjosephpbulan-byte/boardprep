@@ -517,12 +517,89 @@ def delete_note(user_id, note_id):
     return jsonify({"ok": True})
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  ADMIN
+# ══════════════════════════════════════════════════════════════════════════════
+
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin1234")
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("is_admin"):
+            return jsonify({"error": "Admin access required"}), 403
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+@app.route("/api/admin/login", methods=["POST"])
+def admin_login():
+    body = request.json
+    if body.get("password") != ADMIN_PASSWORD:
+        return jsonify({"error": "Wrong admin password"}), 401
+    session["is_admin"] = True
+    return jsonify({"ok": True})
+
+
+@app.route("/api/admin/logout", methods=["POST"])
+def admin_logout():
+    session.pop("is_admin", None)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/admin/me", methods=["GET"])
+def admin_me():
+    if not session.get("is_admin"):
+        return jsonify({"error": "Not logged in"}), 401
+    return jsonify({"ok": True, "is_admin": True})
+
+
+@app.route("/api/admin/users", methods=["GET"])
+@admin_required
+def admin_list_users():
+    data = load_data()
+    result = []
+    for u in data["users"]:
+        total, done = calc_progress(u)
+        pct = 0 if total == 0 else round((done / total) * 100)
+        result.append({
+            "id": u["id"],
+            "username": u["username"],
+            "display_name": u["display_name"],
+            "avatar": u.get("avatar"),
+            "subject_count": len(u.get("subjects", [])),
+            "notes_count": len(u.get("notes", [])),
+            "progress_pct": pct,
+            "created_at": u["created_at"],
+        })
+    return jsonify(result)
+
+
+@app.route("/api/admin/users/<user_id>", methods=["DELETE"])
+@admin_required
+def admin_delete_user(user_id):
+    data = load_data()
+    before = len(data["users"])
+    data["users"] = [u for u in data["users"] if u["id"] != user_id]
+    if len(data["users"]) == before:
+        return jsonify({"error": "User not found"}), 404
+    save_data(data)
+    return jsonify({"ok": True})
+
+
 # ── Serve frontend ────────────────────────────────────────────────────────────
 
 
 @app.route("/")
 def index():
     return send_from_directory("static", "index.html")
+
+
+@app.route("/admin")
+def admin_page():
+    return send_from_directory("static", "admin.html")
 
 
 @app.route("/<path:path>")

@@ -1,48 +1,293 @@
 /* ══════════════════════════════════════════════════════════════
-   BoardPrep PH — Frontend JS  (Optimistic UI, no flicker)
+   BoardPrep PH — Frontend JS v2 (Auth + Profiles + Tracker)
    ══════════════════════════════════════════════════════════════ */
-
-const API = '';
 
 const SUBJECT_COLORS = ['#4f8ef7','#a78bfa','#34d399','#f97316','#f43f5e','#06b6d4','#eab308','#8b5cf6','#e879f9','#2dd4bf'];
 const NOTE_COLORS    = ['#fef08a','#bbf7d0','#bfdbfe','#fecaca','#e9d5ff','#fed7aa','#d1fae5','#fce7f3'];
 
-let subjects = [];
-let notes    = [];
-let ctx      = {};
+let currentUser  = null;   // logged-in user object
+let loginTarget  = null;   // profile being unlocked
+let subjects     = [];
+let notes        = [];
+let ctx          = {};
+let avatarDataUrl = null;  // pending avatar upload preview
 
 // ══════════════════════════════════════════════════════════════
-//  INIT
+//  BOOT
 // ══════════════════════════════════════════════════════════════
-async function init() {
-  await Promise.all([loadSubjects(), loadNotes()]);
+async function boot() {
   buildColorPickers();
+  // Check if already logged in
+  try {
+    const r = await fetch('/api/auth/me');
+    if (r.ok) {
+      currentUser = await r.json();
+      await enterTracker();
+      return;
+    }
+  } catch(e) {}
+  showView('landing');
+  loadProfiles();
 }
 
-async function loadSubjects() {
+// ══════════════════════════════════════════════════════════════
+//  VIEW ROUTER
+// ══════════════════════════════════════════════════════════════
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+  document.getElementById(`view-${name}`).style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  LANDING — Profile Cards
+// ══════════════════════════════════════════════════════════════
+async function loadProfiles() {
+  const grid = document.getElementById('profilesGrid');
+  grid.innerHTML = '<div class="loading-state">Loading profiles…</div>';
   try {
-    const r = await fetch(`${API}/api/subjects`);
-    subjects = await r.json();
-    renderSubjectsGrid();
-    renderProgressOverview();
-  } catch(e) { console.error(e); }
+    const r = await fetch('/api/profiles');
+    const profiles = await r.json();
+
+    if (profiles.length === 0) {
+      grid.innerHTML = `
+        <div class="loading-state" style="grid-column:1/-1">
+          <div style="font-size:2.5rem;margin-bottom:.75rem">👤</div>
+          <div style="font-size:1rem;color:var(--text2)">No profiles yet.</div>
+          <div style="font-size:.85rem;color:var(--text3);margin-top:4px">Be the first to create one!</div>
+        </div>`;
+      return;
+    }
+
+    grid.innerHTML = '';
+    profiles.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'profile-card';
+      card.onclick = () => openLoginForProfile(p);
+      const avatarHTML = p.avatar
+        ? `<img src="${p.avatar}" alt="${esc(p.display_name)}">`
+        : `<span>${esc(p.display_name[0].toUpperCase())}</span>`;
+      card.innerHTML = `
+        <div class="profile-card-avatar">${avatarHTML}</div>
+        <div class="profile-card-name">${esc(p.display_name)}</div>
+        <div class="profile-card-username">@${esc(p.username)}</div>
+        <div class="profile-card-progress">
+          <div class="profile-card-bar-wrap">
+            <div class="profile-card-bar-fill" style="width:${p.progress_pct}%"></div>
+          </div>
+          <div class="profile-card-pct">${p.progress_pct}% reviewed</div>
+        </div>
+        <div class="profile-card-meta">${p.subject_count} subject${p.subject_count !== 1 ? 's' : ''}</div>
+        <div class="profile-lock">🔒 Password protected</div>`;
+      grid.appendChild(card);
+    });
+  } catch(e) {
+    grid.innerHTML = '<div class="loading-state">Failed to load profiles.</div>';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  AUTH — Register
+// ══════════════════════════════════════════════════════════════
+async function doRegister() {
+  const username     = document.getElementById('reg-username').value.trim();
+  const display_name = document.getElementById('reg-display').value.trim();
+  const password     = document.getElementById('reg-password').value;
+  const errEl        = document.getElementById('reg-error');
+  errEl.textContent  = '';
+
+  const r = await fetch('/api/auth/register', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ username, display_name, password })
+  });
+  const data = await r.json();
+  if (!r.ok) { errEl.textContent = data.error; return; }
+
+  currentUser = data;
+  subjects = []; notes = [];
+  await enterTracker();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  AUTH — Login
+// ══════════════════════════════════════════════════════════════
+function openLoginForProfile(profile) {
+  loginTarget = profile;
+  const avatarEl = document.getElementById('loginAvatar');
+  if (profile.avatar) {
+    avatarEl.innerHTML = `<img src="${profile.avatar}" alt="">`;
+  } else {
+    avatarEl.innerHTML = `<span style="font-size:2rem">${profile.display_name[0].toUpperCase()}</span>`;
+  }
+  document.getElementById('loginTitle').textContent = `Welcome, ${profile.display_name}`;
+  document.getElementById('loginSub').textContent   = '@' + profile.username;
+  document.getElementById('login-password').value   = '';
+  document.getElementById('login-error').textContent = '';
+  showView('login');
+  setTimeout(() => document.getElementById('login-password').focus(), 150);
+}
+
+async function doLogin() {
+  if (!loginTarget) return;
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-error');
+  errEl.textContent = '';
+
+  const r = await fetch('/api/auth/login', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ username: loginTarget.username, password })
+  });
+  const data = await r.json();
+  if (!r.ok) { errEl.textContent = data.error; return; }
+
+  currentUser = data;
+  await enterTracker();
+}
+
+async function doLogout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  currentUser = null; subjects = []; notes = [];
+  closeProfileMenu();
+  showView('landing');
+  loadProfiles();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  TRACKER — Enter
+// ══════════════════════════════════════════════════════════════
+async function enterTracker() {
+  updateHeaderProfile();
+  showView('tracker');
+  await Promise.all([loadSubjects(), loadNotes()]);
+}
+
+function updateHeaderProfile() {
+  if (!currentUser) return;
+  const nameEl   = document.getElementById('headerName');
+  const avatarEl = document.getElementById('headerAvatar');
+  nameEl.textContent = currentUser.display_name;
+  if (currentUser.avatar) {
+    avatarEl.innerHTML = `<img src="${currentUser.avatar}" alt="">`;
+  } else {
+    avatarEl.innerHTML = `<span style="font-size:.9rem">${currentUser.display_name[0].toUpperCase()}</span>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  PROFILE MENU
+// ══════════════════════════════════════════════════════════════
+function toggleProfileMenu() {
+  const menu = document.getElementById('profileMenu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+function closeProfileMenu() {
+  document.getElementById('profileMenu').style.display = 'none';
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.profile-pill') && !e.target.closest('.profile-menu')) closeProfileMenu();
+});
+
+// ══════════════════════════════════════════════════════════════
+//  PROFILE SETTINGS MODAL
+// ══════════════════════════════════════════════════════════════
+function openProfileModal() {
+  closeProfileMenu();
+  document.getElementById('profileDisplayName').value = currentUser.display_name;
+  document.getElementById('profileCurrentPw').value   = '';
+  document.getElementById('profileNewPw').value       = '';
+  document.getElementById('profile-error').textContent = '';
+  avatarDataUrl = null;
+  // Show current avatar
+  const prev = document.getElementById('avatarPreview');
+  const removeBtn = document.getElementById('avatarRemoveBtn');
+  if (currentUser.avatar) {
+    prev.innerHTML = `<img src="${currentUser.avatar}" alt="">`;
+    removeBtn.style.display = 'inline-flex';
+  } else {
+    prev.innerHTML = `<span>${currentUser.display_name[0].toUpperCase()}</span>`;
+    removeBtn.style.display = 'none';
+  }
+  openModal('profileModal');
+}
+
+function previewAvatar(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    avatarDataUrl = e.target.result;
+    document.getElementById('avatarPreview').innerHTML = `<img src="${avatarDataUrl}" alt="">`;
+    document.getElementById('avatarRemoveBtn').style.display = 'inline-flex';
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeAvatarPreview() {
+  avatarDataUrl = 'remove';
+  document.getElementById('avatarPreview').innerHTML = `<span>${currentUser.display_name[0].toUpperCase()}</span>`;
+  document.getElementById('avatarRemoveBtn').style.display = 'none';
+  document.getElementById('avatarInput').value = '';
+}
+
+async function saveProfile() {
+  const errEl = document.getElementById('profile-error');
+  errEl.textContent = '';
+  const uid = currentUser.id;
+
+  // Upload avatar if changed
+  if (avatarDataUrl && avatarDataUrl !== 'remove') {
+    const fileInput = document.getElementById('avatarInput');
+    if (fileInput.files[0]) {
+      const form = new FormData();
+      form.append('avatar', fileInput.files[0]);
+      const r = await fetch(`/api/profiles/${uid}/avatar`, { method: 'POST', body: form });
+      const d = await r.json();
+      if (!r.ok) { errEl.textContent = d.error; return; }
+      currentUser = d;
+    }
+  }
+
+  // Update display name / password
+  const body = { display_name: document.getElementById('profileDisplayName').value.trim() };
+  const newPw = document.getElementById('profileNewPw').value;
+  if (newPw) {
+    body.new_password     = newPw;
+    body.current_password = document.getElementById('profileCurrentPw').value;
+  }
+
+  const r2 = await fetch(`/api/profiles/${uid}/settings`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  const d2 = await r2.json();
+  if (!r2.ok) { errEl.textContent = d2.error; return; }
+
+  currentUser = { ...currentUser, ...d2 };
+  updateHeaderProfile();
+  closeModal('profileModal');
+  showToast('Profile updated!');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SUBJECTS
+// ══════════════════════════════════════════════════════════════
+async function loadSubjects() {
+  const r = await fetch(`/api/profiles/${currentUser.id}/subjects`);
+  subjects = await r.json();
+  renderSubjectsGrid();
+  renderProgressOverview();
 }
 
 async function loadNotes() {
-  try {
-    const r = await fetch(`${API}/api/notes`);
-    notes = await r.json();
-    renderNotes();
-  } catch(e) { console.error(e); }
+  const r = await fetch(`/api/profiles/${currentUser.id}/notes`);
+  notes = await r.json();
+  renderNotes();
 }
 
-// ══════════════════════════════════════════════════════════════
-//  FULL GRID RENDER  (only called on page load / add / delete)
-// ══════════════════════════════════════════════════════════════
+function apiBase() { return `/api/profiles/${currentUser.id}`; }
+
 function renderSubjectsGrid() {
   const grid  = document.getElementById('subjectsGrid');
   const empty = document.getElementById('emptyState');
-
   if (subjects.length === 0) {
     grid.innerHTML = '';
     grid.appendChild(empty);
@@ -57,7 +302,6 @@ function renderSubjectsGrid() {
 function buildSubjectCard(subject) {
   const { total, done } = subjectProgress(subject);
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-
   const card = document.createElement('div');
   card.className = 'subject-card';
   card.id = `subject-${subject.id}`;
@@ -83,8 +327,8 @@ function buildSubjectCard(subject) {
         ${subject.subsections.map(ss => buildSubsectionHTML(subject.id, ss)).join('')}
       </div>
       <div class="add-subsection-row">
-        <input class="inline-input" id="ss-input-${subject.id}" placeholder="Add sub-subject..."
-               onkeydown="handleSSEnter(event,'${subject.id}')" />
+        <input class="inline-input" id="ss-input-${subject.id}" placeholder="Add sub-subject…"
+               onkeydown="handleSSEnter(event,'${subject.id}')"/>
         <button class="btn-add-inline" onclick="quickAddSubsection('${subject.id}')">+ Add</button>
       </div>
     </div>`;
@@ -94,20 +338,18 @@ function buildSubjectCard(subject) {
 function buildSubsectionHTML(subjectId, ss) {
   const topicTotal = ss.topics.length;
   const topicDone  = ss.topics.filter(t => t.done).length;
-  const pct        = topicTotal === 0 ? (ss.done ? 100 : 0) : Math.round((topicDone / topicTotal) * 100);
-  const cbClass    = ss.done ? 'checked' : (topicDone > 0 ? 'partial' : '');
-  const checkMark  = ss.done ? '✓' : (topicDone > 0 ? '–' : '');
-
+  const pct = topicTotal === 0 ? (ss.done ? 100 : 0) : Math.round((topicDone / topicTotal) * 100);
+  const cbClass   = ss.done ? 'checked' : (topicDone > 0 ? 'partial' : '');
+  const checkMark = ss.done ? '✓' : (topicDone > 0 ? '–' : '');
   return `
   <div class="subsection-item" id="ss-${ss.id}">
     <div class="subsection-header" onclick="toggleSubsection('${ss.id}')">
       <div class="custom-checkbox ${cbClass}" id="ss-cb-${ss.id}"
            onclick="event.stopPropagation(); toggleSubsectionDone('${subjectId}','${ss.id}')">${checkMark}</div>
-      <span class="subsection-name ${ss.done ? 'done-text' : ''}" id="ss-name-${ss.id}">${esc(ss.name)}</span>
+      <span class="subsection-name ${ss.done ? 'done-text':''}" id="ss-name-${ss.id}">${esc(ss.name)}</span>
       <span class="subsection-sub-pct" id="ss-pct-${ss.id}">${pct}%</span>
       <div class="sub-actions">
-        <button class="btn-icon" title="Delete sub-subject"
-                onclick="event.stopPropagation(); confirmDelete('subsection','${subjectId}','${ss.id}')">🗑️</button>
+        <button class="btn-icon" onclick="event.stopPropagation(); confirmDelete('subsection','${subjectId}','${ss.id}')">🗑️</button>
       </div>
       <span class="subsection-toggle" id="sst-${ss.id}">▼</span>
     </div>
@@ -116,8 +358,8 @@ function buildSubsectionHTML(subjectId, ss) {
         ${ss.topics.map(t => buildTopicHTML(subjectId, ss.id, t)).join('')}
       </div>
       <div class="add-topic-row">
-        <input class="inline-input" id="t-input-${ss.id}" placeholder="Add topic..."
-               onkeydown="handleTopicEnter(event,'${subjectId}','${ss.id}')" />
+        <input class="inline-input" id="t-input-${ss.id}" placeholder="Add topic…"
+               onkeydown="handleTopicEnter(event,'${subjectId}','${ss.id}')"/>
         <button class="btn-add-inline" onclick="quickAddTopic('${subjectId}','${ss.id}')">+ Add</button>
       </div>
     </div>
@@ -127,21 +369,18 @@ function buildSubsectionHTML(subjectId, ss) {
 function buildTopicHTML(subjectId, ssId, t) {
   return `
   <div class="topic-item" id="t-${t.id}">
-    <div class="topic-checkbox ${t.done ? 'checked' : ''}" id="t-cb-${t.id}"
-         onclick="toggleTopicDone('${subjectId}','${ssId}','${t.id}')">${t.done ? '✓' : ''}</div>
-    <span class="topic-name ${t.done ? 'done-text' : ''}" id="t-name-${t.id}">${esc(t.name)}</span>
-    <button class="btn-icon"
-            onclick="confirmDelete('topic','${subjectId}','${ssId}','${t.id}')">🗑️</button>
+    <div class="topic-checkbox ${t.done ? 'checked':''}" id="t-cb-${t.id}"
+         onclick="toggleTopicDone('${subjectId}','${ssId}','${t.id}')">${t.done ? '✓':''}</div>
+    <span class="topic-name ${t.done ? 'done-text':''}" id="t-name-${t.id}">${esc(t.name)}</span>
+    <button class="btn-icon" onclick="confirmDelete('topic','${subjectId}','${ssId}','${t.id}')">🗑️</button>
   </div>`;
 }
 
-// ══════════════════════════════════════════════════════════════
-//  PROGRESS  (targeted DOM updates only)
-// ══════════════════════════════════════════════════════════════
+// ── Progress ──────────────────────────────────────────────────
 function subjectProgress(s) {
   let total = 0, done = 0;
   s.subsections.forEach(ss => {
-    if (ss.topics.length === 0) { total += 1; if (ss.done) done += 1; }
+    if (!ss.topics.length) { total++; if (ss.done) done++; }
     else { total += ss.topics.length; done += ss.topics.filter(t => t.done).length; }
   });
   return { total, done };
@@ -170,10 +409,8 @@ function renderProgressOverview() {
     chip.id = `chip-${s.id}`;
     chip.innerHTML = `
       <div class="chip-dot" style="background:${s.color}"></div>
-      <span style="font-size:0.78rem; color:var(--text2)">${esc(s.name)}</span>
-      <div class="chip-bar-wrap">
-        <div class="chip-bar-fill" id="chip-bar-${s.id}" style="background:${s.color}; width:${pct}%"></div>
-      </div>
+      <span style="font-size:0.78rem;color:var(--text2)">${esc(s.name)}</span>
+      <div class="chip-bar-wrap"><div class="chip-bar-fill" id="chip-bar-${s.id}" style="background:${s.color};width:${pct}%"></div></div>
       <span class="chip-pct" id="chip-pct-${s.id}" style="color:${s.color}">${pct}%</span>`;
     strip.appendChild(chip);
   });
@@ -191,14 +428,12 @@ function refreshOverallProgress() {
     if (cb) cb.style.width = pct + '%';
     if (cp) cp.textContent = pct + '%';
   });
-  const overallPct = totalAll === 0 ? 0 : Math.round((doneAll / totalAll) * 100);
-  document.getElementById('overallFill').style.width = overallPct + '%';
-  document.getElementById('overallPct').textContent  = overallPct + '%';
+  const overall = totalAll === 0 ? 0 : Math.round((doneAll / totalAll) * 100);
+  document.getElementById('overallFill').style.width = overall + '%';
+  document.getElementById('overallPct').textContent  = overall + '%';
 }
 
-// ══════════════════════════════════════════════════════════════
-//  SUBJECT CRUD
-// ══════════════════════════════════════════════════════════════
+// ── Subject CRUD ──────────────────────────────────────────────
 function openAddSubjectModal() {
   ctx = { mode: 'add' };
   document.getElementById('subjectModalTitle').textContent = 'Add Subject';
@@ -207,7 +442,6 @@ function openAddSubjectModal() {
   openModal('subjectModal');
   setTimeout(() => document.getElementById('subjectNameInput').focus(), 100);
 }
-
 function openEditSubjectModal(id) {
   const s = subjects.find(x => x.id === id);
   if (!s) return;
@@ -217,14 +451,12 @@ function openEditSubjectModal(id) {
   selectColor('subjectColorPicker', s.color);
   openModal('subjectModal');
 }
-
 async function saveSubject() {
   const name  = document.getElementById('subjectNameInput').value.trim();
   if (!name) { showToast('Please enter a subject name'); return; }
   const color = getSelectedColor('subjectColorPicker') || SUBJECT_COLORS[0];
-
   if (ctx.mode === 'add') {
-    const r = await fetch(`${API}/api/subjects`, {
+    const r = await fetch(`${apiBase()}/subjects`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ name, color })
     });
@@ -232,22 +464,18 @@ async function saveSubject() {
     subjects.push(s);
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('subjectsGrid').appendChild(buildSubjectCard(s));
-    // Add chip
     const strip = document.getElementById('subjectProgressStrip');
     const chip  = document.createElement('div');
-    chip.className = 'subject-chip';
-    chip.id = `chip-${s.id}`;
+    chip.className = 'subject-chip'; chip.id = `chip-${s.id}`;
     chip.innerHTML = `
       <div class="chip-dot" style="background:${s.color}"></div>
-      <span style="font-size:0.78rem; color:var(--text2)">${esc(s.name)}</span>
-      <div class="chip-bar-wrap">
-        <div class="chip-bar-fill" id="chip-bar-${s.id}" style="background:${s.color}; width:0%"></div>
-      </div>
+      <span style="font-size:0.78rem;color:var(--text2)">${esc(s.name)}</span>
+      <div class="chip-bar-wrap"><div class="chip-bar-fill" id="chip-bar-${s.id}" style="background:${s.color};width:0%"></div></div>
       <span class="chip-pct" id="chip-pct-${s.id}" style="color:${s.color}">0%</span>`;
     strip.appendChild(chip);
     showToast('Subject added!');
   } else {
-    await fetch(`${API}/api/subjects/${ctx.id}`, {
+    await fetch(`${apiBase()}/subjects/${ctx.id}`, {
       method: 'PUT', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ name, color })
     });
@@ -260,29 +488,18 @@ async function saveSubject() {
       card.querySelector('.card-bar-fill').style.background  = color;
       card.querySelector('.card-pct').style.color = color;
     }
-    const dot = document.querySelector(`#chip-${ctx.id} .chip-dot`);
-    const lbl = document.querySelector(`#chip-${ctx.id} span`);
-    const cb  = document.getElementById(`chip-bar-${ctx.id}`);
-    const cp  = document.getElementById(`chip-pct-${ctx.id}`);
-    if (dot) dot.style.background = color;
-    if (cb)  cb.style.background  = color;
-    if (cp)  cp.style.color       = color;
-    if (lbl) lbl.textContent      = name;
     showToast('Subject updated!');
   }
   closeModal('subjectModal');
 }
 
-// ══════════════════════════════════════════════════════════════
-//  SUBSECTION CRUD
-// ══════════════════════════════════════════════════════════════
+// ── Subsections ───────────────────────────────────────────────
 async function quickAddSubsection(subjectId) {
   const input = document.getElementById(`ss-input-${subjectId}`);
   const name  = input.value.trim();
   if (!name) return;
-  const r  = await fetch(`${API}/api/subjects/${subjectId}/subsections`, {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ name })
+  const r  = await fetch(`${apiBase()}/subjects/${subjectId}/subsections`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name })
   });
   const ss = await r.json();
   const s = subjects.find(x => x.id === subjectId);
@@ -293,138 +510,99 @@ async function quickAddSubsection(subjectId) {
   refreshCardProgress(subjectId);
   showToast('Sub-subject added!');
 }
-
-function handleSSEnter(e, subjectId) {
-  if (e.key === 'Enter') quickAddSubsection(subjectId);
-}
+function handleSSEnter(e, id) { if (e.key === 'Enter') quickAddSubsection(id); }
 
 async function toggleSubsectionDone(subjectId, ssId) {
   const s  = subjects.find(x => x.id === subjectId);
   const ss = s?.subsections.find(x => x.id === ssId);
   if (!ss) return;
-
-  // Flip state instantly (optimistic)
   ss.done = !ss.done;
-
-  const cb    = document.getElementById(`ss-cb-${ssId}`);
-  const name  = document.getElementById(`ss-name-${ssId}`);
-  const pctEl = document.getElementById(`ss-pct-${ssId}`);
-
-  if (cb) {
-    cb.className   = 'custom-checkbox' + (ss.done ? ' checked' : '');
-    cb.textContent = ss.done ? '✓' : '';
-  }
-  if (name) name.className = 'subsection-name' + (ss.done ? ' done-text' : '');
-
-  const topicDone  = ss.topics.filter(t => t.done).length;
-  const topicTotal = ss.topics.length;
-  const pct = topicTotal === 0 ? (ss.done ? 100 : 0) : Math.round((topicDone / topicTotal) * 100);
-  if (pctEl) pctEl.textContent = pct + '%';
-
+  const cb = document.getElementById(`ss-cb-${ssId}`);
+  const nm = document.getElementById(`ss-name-${ssId}`);
+  const pe = document.getElementById(`ss-pct-${ssId}`);
+  if (cb) { cb.className = 'custom-checkbox' + (ss.done ? ' checked' : ''); cb.textContent = ss.done ? '✓' : ''; }
+  if (nm) nm.className = 'subsection-name' + (ss.done ? ' done-text' : '');
+  const td = ss.topics.filter(t => t.done).length, tt = ss.topics.length;
+  const pct = tt === 0 ? (ss.done ? 100 : 0) : Math.round((td / tt) * 100);
+  if (pe) pe.textContent = pct + '%';
   refreshCardProgress(subjectId);
-
-  // API in background — no await needed for optimistic pattern
-  fetch(`${API}/api/subjects/${subjectId}/subsections/${ssId}`, {
-    method: 'PUT', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ done: ss.done })
+  fetch(`${apiBase()}/subjects/${subjectId}/subsections/${ssId}`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ done: ss.done })
   });
 }
 
-// ══════════════════════════════════════════════════════════════
-//  TOPICS CRUD
-// ══════════════════════════════════════════════════════════════
+// ── Topics ────────────────────────────────────────────────────
 async function quickAddTopic(subjectId, ssId) {
   const input = document.getElementById(`t-input-${ssId}`);
   const name  = input.value.trim();
   if (!name) return;
-  const r = await fetch(`${API}/api/subjects/${subjectId}/subsections/${ssId}/topics`, {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ name })
+  const r = await fetch(`${apiBase()}/subjects/${subjectId}/subsections/${ssId}/topics`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name })
   });
-  const t = await r.json();
+  const t  = await r.json();
   const s  = subjects.find(x => x.id === subjectId);
   const ss = s?.subsections.find(x => x.id === ssId);
   if (ss) ss.topics.push(t);
   const list = document.getElementById(`topic-list-${ssId}`);
   if (list) list.insertAdjacentHTML('beforeend', buildTopicHTML(subjectId, ssId, t));
-  // Keep subsection open
   const body   = document.getElementById(`ssb-${ssId}`);
   const toggle = document.getElementById(`sst-${ssId}`);
-  if (body)   body.style.display = 'block';
+  if (body) body.style.display = 'block';
   if (toggle) toggle.classList.add('open');
-  // Update sub-pct
-  const pctEl = document.getElementById(`ss-pct-${ssId}`);
-  if (pctEl && ss) {
-    const done  = ss.topics.filter(tp => tp.done).length;
-    const total = ss.topics.length;
-    pctEl.textContent = Math.round((done / total) * 100) + '%';
+  if (ss) {
+    const d = ss.topics.filter(tp => tp.done).length;
+    const pe = document.getElementById(`ss-pct-${ssId}`);
+    if (pe) pe.textContent = Math.round((d / ss.topics.length) * 100) + '%';
   }
   input.value = '';
   refreshCardProgress(subjectId);
   showToast('Topic added!');
 }
-
-function handleTopicEnter(e, subjectId, ssId) {
-  if (e.key === 'Enter') quickAddTopic(subjectId, ssId);
-}
+function handleTopicEnter(e, sid, ssid) { if (e.key === 'Enter') quickAddTopic(sid, ssid); }
 
 async function toggleTopicDone(subjectId, ssId, topicId) {
   const s  = subjects.find(x => x.id === subjectId);
   const ss = s?.subsections.find(x => x.id === ssId);
   const t  = ss?.topics.find(x => x.id === topicId);
   if (!t) return;
-
-  // Flip state instantly (optimistic)
   t.done = !t.done;
-
-  const cb   = document.getElementById(`t-cb-${topicId}`);
-  const name = document.getElementById(`t-name-${topicId}`);
-  if (cb)   { cb.className = 'topic-checkbox' + (t.done ? ' checked' : ''); cb.textContent = t.done ? '✓' : ''; }
-  if (name) name.className = 'topic-name' + (t.done ? ' done-text' : '');
-
-  // Recalc subsection state
-  const topicDone  = ss.topics.filter(tp => tp.done).length;
-  const topicTotal = ss.topics.length;
-  const subPct     = Math.round((topicDone / topicTotal) * 100);
-
-  const ssCb   = document.getElementById(`ss-cb-${ssId}`);
-  const ssPct  = document.getElementById(`ss-pct-${ssId}`);
-  const ssName = document.getElementById(`ss-name-${ssId}`);
-
-  if (ssPct) ssPct.textContent = subPct + '%';
-
-  if (topicDone === topicTotal && topicTotal > 0) {
+  const cb = document.getElementById(`t-cb-${topicId}`);
+  const nm = document.getElementById(`t-name-${topicId}`);
+  if (cb) { cb.className = 'topic-checkbox' + (t.done ? ' checked' : ''); cb.textContent = t.done ? '✓' : ''; }
+  if (nm) nm.className = 'topic-name' + (t.done ? ' done-text' : '');
+  const td = ss.topics.filter(tp => tp.done).length, tt = ss.topics.length;
+  const ssCb = document.getElementById(`ss-cb-${ssId}`);
+  const ssPe = document.getElementById(`ss-pct-${ssId}`);
+  const ssNm = document.getElementById(`ss-name-${ssId}`);
+  if (ssPe) ssPe.textContent = Math.round((td / tt) * 100) + '%';
+  if (td === tt && tt > 0) {
     ss.done = true;
-    if (ssCb)   { ssCb.className = 'custom-checkbox checked'; ssCb.textContent = '✓'; }
-    if (ssName) ssName.className = 'subsection-name done-text';
-  } else if (topicDone === 0) {
+    if (ssCb) { ssCb.className = 'custom-checkbox checked'; ssCb.textContent = '✓'; }
+    if (ssNm) ssNm.className = 'subsection-name done-text';
+  } else if (td === 0) {
     ss.done = false;
-    if (ssCb)   { ssCb.className = 'custom-checkbox'; ssCb.textContent = ''; }
-    if (ssName) ssName.className = 'subsection-name';
+    if (ssCb) { ssCb.className = 'custom-checkbox'; ssCb.textContent = ''; }
+    if (ssNm) ssNm.className = 'subsection-name';
   } else {
     ss.done = false;
-    if (ssCb)   { ssCb.className = 'custom-checkbox partial'; ssCb.textContent = '–'; }
-    if (ssName) ssName.className = 'subsection-name';
+    if (ssCb) { ssCb.className = 'custom-checkbox partial'; ssCb.textContent = '–'; }
+    if (ssNm) ssNm.className = 'subsection-name';
   }
-
   refreshCardProgress(subjectId);
-
-  // API in background
-  fetch(`${API}/api/subjects/${subjectId}/subsections/${ssId}/topics/${topicId}`, {
-    method: 'PUT', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ done: t.done })
+  fetch(`${apiBase()}/subjects/${subjectId}/subsections/${ssId}/topics/${topicId}`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ done: t.done })
   });
 }
 
 // ══════════════════════════════════════════════════════════════
-//  NOTES CRUD
+//  NOTES
 // ══════════════════════════════════════════════════════════════
 function renderNotes() {
   const list  = document.getElementById('notesList');
   const badge = document.getElementById('notesBadge');
   badge.textContent = notes.length;
-  if (notes.length === 0) {
-    list.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:0.85rem;">No notes yet.<br>Click "+ New Note" to add one!</div>`;
+  if (!notes.length) {
+    list.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:.85rem">No notes yet.<br>Click "+ New Note" to add one!</div>`;
     return;
   }
   list.innerHTML = notes.map(n => `
@@ -435,7 +613,6 @@ function renderNotes() {
       <div class="note-card-meta">${formatDate(n.updated_at)}</div>
     </div>`).join('');
 }
-
 function openAddNoteModal() {
   ctx = { mode: 'add' };
   document.getElementById('noteModalTitle').textContent = 'New Note';
@@ -445,7 +622,6 @@ function openAddNoteModal() {
   openModal('noteModal');
   setTimeout(() => document.getElementById('noteTitleInput').focus(), 100);
 }
-
 function openEditNoteModal(id) {
   const n = notes.find(x => x.id === id);
   if (!n) return;
@@ -456,29 +632,23 @@ function openEditNoteModal(id) {
   selectColor('noteColorPicker', n.color);
   openModal('noteModal');
 }
-
 async function saveNote() {
   const title   = document.getElementById('noteTitleInput').value.trim() || 'Untitled';
   const content = document.getElementById('noteContentInput').value.trim();
   const color   = getSelectedColor('noteColorPicker') || NOTE_COLORS[0];
   if (ctx.mode === 'add') {
-    const r = await fetch(`${API}/api/notes`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ title, content, color })
+    const r = await fetch(`${apiBase()}/notes`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ title, content, color })
     });
     const n = await r.json();
     notes.unshift(n);
     showToast('Note saved!');
   } else {
-    await fetch(`${API}/api/notes/${ctx.id}`, {
-      method: 'PUT', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ title, content, color })
+    await fetch(`${apiBase()}/notes/${ctx.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ title, content, color })
     });
     const idx = notes.findIndex(x => x.id === ctx.id);
-    if (idx !== -1) {
-      notes[idx].title = title; notes[idx].content = content;
-      notes[idx].color = color; notes[idx].updated_at = new Date().toISOString();
-    }
+    if (idx !== -1) { notes[idx] = { ...notes[idx], title, content, color, updated_at: new Date().toISOString() }; }
     showToast('Note updated!');
   }
   closeModal('noteModal');
@@ -489,58 +659,41 @@ async function saveNote() {
 //  DELETE
 // ══════════════════════════════════════════════════════════════
 function confirmDelete(type, ...ids) {
-  const messages = {
-    subject:    'Delete this subject and ALL its sub-subjects and topics?',
-    subsection: 'Delete this sub-subject and all its topics?',
-    topic:      'Delete this topic?',
-    note:       'Delete this note?'
-  };
-  document.getElementById('confirmMessage').textContent = messages[type];
+  const msgs = { subject: 'Delete this subject and ALL its content?', subsection: 'Delete this sub-subject and all its topics?', topic: 'Delete this topic?', note: 'Delete this note?' };
+  document.getElementById('confirmMessage').textContent = msgs[type];
   document.getElementById('confirmDeleteBtn').onclick = () => executeDelete(type, ...ids);
   openModal('confirmModal');
 }
-
 async function executeDelete(type, ...ids) {
   closeModal('confirmModal');
   if (type === 'subject') {
-    const [subjectId] = ids;
-    await fetch(`${API}/api/subjects/${subjectId}`, { method: 'DELETE' });
-    subjects = subjects.filter(x => x.id !== subjectId);
-    document.getElementById(`subject-${subjectId}`)?.remove();
-    document.getElementById(`chip-${subjectId}`)?.remove();
-    if (subjects.length === 0) {
-      const grid  = document.getElementById('subjectsGrid');
-      const empty = document.getElementById('emptyState');
-      grid.appendChild(empty);
-      empty.style.display = 'block';
-    }
+    await fetch(`${apiBase()}/subjects/${ids[0]}`, { method: 'DELETE' });
+    subjects = subjects.filter(x => x.id !== ids[0]);
+    document.getElementById(`subject-${ids[0]}`)?.remove();
+    document.getElementById(`chip-${ids[0]}`)?.remove();
+    if (!subjects.length) { const g = document.getElementById('subjectsGrid'); const e = document.getElementById('emptyState'); g.appendChild(e); e.style.display = 'block'; }
     refreshOverallProgress();
     showToast('Subject deleted');
   } else if (type === 'subsection') {
-    const [subjectId, ssId] = ids;
-    await fetch(`${API}/api/subjects/${subjectId}/subsections/${ssId}`, { method: 'DELETE' });
-    const s = subjects.find(x => x.id === subjectId);
-    if (s) s.subsections = s.subsections.filter(x => x.id !== ssId);
-    document.getElementById(`ss-${ssId}`)?.remove();
-    refreshCardProgress(subjectId);
+    const [sid, ssid] = ids;
+    await fetch(`${apiBase()}/subjects/${sid}/subsections/${ssid}`, { method: 'DELETE' });
+    const s = subjects.find(x => x.id === sid);
+    if (s) s.subsections = s.subsections.filter(x => x.id !== ssid);
+    document.getElementById(`ss-${ssid}`)?.remove();
+    refreshCardProgress(sid);
     showToast('Sub-subject deleted');
   } else if (type === 'topic') {
-    const [subjectId, ssId, topicId] = ids;
-    await fetch(`${API}/api/subjects/${subjectId}/subsections/${ssId}/topics/${topicId}`, { method: 'DELETE' });
-    const s  = subjects.find(x => x.id === subjectId);
-    const ss = s?.subsections.find(x => x.id === ssId);
-    if (ss) ss.topics = ss.topics.filter(x => x.id !== topicId);
-    document.getElementById(`t-${topicId}`)?.remove();
-    if (ss) {
-      const done  = ss.topics.filter(t => t.done).length;
-      const total = ss.topics.length;
-      const pctEl = document.getElementById(`ss-pct-${ssId}`);
-      if (pctEl) pctEl.textContent = (total === 0 ? 0 : Math.round((done / total) * 100)) + '%';
-    }
-    refreshCardProgress(subjectId);
+    const [sid, ssid, tid] = ids;
+    await fetch(`${apiBase()}/subjects/${sid}/subsections/${ssid}/topics/${tid}`, { method: 'DELETE' });
+    const s = subjects.find(x => x.id === sid);
+    const ss = s?.subsections.find(x => x.id === ssid);
+    if (ss) ss.topics = ss.topics.filter(x => x.id !== tid);
+    document.getElementById(`t-${tid}`)?.remove();
+    if (ss) { const pe = document.getElementById(`ss-pct-${ssid}`); const d = ss.topics.filter(t => t.done).length; if (pe) pe.textContent = (ss.topics.length ? Math.round((d / ss.topics.length) * 100) : 0) + '%'; }
+    refreshCardProgress(sid);
     showToast('Topic deleted');
   } else if (type === 'note') {
-    await fetch(`${API}/api/notes/${ids[0]}`, { method: 'DELETE' });
+    await fetch(`${apiBase()}/notes/${ids[0]}`, { method: 'DELETE' });
     notes = notes.filter(x => x.id !== ids[0]);
     renderNotes();
     showToast('Note deleted');
@@ -558,34 +711,24 @@ function toggleSubsection(ssId) {
   body.style.display = isOpen ? 'none' : 'block';
   toggle.classList.toggle('open', !isOpen);
 }
-
 function toggleNotesSidebar() {
   document.getElementById('notesSidebar').classList.toggle('open');
   document.getElementById('sidebarOverlay').classList.toggle('open');
 }
-
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
+  t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2200);
 }
-
 function esc(str) {
   if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-
 function formatDate(iso) {
   if (!iso) return '';
-  return new Date(iso).toLocaleDateString('en-PH', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-  });
+  return new Date(iso).toLocaleDateString('en-PH', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
 }
 
 // ── Color Pickers ──────────────────────────────────────────────
@@ -593,25 +736,21 @@ function buildColorPickers() {
   buildPicker('subjectColorPicker', SUBJECT_COLORS, SUBJECT_COLORS[0]);
   buildPicker('noteColorPicker',    NOTE_COLORS,    NOTE_COLORS[0]);
 }
-
 function buildPicker(containerId, colors, defaultColor) {
   const el = document.getElementById(containerId);
   el.innerHTML = '';
   colors.forEach(c => {
     const sw = document.createElement('div');
     sw.className = 'color-swatch' + (c === defaultColor ? ' selected' : '');
-    sw.style.background = c;
-    sw.dataset.color = c;
+    sw.style.background = c; sw.dataset.color = c;
     sw.onclick = () => selectColor(containerId, c);
     el.appendChild(sw);
   });
 }
-
 function selectColor(containerId, color) {
   document.querySelectorAll(`#${containerId} .color-swatch`)
     .forEach(sw => sw.classList.toggle('selected', sw.dataset.color === color));
 }
-
 function getSelectedColor(containerId) {
   const sw = document.querySelector(`#${containerId} .color-swatch.selected`);
   return sw ? sw.dataset.color : null;
@@ -620,19 +759,13 @@ function getSelectedColor(containerId) {
 // ── Keyboard shortcuts ──────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    ['subjectModal','subsectionModal','topicModal','noteModal','confirmModal'].forEach(closeModal);
-    const sidebar = document.getElementById('notesSidebar');
-    if (sidebar.classList.contains('open')) toggleNotesSidebar();
+    ['subjectModal','noteModal','profileModal','confirmModal'].forEach(closeModal);
+    if (document.getElementById('notesSidebar')?.classList.contains('open')) toggleNotesSidebar();
   }
 });
-
-document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-  backdrop.addEventListener('click', e => {
-    if (e.target === backdrop) backdrop.classList.remove('open');
-  });
+document.querySelectorAll('.modal-backdrop').forEach(b => {
+  b.addEventListener('click', e => { if (e.target === b) b.classList.remove('open'); });
 });
 
 // ══════════════════════════════════════════════════════════════
-//  BOOT
-// ══════════════════════════════════════════════════════════════
-init();
+boot();

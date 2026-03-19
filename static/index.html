@@ -37,7 +37,7 @@
   </main>
 </div>
 
-<!-- 2. REGISTER -->
+<!-- 2. REGISTER — Step 1: Fill in details -->
 <div id="view-register" class="view" style="display:none">
   <div class="auth-wrap">
     <div class="auth-card">
@@ -48,16 +48,45 @@
         <label>Username</label>
         <input type="text" id="reg-username" placeholder="e.g. juandelacruz" maxlength="30"
                oninput="this.value=this.value.replace(/\s/g,'')"
-               onkeydown="if(event.key==='Enter') doRegister()" />
+               onkeydown="if(event.key==='Enter') doRequestCode()" />
         <label>Display Name <span class="opt">(optional)</span></label>
         <input type="text" id="reg-display" placeholder="e.g. Juan dela Cruz" maxlength="40"
-               onkeydown="if(event.key==='Enter') doRegister()"/>
+               onkeydown="if(event.key==='Enter') doRequestCode()"/>
+        <label>Email Address</label>
+        <input type="email" id="reg-email" placeholder="e.g. juan@gmail.com"
+               onkeydown="if(event.key==='Enter') doRequestCode()"/>
         <label>Password</label>
         <input type="password" id="reg-password" placeholder="Min. 4 characters"
-               onkeydown="if(event.key==='Enter') doRegister()"/>
+               onkeydown="if(event.key==='Enter') doRequestCode()"/>
         <div class="auth-error" id="reg-error"></div>
-        <button class="btn-primary btn-full" id="reg-btn" onclick="doRegister()">Create Profile</button>
+        <button class="btn-primary btn-full" id="reg-btn" onclick="doRequestCode()">Send Verification Code</button>
         <div class="auth-switch">Already have a profile? <a href="#" onclick="showView('landing')">Go back</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 2b. REGISTER — Step 2: Enter verification code -->
+<div id="view-verify" class="view" style="display:none">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">📚 <span>BoardPrep PH</span></div>
+      <div class="verify-icon">📧</div>
+      <h2>Check your email</h2>
+      <p class="auth-sub" id="verify-sub">We sent a 6-digit code to your email</p>
+      <div class="auth-form">
+        <label>Verification Code</label>
+        <input type="text" id="verify-code" placeholder="Enter 6-digit code"
+               maxlength="6" inputmode="numeric"
+               oninput="this.value=this.value.replace(/\D/g,'')"
+               onkeydown="if(event.key==='Enter') doVerifyCode()"
+               class="verify-code-input"/>
+        <div class="auth-error" id="verify-error"></div>
+        <button class="btn-primary btn-full" id="verify-btn" onclick="doVerifyCode()">Verify & Create Profile</button>
+        <div class="auth-switch">
+          Didn't receive it? <a href="#" id="resend-link" onclick="doResendCode()">Resend code</a>
+          &nbsp;·&nbsp; <a href="#" onclick="showView('register')">Change details</a>
+        </div>
       </div>
     </div>
   </div>

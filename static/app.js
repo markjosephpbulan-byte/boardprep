@@ -88,43 +88,124 @@ async function loadProfiles() {
 // ══════════════════════════════════════════════════════════════
 //  AUTH — Register
 // ══════════════════════════════════════════════════════════════
-async function doRegister() {
+// Holds email between step 1 and step 2
+let pendingEmail = '';
+let resendCooldown = null;
+
+async function doRequestCode() {
   const username     = document.getElementById('reg-username').value.trim();
   const display_name = document.getElementById('reg-display').value.trim();
+  const email        = document.getElementById('reg-email').value.trim();
   const password     = document.getElementById('reg-password').value;
   const errEl        = document.getElementById('reg-error');
   const btn          = document.getElementById('reg-btn');
   errEl.textContent  = '';
 
-  // Basic client-side checks first
-  if (!username)        { errEl.textContent = 'Please enter a username.'; return; }
+  // Client-side validation
+  if (!username)           { errEl.textContent = 'Please enter a username.'; return; }
   if (username.length < 3) { errEl.textContent = 'Username must be at least 3 characters.'; return; }
-  if (!password)        { errEl.textContent = 'Please enter a password.'; return; }
+  if (!email || !email.includes('@')) { errEl.textContent = 'Please enter a valid email address.'; return; }
+  if (!password)           { errEl.textContent = 'Please enter a password.'; return; }
   if (password.length < 4) { errEl.textContent = 'Password must be at least 4 characters.'; return; }
 
-  // Show loading
-  btn.textContent = 'Creating…';
+  btn.textContent = 'Sending code…';
   btn.disabled = true;
 
   try {
-    const r = await fetch('/api/auth/register', {
+    const r = await fetch('/api/auth/request-code', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ username, display_name, password })
+      body: JSON.stringify({ username, display_name, email, password })
     });
     const data = await r.json();
     if (!r.ok) {
       errEl.textContent = data.error || 'Something went wrong. Please try again.';
       return;
     }
+
+    // Store email for step 2
+    pendingEmail = email;
+
+    // Show step 2
+    const sub = document.getElementById('verify-sub');
+    sub.textContent = `We sent a 6-digit code to ${email}`;
+    document.getElementById('verify-code').value = '';
+    document.getElementById('verify-error').textContent = '';
+
+    // Dev mode — show code hint
+    if (data.dev_mode) {
+      document.getElementById('verify-error').style.color = 'var(--green)';
+      document.getElementById('verify-error').textContent = '⚙️ Dev mode: check the Railway logs for your code.';
+    }
+
+    showView('verify');
+    setTimeout(() => document.getElementById('verify-code').focus(), 150);
+    startResendCooldown();
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please check your internet and try again.';
+  } finally {
+    btn.textContent = 'Send Verification Code';
+    btn.disabled = false;
+  }
+}
+
+async function doVerifyCode() {
+  const code  = document.getElementById('verify-code').value.trim();
+  const errEl = document.getElementById('verify-error');
+  const btn   = document.getElementById('verify-btn');
+  errEl.textContent = '';
+  errEl.style.color = 'var(--red)';
+
+  if (!code || code.length !== 6) { errEl.textContent = 'Please enter the 6-digit code.'; return; }
+
+  btn.textContent = 'Verifying…';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/auth/register', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ email: pendingEmail, code })
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      errEl.textContent = data.error || 'Verification failed. Please try again.';
+      return;
+    }
     currentUser = data;
     subjects = []; notes = [];
     await enterTracker();
   } catch(e) {
-    errEl.textContent = 'Connection error. Please check your internet and try again.';
+    errEl.textContent = 'Connection error. Please try again.';
   } finally {
-    btn.textContent = 'Create Profile';
+    btn.textContent = 'Verify & Create Profile';
     btn.disabled = false;
   }
+}
+
+async function doResendCode() {
+  if (resendCooldown) return;
+  // Re-trigger request-code with the same form values
+  showView('register');
+  setTimeout(() => doRequestCode(), 100);
+}
+
+function startResendCooldown() {
+  // Disable resend link for 30 seconds
+  const link = document.getElementById('resend-link');
+  if (!link) return;
+  let secs = 30;
+  link.textContent = `Resend code (${secs}s)`;
+  link.classList.add('resend-cooldown');
+  resendCooldown = setInterval(() => {
+    secs--;
+    if (secs <= 0) {
+      clearInterval(resendCooldown);
+      resendCooldown = null;
+      link.textContent = 'Resend code';
+      link.classList.remove('resend-cooldown');
+    } else {
+      link.textContent = `Resend code (${secs}s)`;
+    }
+  }, 1000);
 }
 
 // ══════════════════════════════════════════════════════════════

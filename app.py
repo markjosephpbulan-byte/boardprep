@@ -1,9 +1,10 @@
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-import json, os, uuid, base64
-from datetime import datetime
+import json, os, uuid, base64, random, string
+from datetime import datetime, timedelta
 from functools import wraps
+import requests as http_requests
 
 app = Flask(__name__, static_folder="static")
 app.secret_key = os.environ.get("SECRET_KEY", "boardprep-dev-secret-change-in-prod")
@@ -13,6 +14,62 @@ UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
+
+# ── Email (Resend) ─────────────────────────────────────────────────────────────
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "BoardPrep PH <onboarding@resend.dev>")
+EMAIL_ENABLED = bool(RESEND_API_KEY)
+
+# In-memory store for pending verifications: { email: { code, username, display_name, password_hash, expires_at } }
+pending_verifications = {}
+
+
+def generate_code():
+    return "".join(random.choices(string.digits, k=6))
+
+
+def send_verification_email(to_email, code, display_name):
+    """Send 6-digit code via Resend API. Returns (ok, error_msg)."""
+    if not EMAIL_ENABLED:
+        # Dev mode — print code to console instead
+        print(f"[DEV] Verification code for {to_email}: {code}")
+        return True, None
+    try:
+        resp = http_requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": EMAIL_FROM,
+                "to": [to_email],
+                "subject": "Your BoardPrep PH Verification Code",
+                "html": f"""
+                <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#0d1117;color:#e8edf5;border-radius:12px;">
+                  <div style="text-align:center;margin-bottom:24px;">
+                    <div style="font-size:2rem">📚</div>
+                    <h1 style="color:#f5c842;font-size:1.4rem;margin:8px 0">BoardPrep PH</h1>
+                    <p style="color:#8b97a8;font-size:0.9rem">Board Exam Learning Tracker</p>
+                  </div>
+                  <p style="margin-bottom:8px">Hi <strong>{display_name}</strong>,</p>
+                  <p style="color:#8b97a8;margin-bottom:24px">Enter this verification code to complete your registration:</p>
+                  <div style="background:#1e2736;border:2px solid #f5c842;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
+                    <div style="font-size:2.5rem;font-weight:800;letter-spacing:12px;color:#f5c842;font-family:monospace">{code}</div>
+                    <div style="color:#8b97a8;font-size:0.8rem;margin-top:8px">This code expires in 10 minutes</div>
+                  </div>
+                  <p style="color:#5a6678;font-size:0.8rem;text-align:center">If you didn't request this, you can ignore this email.</p>
+                </div>
+                """,
+            },
+            timeout=10,
+        )
+        if resp.status_code in (200, 201):
+            return True, None
+        return False, f"Email service error ({resp.status_code})"
+    except Exception as e:
+        return False, str(e)
+
 
 # ── Data helpers ──────────────────────────────────────────────────────────────
 
@@ -84,28 +141,86 @@ def owner_required(f):
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-@app.route("/api/auth/register", methods=["POST"])
-def register():
+@app.route("/api/auth/request-code", methods=["POST"])
+def request_code():
+    """Step 1: Validate fields, store pending registration, send code to email."""
     data = load_data()
-    body = request.json
+    body = request.json or {}
     username = (body.get("username") or "").strip()
     password = (body.get("password") or "").strip()
+    email = (body.get("email") or "").strip().lower()
     display_name = (body.get("display_name") or username).strip()
 
-    if not username or not password:
-        return jsonify({"error": "Username and password are required"}), 400
+    # Validate
+    if not username:
+        return jsonify({"error": "Username is required"}), 400
     if len(username) < 3:
         return jsonify({"error": "Username must be at least 3 characters"}), 400
-    if len(password) < 4:
+    if not password or len(password) < 4:
         return jsonify({"error": "Password must be at least 4 characters"}), 400
+    if not email or "@" not in email:
+        return jsonify({"error": "A valid email address is required"}), 400
     if get_user_by_username(data, username):
         return jsonify({"error": "Username already taken"}), 409
+    # Check email not already used
+    if any(u.get("email", "").lower() == email for u in data["users"]):
+        return jsonify({"error": "An account with this email already exists"}), 409
 
-    user = {
-        "id": str(uuid.uuid4()),
+    # Generate code and store pending
+    code = generate_code()
+    pending_verifications[email] = {
+        "code": code,
         "username": username,
         "display_name": display_name,
         "password_hash": generate_password_hash(password),
+        "expires_at": (datetime.now() + timedelta(minutes=10)).isoformat(),
+    }
+
+    # Send email
+    ok, err = send_verification_email(email, code, display_name)
+    if not ok:
+        return jsonify({"error": f"Failed to send email: {err}"}), 500
+
+    return jsonify({"ok": True, "email": email, "dev_mode": not EMAIL_ENABLED})
+
+
+@app.route("/api/auth/register", methods=["POST"])
+def register():
+    """Step 2: Verify code and create the account."""
+    data = load_data()
+    body = request.json or {}
+    email = (body.get("email") or "").strip().lower()
+    code = (body.get("code") or "").strip()
+
+    pending = pending_verifications.get(email)
+    if not pending:
+        return jsonify({
+            "error": "No pending verification for this email. Please request a new code."
+        }), 400
+
+    # Check expiry
+    if datetime.now() > datetime.fromisoformat(pending["expires_at"]):
+        del pending_verifications[email]
+        return jsonify({"error": "Code has expired. Please request a new one."}), 400
+
+    # Check code
+    if pending["code"] != code:
+        return jsonify({"error": "Incorrect code. Please try again."}), 401
+
+    # Double-check username/email not taken (race condition safety)
+    if get_user_by_username(data, pending["username"]):
+        del pending_verifications[email]
+        return jsonify({
+            "error": "Username was just taken. Please choose another."
+        }), 409
+
+    # Create user
+    user = {
+        "id": str(uuid.uuid4()),
+        "username": pending["username"],
+        "display_name": pending["display_name"],
+        "email": email,
+        "password_hash": pending["password_hash"],
         "avatar": None,
         "subjects": [],
         "notes": [],
@@ -113,6 +228,7 @@ def register():
     }
     data["users"].append(user)
     save_data(data)
+    del pending_verifications[email]
 
     session["user_id"] = user["id"]
     return jsonify(safe_user(user)), 201
@@ -157,6 +273,7 @@ def safe_user(u):
         "id": u["id"],
         "username": u["username"],
         "display_name": u["display_name"],
+        "email": u.get("email", ""),
         "avatar": u.get("avatar"),
         "exam_date": u.get("exam_date", None),
         "created_at": u["created_at"],

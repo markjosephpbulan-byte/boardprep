@@ -4,12 +4,80 @@ from werkzeug.utils import secure_filename
 import json, os, uuid, base64, random, string
 from datetime import datetime, timedelta
 from functools import wraps
+from collections import defaultdict
+import threading
 import requests as http_requests
 
 app = Flask(__name__, static_folder="static")
 app.secret_key = os.environ.get("SECRET_KEY", "boardprep-dev-secret-change-in-prod")
 
 DATA_FILE = os.environ.get("DATA_FILE", "data.json")
+
+
+# ── Rate Limiter (in-memory, no Redis needed) ─────────────────────────────────
+class RateLimiter:
+    """Simple in-memory rate limiter. Tracks requests per IP per window."""
+
+    def __init__(self):
+        self._counts = defaultdict(list)
+        self._lock = threading.Lock()
+
+    def is_allowed(self, key, max_requests, window_seconds):
+        now = datetime.now()
+        cutoff = now - timedelta(seconds=window_seconds)
+        with self._lock:
+            # Remove old entries outside the window
+            self._counts[key] = [t for t in self._counts[key] if t > cutoff]
+            if len(self._counts[key]) >= max_requests:
+                return False
+            self._counts[key].append(now)
+            return True
+
+    def cleanup(self):
+        """Remove all expired keys — call periodically."""
+        now = datetime.now()
+        with self._lock:
+            expired = [
+                k
+                for k, times in self._counts.items()
+                if not times or max(times) < now - timedelta(hours=1)
+            ]
+            for k in expired:
+                del self._counts[k]
+
+
+limiter = RateLimiter()
+
+
+def get_client_ip():
+    """Get real IP even behind Railway proxy."""
+    return (
+        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or request.remote_addr
+        or "0.0.0.0"
+    )
+
+
+def rate_limit(max_requests, window_seconds, scope=""):
+    """Decorator: limit a route to max_requests per window_seconds per IP."""
+
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            ip = get_client_ip()
+            key = f"{scope or f.__name__}:{ip}"
+            if not limiter.is_allowed(key, max_requests, window_seconds):
+                retry_after = window_seconds
+                return jsonify({
+                    "error": f"Too many requests. Please wait {window_seconds} seconds and try again."
+                }), 429
+            return f(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
+
+
 UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -26,6 +94,10 @@ EMAIL_ENABLED = bool(BREVO_API_KEY)
 # In-memory store for pending verifications
 # { email: { code, username, display_name, password_hash, expires_at } }
 pending_verifications = {}
+
+# In-memory store for password reset codes
+# { email: { code, user_id, expires_at } }
+pending_resets = {}
 
 
 def generate_code():
@@ -71,6 +143,50 @@ def send_verification_email(to_email, code, display_name):
         try:
             body = resp.json()
             err = body.get("message") or body.get("error") or str(resp.status_code)
+        except Exception:
+            err = str(resp.status_code)
+        return False, f"({resp.status_code}) {err}"
+    except Exception as e:
+        return False, str(e)
+
+
+def send_reset_email(to_email, code, display_name):
+    """Send password reset code. Returns (ok, error_msg)."""
+    if not EMAIL_ENABLED:
+        print(f"[DEV] Password reset code for {to_email}: {code}")
+        return True, None
+    try:
+        html_body = f"""
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#0d1117;color:#e8edf5;border-radius:12px;">
+          <div style="text-align:center;margin-bottom:24px;">
+            <div style="font-size:2rem">&#128218;</div>
+            <h1 style="color:#f5c842;font-size:1.4rem;margin:8px 0">BoardPrep PH</h1>
+            <p style="color:#8b97a8;font-size:0.9rem">Board Exam Learning Tracker</p>
+          </div>
+          <p style="margin-bottom:8px">Hi <strong>{display_name}</strong>,</p>
+          <p style="color:#8b97a8;margin-bottom:24px">You requested a password reset. Use this code to set a new password:</p>
+          <div style="background:#1e2736;border:2px solid #f56565;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
+            <div style="font-size:2.5rem;font-weight:800;letter-spacing:12px;color:#f56565;font-family:monospace">{code}</div>
+            <div style="color:#8b97a8;font-size:0.8rem;margin-top:8px">This code expires in 10 minutes</div>
+          </div>
+          <p style="color:#5a6678;font-size:0.8rem;text-align:center">If you did not request this, you can safely ignore this email. Your password has not been changed.</p>
+        </div>
+        """
+        resp = http_requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json"},
+            json={
+                "sender": {"name": EMAIL_FROM, "email": EMAIL_ADDRESS},
+                "to": [{"email": to_email}],
+                "subject": "BoardPrep PH — Password Reset Code",
+                "htmlContent": html_body,
+            },
+            timeout=10,
+        )
+        if resp.status_code in (200, 201):
+            return True, None
+        try:
+            err = resp.json().get("message") or str(resp.status_code)
         except Exception:
             err = str(resp.status_code)
         return False, f"({resp.status_code}) {err}"
@@ -149,6 +265,7 @@ def owner_required(f):
 
 
 @app.route("/api/auth/request-code", methods=["POST"])
+@rate_limit(5, 600, "request_code")
 def request_code():
     """Step 1: Validate fields, store pending registration, send code to email."""
     data = load_data()
@@ -192,6 +309,7 @@ def request_code():
 
 
 @app.route("/api/auth/register", methods=["POST"])
+@rate_limit(10, 600, "register")
 def register():
     """Step 2: Verify code and create the account."""
     data = load_data()
@@ -242,6 +360,7 @@ def register():
 
 
 @app.route("/api/auth/login", methods=["POST"])
+@rate_limit(10, 300, "login")
 def login():
     data = load_data()
     body = request.json
@@ -259,6 +378,79 @@ def login():
 @app.route("/api/auth/logout", methods=["POST"])
 def logout():
     session.clear()
+    return jsonify({"ok": True})
+
+
+# ── Forgot Password ───────────────────────────────────────────────────────────
+
+
+@app.route("/api/auth/forgot-password", methods=["POST"])
+@rate_limit(5, 600, "forgot_password")
+def forgot_password():
+    """Step 1: User enters email → send reset code."""
+    body = request.json or {}
+    email = (body.get("email") or "").strip().lower()
+
+    if not email or "@" not in email:
+        return jsonify({"error": "Please enter a valid email address."}), 400
+
+    data = load_data()
+    # Find user by email (silently succeed even if not found — security best practice)
+    user = next((u for u in data["users"] if u.get("email", "").lower() == email), None)
+
+    if user:
+        code = generate_code()
+        pending_resets[email] = {
+            "code": code,
+            "user_id": user["id"],
+            "expires_at": (datetime.now() + timedelta(minutes=10)).isoformat(),
+        }
+        ok, err = send_reset_email(email, code, user["display_name"])
+        if not ok:
+            return jsonify({"error": f"Failed to send email: {err}"}), 500
+
+    # Always return success — don't reveal if email exists
+    return jsonify({"ok": True, "dev_mode": not EMAIL_ENABLED})
+
+
+@app.route("/api/auth/reset-password", methods=["POST"])
+@rate_limit(10, 600, "reset_password")
+def reset_password():
+    """Step 2: Verify code and set new password."""
+    body = request.json or {}
+    email = (body.get("email") or "").strip().lower()
+    code = (body.get("code") or "").strip()
+    new_password = (body.get("new_password") or "").strip()
+
+    if not email or not code or not new_password:
+        return jsonify({"error": "All fields are required."}), 400
+    if len(new_password) < 4:
+        return jsonify({"error": "Password must be at least 4 characters."}), 400
+
+    pending = pending_resets.get(email)
+    if not pending:
+        return jsonify({
+            "error": "No reset request found. Please request a new code."
+        }), 400
+
+    if datetime.now() > datetime.fromisoformat(pending["expires_at"]):
+        del pending_resets[email]
+        return jsonify({"error": "Code has expired. Please request a new one."}), 400
+
+    if pending["code"] != code:
+        return jsonify({"error": "Incorrect code. Please try again."}), 401
+
+    # Update password
+    data = load_data()
+    user = get_user(data, pending["user_id"])
+    if not user:
+        del pending_resets[email]
+        return jsonify({"error": "Account not found."}), 404
+
+    user["password_hash"] = generate_password_hash(new_password)
+    save_data(data)
+    del pending_resets[email]
+
     return jsonify({"ok": True})
 
 
@@ -707,6 +899,7 @@ def admin_required(f):
 
 
 @app.route("/api/admin/login", methods=["POST"])
+@rate_limit(5, 600, "admin_login")
 def admin_login():
     body = request.json
     if body.get("password") != ADMIN_PASSWORD:

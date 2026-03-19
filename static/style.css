@@ -964,3 +964,21 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 @media (max-width: 640px) {
   .main-content { padding: 1rem !important; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   AUTH SUCCESS MESSAGE
+   ══════════════════════════════════════════════════════════════ */
+.auth-success {
+  font-size: 0.85rem;
+  color: var(--green);
+  background: rgba(62, 207, 142, 0.08);
+  border: 1px solid rgba(62, 207, 142, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.85rem;
+  line-height: 1.5;
+}
+
+/* Rate limit error styling */
+.auth-error.rate-limit {
+  color: #f97316;
+}

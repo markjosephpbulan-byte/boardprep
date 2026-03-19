@@ -307,6 +307,130 @@ function startResendCooldown() {
 }
 
 // ══════════════════════════════════════════════════════════════
+//  AUTH — Forgot / Reset Password
+// ══════════════════════════════════════════════════════════════
+
+let forgotEmail = '';  // remember email between forgot → reset steps
+
+function openForgotPassword() {
+  // Pre-fill email from the current login target if available
+  const emailInput = document.getElementById('forgot-email');
+  if (emailInput && loginTarget) emailInput.value = '';
+  document.getElementById('forgot-error').textContent = '';
+  const succ = document.getElementById('forgot-success');
+  if (succ) { succ.style.display = 'none'; succ.textContent = ''; }
+  showView('forgot');
+  setTimeout(() => document.getElementById('forgot-email')?.focus(), 150);
+}
+
+async function doForgotPassword() {
+  const email = document.getElementById('forgot-email').value.trim().toLowerCase();
+  const errEl = document.getElementById('forgot-error');
+  const succEl = document.getElementById('forgot-success');
+  const btn   = document.getElementById('forgot-btn');
+  errEl.textContent = '';
+  errEl.className = 'auth-error';
+  if (succEl) succEl.style.display = 'none';
+
+  if (!email || !email.includes('@')) {
+    errEl.textContent = 'Please enter a valid email address.';
+    return;
+  }
+
+  btn.textContent = 'Sending…';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/auth/forgot-password', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ email })
+    });
+    const d = await r.json();
+
+    if (r.status === 429) {
+      errEl.className = 'auth-error rate-limit';
+      errEl.textContent = d.error;
+      return;
+    }
+    if (!r.ok) { errEl.textContent = d.error; return; }
+
+    // Always show success (even if email not found — security)
+    forgotEmail = email;
+    if (succEl) {
+      succEl.textContent = `✅ If an account exists for ${email}, a reset code has been sent. Check your inbox!`;
+      succEl.style.display = 'block';
+    }
+
+    // Dev mode hint
+    if (d.dev_mode) {
+      errEl.style.color = 'var(--green)';
+      errEl.textContent = '⚙️ Dev mode: check Railway logs for the code.';
+    }
+
+    // Auto-navigate to reset step after 1.5s
+    setTimeout(() => {
+      document.getElementById('reset-sub').textContent = `Enter the code sent to ${email}`;
+      document.getElementById('reset-code').value = '';
+      document.getElementById('reset-new-pw').value = '';
+      document.getElementById('reset-confirm-pw').value = '';
+      document.getElementById('reset-error').textContent = '';
+      showView('reset');
+      setTimeout(() => document.getElementById('reset-code')?.focus(), 150);
+    }, 1500);
+
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+  } finally {
+    btn.textContent = 'Send Reset Code';
+    btn.disabled = false;
+  }
+}
+
+async function doResetPassword() {
+  const code    = document.getElementById('reset-code').value.trim();
+  const newPw   = document.getElementById('reset-new-pw').value;
+  const confirm = document.getElementById('reset-confirm-pw').value;
+  const errEl   = document.getElementById('reset-error');
+  const btn     = document.getElementById('reset-btn');
+  errEl.textContent = '';
+  errEl.className = 'auth-error';
+
+  if (!code || code.length !== 6) { errEl.textContent = 'Please enter the 6-digit code.'; return; }
+  if (!newPw)                      { errEl.textContent = 'Please enter a new password.'; return; }
+  if (newPw.length < 4)            { errEl.textContent = 'Password must be at least 4 characters.'; return; }
+  if (newPw !== confirm)           { errEl.textContent = 'Passwords do not match.'; return; }
+
+  btn.textContent = 'Resetting…';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/auth/reset-password', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ email: forgotEmail, code, new_password: newPw })
+    });
+    const d = await r.json();
+
+    if (r.status === 429) {
+      errEl.className = 'auth-error rate-limit';
+      errEl.textContent = d.error;
+      return;
+    }
+    if (!r.ok) { errEl.textContent = d.error; return; }
+
+    // Success — go back to landing with a toast
+    showToast('✅ Password reset! You can now log in.');
+    showView('landing');
+    loadProfiles();
+
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+  } finally {
+    btn.textContent = 'Set New Password';
+    btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 //  AUTH — Login
 // ══════════════════════════════════════════════════════════════
 function openLoginForProfile(profile) {

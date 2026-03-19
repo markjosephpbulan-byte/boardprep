@@ -123,7 +123,63 @@
                onkeydown="if(event.key==='Enter') doLogin()"/>
         <div class="auth-error" id="login-error"></div>
         <button class="btn-primary btn-full" onclick="doLogin()">Unlock Profile</button>
-        <div class="auth-switch"><a href="#" onclick="showView('landing')">← Back to profiles</a></div>
+        <div class="auth-switch">
+          <a href="#" onclick="showView('landing')">← Back to profiles</a>
+          &nbsp;·&nbsp;
+          <a href="#" onclick="openForgotPassword()">Forgot password?</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 4b. FORGOT PASSWORD — Step 1: Enter email -->
+<div id="view-forgot" class="view" style="display:none">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">📚 <span>BoardPrep PH</span></div>
+      <div class="verify-icon">🔑</div>
+      <h2>Forgot Password</h2>
+      <p class="auth-sub">Enter your email and we'll send you a reset code</p>
+      <div class="auth-form">
+        <label>Email Address</label>
+        <input type="email" id="forgot-email" placeholder="Your registered email"
+               onkeydown="if(event.key==='Enter') doForgotPassword()"/>
+        <div class="auth-error" id="forgot-error"></div>
+        <div class="auth-success" id="forgot-success" style="display:none"></div>
+        <button class="btn-primary btn-full" id="forgot-btn" onclick="doForgotPassword()">Send Reset Code</button>
+        <div class="auth-switch"><a href="#" onclick="showView('login')">← Back to login</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 4c. RESET PASSWORD — Step 2: Enter code + new password -->
+<div id="view-reset" class="view" style="display:none">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">📚 <span>BoardPrep PH</span></div>
+      <div class="verify-icon">🔒</div>
+      <h2>Reset Password</h2>
+      <p class="auth-sub" id="reset-sub">Enter the code we sent to your email</p>
+      <div class="auth-form">
+        <label>Verification Code</label>
+        <input type="text" id="reset-code" placeholder="6-digit code"
+               maxlength="6" inputmode="numeric"
+               oninput="this.value=this.value.replace(/\D/g,'')"
+               class="verify-code-input"
+               onkeydown="if(event.key==='Enter') doResetPassword()"/>
+        <label>New Password</label>
+        <input type="password" id="reset-new-pw" placeholder="Min. 4 characters"
+               onkeydown="if(event.key==='Enter') doResetPassword()"/>
+        <label>Confirm New Password</label>
+        <input type="password" id="reset-confirm-pw" placeholder="Repeat new password"
+               onkeydown="if(event.key==='Enter') doResetPassword()"/>
+        <div class="auth-error" id="reset-error"></div>
+        <button class="btn-primary btn-full" id="reset-btn" onclick="doResetPassword()">Set New Password</button>
+        <div class="auth-switch">
+          Didn't receive it? <a href="#" onclick="showView('forgot')">Request new code</a>
+        </div>
       </div>
     </div>
   </div>

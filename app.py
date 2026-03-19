@@ -485,6 +485,7 @@ def add_note(user_id):
         "title": body.get("title", "Untitled"),
         "content": body.get("content", ""),
         "color": body.get("color", "#fef08a"),
+        "done": False,
         "created_at": datetime.now().isoformat(),
         "updated_at": datetime.now().isoformat(),
     }
@@ -504,6 +505,7 @@ def update_note(user_id, note_id):
             n["title"] = body.get("title", n["title"])
             n["content"] = body.get("content", n["content"])
             n["color"] = body.get("color", n["color"])
+            n["done"] = body.get("done", n.get("done", False))
             n["updated_at"] = datetime.now().isoformat()
             save_data(data)
             return jsonify(n)

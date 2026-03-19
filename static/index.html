@@ -151,6 +151,15 @@
       <button class="btn-close-sidebar" onclick="toggleNotesSidebar()">✕</button>
     </div>
     <button class="btn-add-note" onclick="openAddNoteModal()">+ New Note</button>
+    <!-- Tabs -->
+    <div class="notes-tabs">
+      <button class="notes-tab active" id="ntab-active" onclick="switchNotesTab('active')">
+        Active <span class="notes-tab-count" id="ntab-active-count">0</span>
+      </button>
+      <button class="notes-tab" id="ntab-done" onclick="switchNotesTab('done')">
+        ✅ Done <span class="notes-tab-count" id="ntab-done-count">0</span>
+      </button>
+    </div>
     <div class="notes-list" id="notesList"></div>
   </aside>
   <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleNotesSidebar()"></div>

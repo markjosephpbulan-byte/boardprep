@@ -541,3 +541,82 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   .pomodoro-fab { bottom: 1.25rem; right: 1.25rem; }
   .countdown-chip { display: none !important; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   NOTES TABS + DONE STATE
+   ══════════════════════════════════════════════════════════════ */
+.notes-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 0.75rem 0.5rem;
+  flex-shrink: 0;
+}
+.notes-tab {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text3);
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.notes-tab:hover { color: var(--text2); border-color: var(--border2); }
+.notes-tab.active {
+  background: var(--surface2);
+  border-color: var(--border2);
+  color: var(--text);
+}
+.notes-tab-count {
+  background: var(--bg3);
+  border-radius: 99px;
+  padding: 0px 6px;
+  font-size: 0.7rem;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+}
+.notes-tab.active .notes-tab-count { background: var(--border2); }
+
+/* Note card done checkbox */
+.note-card-check {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(0,0,0,0.2);
+  background: rgba(255,255,255,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.65rem;
+  color: rgba(0,0,0,0.5);
+  transition: all 0.2s;
+  z-index: 2;
+}
+.note-card-check:hover { background: rgba(255,255,255,0.8); border-color: rgba(0,0,0,0.4); transform: scale(1.1); }
+.note-card-check.checked { background: #22c55e; border-color: #16a34a; color: white; }
+
+/* Done note card styling */
+.note-card.is-done { opacity: 0.7; }
+.note-card.is-done .note-card-title { text-decoration: line-through; color: rgba(0,0,0,0.5); }
+.note-card.is-done .note-card-preview { color: rgba(0,0,0,0.4); }
+
+/* Done tab empty state */
+.notes-done-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text3);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+.notes-done-empty .done-empty-icon { font-size: 2rem; margin-bottom: 0.5rem; }

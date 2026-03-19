@@ -643,20 +643,49 @@ async function toggleTopicDone(subjectId, ssId, topicId) {
 // ══════════════════════════════════════════════════════════════
 //  NOTES
 // ══════════════════════════════════════════════════════════════
+let notesActiveTab = 'active';  // 'active' or 'done'
+
+function switchNotesTab(tab) {
+  notesActiveTab = tab;
+  document.querySelectorAll('.notes-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`ntab-${tab}`).classList.add('active');
+  renderNotes();
+}
+
 function renderNotes() {
   const list  = document.getElementById('notesList');
   const badge = document.getElementById('notesBadge');
-  badge.textContent = notes.length;
-  if (!notes.length) {
-    list.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:.85rem">No notes yet.<br>Click "+ New Note" to add one!</div>`;
+
+  const activeNotes = notes.filter(n => !n.done);
+  const doneNotes   = notes.filter(n => n.done);
+
+  // Badge shows only active notes
+  badge.textContent = activeNotes.length;
+
+  // Update tab counts
+  document.getElementById('ntab-active-count').textContent = activeNotes.length;
+  document.getElementById('ntab-done-count').textContent   = doneNotes.length;
+
+  const showing = notesActiveTab === 'active' ? activeNotes : doneNotes;
+
+  if (!showing.length) {
+    if (notesActiveTab === 'active') {
+      list.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:.85rem">No notes yet.<br>Click "+ New Note" to add one!</div>`;
+    } else {
+      list.innerHTML = `<div class="notes-done-empty"><div class="done-empty-icon">✅</div>No completed notes yet.<br>Check off a note to move it here.</div>`;
+    }
     return;
   }
-  list.innerHTML = notes.map(n => `
-    <div class="note-card" style="background:${n.color}" onclick="openEditNoteModal('${n.id}')">
+
+  list.innerHTML = showing.map(n => `
+    <div class="note-card ${n.done ? 'is-done' : ''}" style="background:${n.color}" onclick="openEditNoteModal('${n.id}')">
       <button class="note-card-del" onclick="event.stopPropagation(); confirmDelete('note','${n.id}')">✕</button>
       <div class="note-card-title">${esc(n.title)}</div>
       <div class="note-card-preview">${esc(n.content)}</div>
       <div class="note-card-meta">${formatDate(n.updated_at)}</div>
+      <div class="note-card-check ${n.done ? 'checked' : ''}"
+           onclick="event.stopPropagation(); toggleNoteDone('${n.id}')"
+           title="${n.done ? 'Mark as active' : 'Mark as done'}">${n.done ? '✓' : ''}</div>
     </div>`).join('');
 }
 function openAddNoteModal() {
@@ -699,6 +728,28 @@ async function saveNote() {
   }
   closeModal('noteModal');
   renderNotes();
+}
+
+async function toggleNoteDone(noteId) {
+  const n = notes.find(x => x.id === noteId);
+  if (!n) return;
+  n.done = !n.done;
+
+  // Optimistic UI — re-render immediately
+  renderNotes();
+
+  // If we just marked done and we're on active tab, switch to done after a beat
+  if (n.done && notesActiveTab === 'active') {
+    showToast('Note moved to Done ✅');
+  } else if (!n.done && notesActiveTab === 'done') {
+    showToast('Note restored to Active 📝');
+  }
+
+  // API in background
+  fetch(`${apiBase()}/notes/${noteId}`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ done: n.done })
+  });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -965,6 +1016,37 @@ function skipPomodoro() {
   onPomComplete();
 }
 
+// ── Pomodoro Sound (Web Audio API — no files needed) ──────────
+function playPomSound(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    const notes = type === 'focus_done'
+      ? [523, 659, 784, 1047]   // C E G C — upbeat "done!" arpeggio
+      : [523, 494, 440];         // C B A — gentle descending "break time"
+
+    notes.forEach((freq, i) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type      = 'sine';
+      osc.frequency.value = freq;
+
+      const start = ctx.currentTime + i * 0.18;
+      const end   = start + 0.22;
+
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.35, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, end);
+
+      osc.start(start);
+      osc.stop(end);
+    });
+  } catch(e) { /* Audio not supported — silent fallback */ }
+}
+
 function onPomComplete() {
   document.getElementById('pomodoroFab').classList.remove('running', 'break-running');
   document.getElementById('pomPlayBtn').textContent = '▶';
@@ -986,6 +1068,10 @@ function onPomComplete() {
     if (pomSession > 4) pomSession = 1;
     switchMode('focus');
   }
+
+  // Play completion sound
+  const soundType = (pomMode === 'focus') ? 'break_time' : 'focus_done';
+  playPomSound(soundType);
 
   // Open widget so user sees the transition
   pomWidgetOpen = true;

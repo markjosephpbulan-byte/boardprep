@@ -174,8 +174,9 @@
 
   @media (max-width: 640px) {
     .admin-main { padding: 1rem; }
-    .users-table th:nth-child(3), .users-table td:nth-child(3),
-    .users-table th:nth-child(4), .users-table td:nth-child(4) { display: none; }
+    .users-table th:nth-child(2), .users-table td:nth-child(2),
+    .users-table th:nth-child(4), .users-table td:nth-child(4),
+    .users-table th:nth-child(5), .users-table td:nth-child(5) { display: none; }
   }
 </style>
 </head>
@@ -243,6 +244,7 @@
         <thead>
           <tr>
             <th>User</th>
+            <th>Email</th>
             <th>Subjects</th>
             <th>Progress</th>
             <th>Joined</th>
@@ -362,6 +364,15 @@ async function loadUsers() {
             </div>
           </div>
         </td>
+        <td>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="color:var(--text2);font-size:0.8rem">${esc(u.email || '—')}</span>
+            ${u.email ? `<button onclick="copyEmail('${esc(u.email)}')" title="Copy email"
+              style="background:transparent;border:none;cursor:pointer;color:var(--text3);font-size:0.75rem;padding:2px 5px;border-radius:4px;transition:all 0.15s"
+              onmouseover="this.style.color='var(--text)';this.style.background='var(--border)'"
+              onmouseout="this.style.color='var(--text3)';this.style.background='transparent'">📋</button>` : ''}
+          </div>
+        </td>
         <td>${u.subject_count}</td>
         <td>
           <div class="progress-inline">
@@ -424,6 +435,21 @@ async function executeDelete() {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+function copyEmail(email) {
+  navigator.clipboard.writeText(email).then(() => {
+    showToast('📋 Email copied: ' + email);
+  }).catch(() => {
+    // Fallback for older browsers
+    const el = document.createElement('textarea');
+    el.value = email;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    showToast('📋 Email copied: ' + email);
+  });
+}
+
 function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');

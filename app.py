@@ -15,12 +15,16 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
 
-# ── Email (Resend) ─────────────────────────────────────────────────────────────
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-EMAIL_FROM = os.environ.get("EMAIL_FROM", "BoardPrep PH <onboarding@resend.dev>")
-EMAIL_ENABLED = bool(RESEND_API_KEY)
+# ── Email (Brevo) ──────────────────────────────────────────────────────────────
+# Brevo (formerly Sendinblue) — free plan sends to ANY email, no domain needed
+# Sign up at brevo.com → SMTP & API → API Keys → copy key
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "BoardPrep PH")
+EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS", "noreply@boardprep.ph")
+EMAIL_ENABLED = bool(BREVO_API_KEY)
 
-# In-memory store for pending verifications: { email: { code, username, display_name, password_hash, expires_at } }
+# In-memory store for pending verifications
+# { email: { code, username, display_name, password_hash, expires_at } }
 pending_verifications = {}
 
 
@@ -29,44 +33,47 @@ def generate_code():
 
 
 def send_verification_email(to_email, code, display_name):
-    """Send 6-digit code via Resend API. Returns (ok, error_msg)."""
+    """Send 6-digit code via Brevo API. Returns (ok, error_msg)."""
     if not EMAIL_ENABLED:
-        # Dev mode — print code to console instead
         print(f"[DEV] Verification code for {to_email}: {code}")
         return True, None
     try:
+        html_body = f"""
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#0d1117;color:#e8edf5;border-radius:12px;">
+          <div style="text-align:center;margin-bottom:24px;">
+            <div style="font-size:2rem">&#128218;</div>
+            <h1 style="color:#f5c842;font-size:1.4rem;margin:8px 0">BoardPrep PH</h1>
+            <p style="color:#8b97a8;font-size:0.9rem">Board Exam Learning Tracker</p>
+          </div>
+          <p style="margin-bottom:8px">Hi <strong>{display_name}</strong>,</p>
+          <p style="color:#8b97a8;margin-bottom:24px">Enter this verification code to complete your registration:</p>
+          <div style="background:#1e2736;border:2px solid #f5c842;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
+            <div style="font-size:2.5rem;font-weight:800;letter-spacing:12px;color:#f5c842;font-family:monospace">{code}</div>
+            <div style="color:#8b97a8;font-size:0.8rem;margin-top:8px">This code expires in 10 minutes</div>
+          </div>
+          <p style="color:#5a6678;font-size:0.8rem;text-align:center">If you did not request this, you can safely ignore this email.</p>
+        </div>
+        """
         resp = http_requests.post(
-            "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {RESEND_API_KEY}",
-                "Content-Type": "application/json",
-            },
+            "https://api.brevo.com/v3/smtp/email",
+            headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json"},
             json={
-                "from": EMAIL_FROM,
-                "to": [to_email],
+                "sender": {"name": EMAIL_FROM, "email": EMAIL_ADDRESS},
+                "to": [{"email": to_email}],
                 "subject": "Your BoardPrep PH Verification Code",
-                "html": f"""
-                <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#0d1117;color:#e8edf5;border-radius:12px;">
-                  <div style="text-align:center;margin-bottom:24px;">
-                    <div style="font-size:2rem">📚</div>
-                    <h1 style="color:#f5c842;font-size:1.4rem;margin:8px 0">BoardPrep PH</h1>
-                    <p style="color:#8b97a8;font-size:0.9rem">Board Exam Learning Tracker</p>
-                  </div>
-                  <p style="margin-bottom:8px">Hi <strong>{display_name}</strong>,</p>
-                  <p style="color:#8b97a8;margin-bottom:24px">Enter this verification code to complete your registration:</p>
-                  <div style="background:#1e2736;border:2px solid #f5c842;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
-                    <div style="font-size:2.5rem;font-weight:800;letter-spacing:12px;color:#f5c842;font-family:monospace">{code}</div>
-                    <div style="color:#8b97a8;font-size:0.8rem;margin-top:8px">This code expires in 10 minutes</div>
-                  </div>
-                  <p style="color:#5a6678;font-size:0.8rem;text-align:center">If you didn't request this, you can ignore this email.</p>
-                </div>
-                """,
+                "htmlContent": html_body,
             },
             timeout=10,
         )
         if resp.status_code in (200, 201):
             return True, None
-        return False, f"Email service error ({resp.status_code})"
+        # Parse Brevo error for a helpful message
+        try:
+            body = resp.json()
+            err = body.get("message") or body.get("error") or str(resp.status_code)
+        except Exception:
+            err = str(resp.status_code)
+        return False, f"({resp.status_code}) {err}"
     except Exception as e:
         return False, str(e)
 
@@ -718,6 +725,7 @@ def admin_list_users():
             "id": u["id"],
             "username": u["username"],
             "display_name": u["display_name"],
+            "email": u.get("email", "—"),
             "avatar": u.get("avatar"),
             "subject_count": len(u.get("subjects", [])),
             "notes_count": len(u.get("notes", [])),

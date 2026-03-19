@@ -667,3 +667,105 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
 /* Resend link cooldown */
 .resend-cooldown { color: var(--text3) !important; cursor: default !important; text-decoration: none !important; }
+
+/* ══════════════════════════════════════════════════════════════
+   PROFILE SEARCH BAR
+   ══════════════════════════════════════════════════════════════ */
+.profile-search-wrap {
+  max-width: 480px;
+  margin: 1.75rem auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-search-box {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.profile-search-icon {
+  position: absolute;
+  left: 14px;
+  font-size: 1rem;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.profile-search-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1.5px solid var(--border2);
+  border-radius: 99px;
+  padding: 0.75rem 2.75rem 0.75rem 2.75rem;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.25s;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+}
+.profile-search-input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(245,200,66,0.12), 0 2px 12px rgba(0,0,0,0.2);
+  background: var(--surface2);
+}
+.profile-search-input::placeholder { color: var(--text3); }
+
+.profile-search-clear {
+  position: absolute;
+  right: 12px;
+  background: var(--surface2);
+  border: none;
+  color: var(--text3);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  line-height: 1;
+}
+.profile-search-clear:hover { background: var(--border2); color: var(--text); }
+
+.profile-search-count {
+  font-size: 0.78rem;
+  color: var(--text3);
+  min-height: 18px;
+  transition: opacity 0.2s;
+}
+.profile-search-count.has-results { color: var(--text2); }
+
+/* Highlight matching text in cards */
+.search-highlight {
+  background: rgba(245,200,66,0.25);
+  color: var(--gold);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 600;
+}
+
+/* No results state */
+.no-results-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text3);
+}
+.no-results-state .no-results-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+.no-results-state p { font-size: 0.9rem; margin-bottom: 0.4rem; color: var(--text2); }
+.no-results-state span { font-size: 0.82rem; }
+
+/* Profile card — hide animation for search filter */
+.profile-card.hidden { display: none; }
+.profile-card.search-match { animation: none; }
+
+@media (max-width: 640px) {
+  .profile-search-wrap { max-width: 100%; }
+}

@@ -30,6 +30,24 @@
     <div class="landing-hero">
       <h1>Choose your profile</h1>
       <p>Select your profile to continue reviewing, or create a new one.</p>
+      <!-- Search bar -->
+      <div class="profile-search-wrap">
+        <div class="profile-search-box">
+          <span class="profile-search-icon">🔍</span>
+          <input
+            type="text"
+            id="profileSearch"
+            class="profile-search-input"
+            placeholder="Search by name or username…"
+            oninput="filterProfiles(this.value)"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button class="profile-search-clear" id="searchClearBtn"
+                  onclick="clearProfileSearch()" style="display:none">✕</button>
+        </div>
+        <div class="profile-search-count" id="profileSearchCount"></div>
+      </div>
     </div>
     <div class="profiles-grid" id="profilesGrid">
       <div class="loading-state">Loading profiles…</div>

@@ -41,14 +41,26 @@ function showView(name) {
 // ══════════════════════════════════════════════════════════════
 //  LANDING — Profile Cards
 // ══════════════════════════════════════════════════════════════
+// All profiles stored in memory so search doesn't need re-fetch
+let allProfiles = [];
+
 async function loadProfiles() {
   const grid = document.getElementById('profilesGrid');
   grid.innerHTML = '<div class="loading-state">Loading profiles…</div>';
+
+  // Reset search bar
+  const searchInput = document.getElementById('profileSearch');
+  const clearBtn    = document.getElementById('searchClearBtn');
+  const countEl     = document.getElementById('profileSearchCount');
+  if (searchInput) searchInput.value = '';
+  if (clearBtn)    clearBtn.style.display = 'none';
+  if (countEl)     countEl.textContent = '';
+
   try {
     const r = await fetch('/api/profiles');
-    const profiles = await r.json();
+    allProfiles = await r.json();
 
-    if (profiles.length === 0) {
+    if (allProfiles.length === 0) {
       grid.innerHTML = `
         <div class="loading-state" style="grid-column:1/-1">
           <div style="font-size:2.5rem;margin-bottom:.75rem">👤</div>
@@ -58,31 +70,107 @@ async function loadProfiles() {
       return;
     }
 
-    grid.innerHTML = '';
-    profiles.forEach(p => {
-      const card = document.createElement('div');
-      card.className = 'profile-card';
-      card.onclick = () => openLoginForProfile(p);
-      const avatarHTML = p.avatar
-        ? `<img src="${p.avatar}" alt="${esc(p.display_name)}">`
-        : `<span>${esc(p.display_name[0].toUpperCase())}</span>`;
-      card.innerHTML = `
-        <div class="profile-card-avatar">${avatarHTML}</div>
-        <div class="profile-card-name">${esc(p.display_name)}</div>
-        <div class="profile-card-username">@${esc(p.username)}</div>
-        <div class="profile-card-progress">
-          <div class="profile-card-bar-wrap">
-            <div class="profile-card-bar-fill" style="width:${p.progress_pct}%"></div>
-          </div>
-          <div class="profile-card-pct">${p.progress_pct}% reviewed</div>
-        </div>
-        <div class="profile-card-meta">${p.subject_count} subject${p.subject_count !== 1 ? 's' : ''}</div>
-        <div class="profile-lock">🔒 Password protected</div>`;
-      grid.appendChild(card);
-    });
+    renderProfileCards(allProfiles, '');
   } catch(e) {
     grid.innerHTML = '<div class="loading-state">Failed to load profiles.</div>';
   }
+}
+
+function renderProfileCards(profiles, query) {
+  const grid = document.getElementById('profilesGrid');
+  grid.innerHTML = '';
+
+  if (profiles.length === 0 && query) {
+    grid.innerHTML = `
+      <div class="no-results-state">
+        <div class="no-results-icon">🔍</div>
+        <p>No profiles found for "<strong>${esc(query)}</strong>"</p>
+        <span>Try a different name or username</span>
+      </div>`;
+    return;
+  }
+
+  profiles.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'profile-card';
+    card.dataset.name     = p.display_name.toLowerCase();
+    card.dataset.username = p.username.toLowerCase();
+    card.onclick = () => openLoginForProfile(p);
+
+    const avatarHTML = p.avatar
+      ? `<img src="${p.avatar}" alt="${esc(p.display_name)}">`
+      : `<span>${esc(p.display_name[0].toUpperCase())}</span>`;
+
+    // Highlight matched text
+    const hlName     = highlight(esc(p.display_name), query);
+    const hlUsername = highlight(esc(p.username), query);
+
+    card.innerHTML = `
+      <div class="profile-card-avatar">${avatarHTML}</div>
+      <div class="profile-card-name">${hlName}</div>
+      <div class="profile-card-username">@${hlUsername}</div>
+      <div class="profile-card-progress">
+        <div class="profile-card-bar-wrap">
+          <div class="profile-card-bar-fill" style="width:${p.progress_pct}%"></div>
+        </div>
+        <div class="profile-card-pct">${p.progress_pct}% reviewed</div>
+      </div>
+      <div class="profile-card-meta">${p.subject_count} subject${p.subject_count !== 1 ? 's' : ''}</div>
+      <div class="profile-lock">🔒 Password protected</div>`;
+    grid.appendChild(card);
+  });
+}
+
+function filterProfiles(query) {
+  const q         = query.trim().toLowerCase();
+  const clearBtn  = document.getElementById('searchClearBtn');
+  const countEl   = document.getElementById('profileSearchCount');
+
+  // Show/hide clear button
+  if (clearBtn) clearBtn.style.display = q ? 'flex' : 'none';
+
+  if (!q) {
+    renderProfileCards(allProfiles, '');
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+
+  // Filter by display_name or username
+  const filtered = allProfiles.filter(p =>
+    p.display_name.toLowerCase().includes(q) ||
+    p.username.toLowerCase().includes(q)
+  );
+
+  renderProfileCards(filtered, q);
+
+  // Update count label
+  if (countEl) {
+    if (filtered.length === 0) {
+      countEl.textContent = 'No profiles found';
+      countEl.className = 'profile-search-count';
+    } else if (filtered.length === allProfiles.length) {
+      countEl.textContent = '';
+    } else {
+      countEl.textContent = `${filtered.length} of ${allProfiles.length} profiles`;
+      countEl.className = 'profile-search-count has-results';
+    }
+  }
+}
+
+function clearProfileSearch() {
+  const input = document.getElementById('profileSearch');
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
+  filterProfiles('');
+}
+
+function highlight(text, query) {
+  if (!query) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex   = new RegExp(`(${escaped})`, 'gi');
+  return text.replace(regex, '<span class="search-highlight">$1</span>');
 }
 
 // ══════════════════════════════════════════════════════════════

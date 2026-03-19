@@ -5,8 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BoardPrep PH</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="/static/style.css"/>
+<!-- Preconnect to external domains — starts TCP handshake early -->
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<!-- Load fonts async so they don't block page render -->
+<link rel="preload" as="style"
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"/>
+<noscript>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+</noscript>
+<link rel="stylesheet" href="/static/style.min.css"/>
+<!-- Preload the JS so it's ready before needed -->
+<link rel="modulepreload" href="/static/app.min.js" as="script"/>
 </head>
 <body>
 
@@ -489,6 +500,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.min.js" defer></script>
 </body>
 </html>

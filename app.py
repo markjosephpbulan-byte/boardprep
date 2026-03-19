@@ -10,8 +10,47 @@ from collections import defaultdict
 import threading
 import requests as http_requests
 
+from flask import make_response
+import gzip
+import io
+
 app = Flask(__name__, static_folder="static")
 app.secret_key = os.environ.get("SECRET_KEY", "boardprep-dev-secret-change-in-prod")
+
+# Tell browser to cache static files aggressively
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000  # 1 year for static files
+
+
+@app.after_request
+def add_performance_headers(response):
+    """Add headers that make the browser and CDN cache responses efficiently."""
+    # Compress JSON responses
+    if (
+        response.content_type.startswith("application/json")
+        and len(response.data) > 1024
+        and "gzip" in request.headers.get("Accept-Encoding", "")
+    ):
+        compressed = gzip.compress(response.data, compresslevel=6)
+        if len(compressed) < len(response.data):
+            response.data = compressed
+            response.headers["Content-Encoding"] = "gzip"
+            response.headers["Vary"] = "Accept-Encoding"
+
+    # Cache static files for 1 year (they have unique names via versioning)
+    if request.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    # Cache profile list for 30s in browser too
+    elif request.path == "/api/profiles" and response.status_code == 200:
+        response.headers["Cache-Control"] = "public, max-age=30"
+    # Never cache API responses that change per-user
+    elif request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+
+    # Security headers (good practice)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    return response
+
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
@@ -35,9 +74,16 @@ def get_pool():
         if not DATABASE_URL:
             raise RuntimeError("DATABASE_URL environment variable not set")
         _pool = pg_pool.ThreadedConnectionPool(
-            minconn=2,  # keep 2 connections warm always
+            minconn=3,  # keep 3 connections warm (Singapore is close, worth it)
             maxconn=10,  # max 10 simultaneous connections (free tier safe)
-            dsn=DATABASE_URL,
+            dsn=DATABASE_URL
+            + (
+                ""
+                if "keepalives" in DATABASE_URL
+                else "?keepalives=1&keepalives_idle=30&keepalives_interval=10&keepalives_count=5"
+                if "?" not in DATABASE_URL
+                else "&keepalives=1&keepalives_idle=30&keepalives_interval=10&keepalives_count=5"
+            ),
             cursor_factory=psycopg2.extras.RealDictCursor,
         )
         print("[DB] Connection pool created ✅")
@@ -147,8 +193,34 @@ def init_db():
 
 try:
     get_pool()  # warm up the pool immediately on startup
-    init_db()
-    print("[DB] Ready ✅")
+    # Check if tables exist — skip init if they do (saves 13 DB round trips on restart)
+    existing = db_execute(
+        """
+        SELECT COUNT(*) as c FROM information_schema.tables
+        WHERE table_schema='public' AND table_name='users'
+    """,
+        fetch="one",
+    )
+    if not existing or int(existing.get("c", 0)) == 0:
+        init_db()
+        print("[DB] Tables created ✅")
+    else:
+        # Still create indexes (idempotent) but skip table creation
+        db_execute(
+            "CREATE INDEX IF NOT EXISTS idx_subjects_user    ON subjects(user_id)"
+        )
+        db_execute(
+            "CREATE INDEX IF NOT EXISTS idx_subsections_subj ON subsections(subject_id)"
+        )
+        db_execute(
+            "CREATE INDEX IF NOT EXISTS idx_subsections_user ON subsections(user_id)"
+        )
+        db_execute(
+            "CREATE INDEX IF NOT EXISTS idx_topics_subsect   ON topics(subsection_id)"
+        )
+        db_execute("CREATE INDEX IF NOT EXISTS idx_topics_user      ON topics(user_id)")
+        db_execute("CREATE INDEX IF NOT EXISTS idx_notes_user       ON notes(user_id)")
+        print("[DB] Ready ✅ (tables already exist)")
 except Exception as e:
     print(f"[DB] ❌ FAILED: {e}")
     if DATABASE_URL:
@@ -334,7 +406,18 @@ def send_reset_email(to_email, code, display_name):
 
 
 def get_user_by_id(user_id):
-    return db_execute("SELECT * FROM users WHERE id=%s", (user_id,), fetch="one")
+    key = f"user:{user_id}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    user = db_execute("SELECT * FROM users WHERE id=%s", (user_id,), fetch="one")
+    if user:
+        cache.set(key, user, ttl_seconds=10)
+    return user
+
+
+def invalidate_user_cache(user_id):
+    cache.delete(f"user:{user_id}")
 
 
 def get_user_by_username(username):
@@ -665,6 +748,7 @@ def reset_password():
         "UPDATE users SET password_hash=%s WHERE id=%s",
         (generate_password_hash(new_password), pending["user_id"]),
     )
+    invalidate_user_cache(pending["user_id"])
     del pending_resets[email]
     return jsonify({"ok": True})
 
@@ -800,6 +884,9 @@ def update_profile(user_id):
     if not user:
         return jsonify({"error": "Not found"}), 404
     body = request.json or {}
+    fields = []
+    vals = []
+
     if "username" in body:
         new_username = (body["username"] or "").strip().lower()
         if not new_username:
@@ -813,24 +900,33 @@ def update_profile(user_id):
         existing = get_user_by_username(new_username)
         if existing and existing["id"] != user_id:
             return jsonify({"error": "Username already taken"}), 409
-        db_execute("UPDATE users SET username=%s WHERE id=%s", (new_username, user_id))
+        fields.append("username=%s")
+        vals.append(new_username)
+
     if "display_name" in body:
         dn = (body["display_name"] or "").strip()
         if dn:
-            db_execute("UPDATE users SET display_name=%s WHERE id=%s", (dn, user_id))
+            fields.append("display_name=%s")
+            vals.append(dn)
+
     if "exam_date" in body:
-        db_execute(
-            "UPDATE users SET exam_date=%s WHERE id=%s", (body["exam_date"], user_id)
-        )
+        fields.append("exam_date=%s")
+        vals.append(body["exam_date"])
+
     if "new_password" in body and body["new_password"]:
         if not body.get("current_password"):
             return jsonify({"error": "Current password required"}), 400
         if not check_password_hash(user["password_hash"], body["current_password"]):
             return jsonify({"error": "Current password is wrong"}), 401
-        db_execute(
-            "UPDATE users SET password_hash=%s WHERE id=%s",
-            (generate_password_hash(body["new_password"]), user_id),
-        )
+        fields.append("password_hash=%s")
+        vals.append(generate_password_hash(body["new_password"]))
+
+    # ONE query instead of up to 4 separate ones
+    if fields:
+        vals.append(user_id)
+        db_execute(f"UPDATE users SET {', '.join(fields)} WHERE id=%s", vals)
+
+    invalidate_user_cache(user_id)
     invalidate_profiles_cache()
     return jsonify(safe_user(get_user_by_id(user_id)))
 
@@ -851,6 +947,7 @@ def upload_avatar(user_id):
     b64 = base64.b64encode(raw).decode()
     avatar = f"data:{mime};base64,{b64}"
     db_execute("UPDATE users SET avatar=%s WHERE id=%s", (avatar, user_id))
+    invalidate_user_cache(user_id)
     invalidate_profiles_cache()
     return jsonify(safe_user(get_user_by_id(user_id)))
 
@@ -1180,29 +1277,82 @@ def admin_me():
 @app.route("/api/admin/users", methods=["GET"])
 @admin_required
 def admin_list_users():
+    # All data in 5 queries total regardless of user count
     users = (
         db_execute("SELECT * FROM users ORDER BY created_at DESC", fetch="all") or []
     )
+    if not users:
+        return jsonify([])
+
+    sc_rows = (
+        db_execute(
+            "SELECT user_id, COUNT(*) as c FROM subjects GROUP BY user_id", fetch="all"
+        )
+        or []
+    )
+    sc_map = {r["user_id"]: int(r["c"]) for r in sc_rows}
+
+    nc_rows = (
+        db_execute(
+            "SELECT user_id, COUNT(*) as c FROM notes GROUP BY user_id", fetch="all"
+        )
+        or []
+    )
+    nc_map = {r["user_id"]: int(r["c"]) for r in nc_rows}
+
+    tp_rows = (
+        db_execute(
+            """
+        SELECT s.user_id,
+               COUNT(t.id) as total,
+               SUM(CASE WHEN t.done THEN 1 ELSE 0 END) as done
+        FROM subjects s
+        LEFT JOIN subsections ss ON ss.subject_id = s.id
+        LEFT JOIN topics t ON t.subsection_id = ss.id
+        GROUP BY s.user_id
+    """,
+            fetch="all",
+        )
+        or []
+    )
+    tp_map = {
+        r["user_id"]: (int(r["total"] or 0), int(r["done"] or 0)) for r in tp_rows
+    }
+
+    ssp_rows = (
+        db_execute(
+            """
+        SELECT ss.user_id,
+               COUNT(ss.id) as cnt,
+               SUM(CASE WHEN ss.done THEN 1 ELSE 0 END) as done_cnt
+        FROM subsections ss
+        WHERE NOT EXISTS (SELECT 1 FROM topics t WHERE t.subsection_id=ss.id)
+        GROUP BY ss.user_id
+    """,
+            fetch="all",
+        )
+        or []
+    )
+    ssp_map = {
+        r["user_id"]: (int(r["cnt"] or 0), int(r["done_cnt"] or 0)) for r in ssp_rows
+    }
+
     result = []
     for u in users:
-        total, done = calc_progress_db(u["id"])
+        uid = u["id"]
+        t_total, t_done = tp_map.get(uid, (0, 0))
+        s_cnt, s_done = ssp_map.get(uid, (0, 0))
+        total = t_total + s_cnt
+        done = t_done + s_done
         pct = 0 if total == 0 else round((done / total) * 100)
-        sc = db_execute(
-            "SELECT COUNT(*) as c FROM subjects WHERE user_id=%s",
-            (u["id"],),
-            fetch="one",
-        )
-        nc = db_execute(
-            "SELECT COUNT(*) as c FROM notes WHERE user_id=%s", (u["id"],), fetch="one"
-        )
         result.append({
-            "id": u["id"],
+            "id": uid,
             "username": u["username"],
             "display_name": u["display_name"],
             "email": u.get("email", "—"),
             "avatar": u.get("avatar"),
-            "subject_count": int(sc["c"] or 0),
-            "notes_count": int(nc["c"] or 0),
+            "subject_count": sc_map.get(uid, 0),
+            "notes_count": nc_map.get(uid, 0),
             "progress_pct": pct,
             "created_at": str(u["created_at"]),
         })

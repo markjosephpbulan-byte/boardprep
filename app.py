@@ -20,21 +20,36 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  DATABASE
+#  DATABASE — Connection Pool (reuses connections, much faster)
 # ══════════════════════════════════════════════════════════════════════════════
 
+from psycopg2 import pool as pg_pool
 
-def get_db():
-    if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL environment variable not set")
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
-    conn.autocommit = False
-    return conn
+_pool = None
+
+
+def get_pool():
+    """Create the connection pool once, reuse forever."""
+    global _pool
+    if _pool is None:
+        if not DATABASE_URL:
+            raise RuntimeError("DATABASE_URL environment variable not set")
+        _pool = pg_pool.ThreadedConnectionPool(
+            minconn=1,  # keep at least 1 connection open
+            maxconn=10,  # max 10 simultaneous connections (free tier safe)
+            dsn=DATABASE_URL,
+            cursor_factory=psycopg2.extras.RealDictCursor,
+        )
+        print("[DB] Connection pool created ✅")
+    return _pool
 
 
 def db_execute(query, params=(), fetch="none"):
-    conn = get_db()
+    """Run a query using a pooled connection — fast."""
+    pool = get_pool()
+    conn = pool.getconn()
     try:
+        conn.autocommit = False
         cur = conn.cursor()
         cur.execute(query, params)
         result = None
@@ -51,7 +66,7 @@ def db_execute(query, params=(), fetch="none"):
         conn.rollback()
         raise e
     finally:
-        conn.close()
+        pool.putconn(conn)  # return connection to pool — NOT closed
 
 
 def init_db():
@@ -114,15 +129,14 @@ def init_db():
 
 
 try:
+    get_pool()  # warm up the pool immediately on startup
     init_db()
-    print("[DB] Tables ready ✅")
+    print("[DB] Ready ✅")
 except Exception as e:
-    print(f"[DB] ❌ Init FAILED: {e}")
-    print(f"[DB] DATABASE_URL set: {bool(DATABASE_URL)}")
+    print(f"[DB] ❌ FAILED: {e}")
     if DATABASE_URL:
-        # Print URL without password for debugging
         safe_url = DATABASE_URL.split("@")[1] if "@" in DATABASE_URL else "unknown"
-        print(f"[DB] Connecting to: ...@{safe_url}")
+        print(f"[DB] Tried connecting to: ...@{safe_url}")
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  RATE LIMITER
@@ -292,6 +306,11 @@ def safe_user(u):
 
 
 def get_subjects_for_user(user_id):
+    """
+    Load all subjects/subsections/topics in 3 queries total instead of
+    1 + N + N*M queries. Much faster for users with many subjects.
+    """
+    # Query 1 — all subjects
     subjects = (
         db_execute(
             "SELECT * FROM subjects WHERE user_id=%s ORDER BY position, created_at",
@@ -300,32 +319,57 @@ def get_subjects_for_user(user_id):
         )
         or []
     )
-    for s in subjects:
-        subsections = (
+    if not subjects:
+        return []
+
+    subject_ids = [s["id"] for s in subjects]
+
+    # Query 2 — all subsections for these subjects in one go
+    placeholders = ",".join(["%s"] * len(subject_ids))
+    all_subsections = (
+        db_execute(
+            f"SELECT * FROM subsections WHERE subject_id IN ({placeholders}) ORDER BY position, created_at",
+            subject_ids,
+            fetch="all",
+        )
+        or []
+    )
+
+    subsection_ids = [ss["id"] for ss in all_subsections]
+
+    # Query 3 — all topics for these subsections in one go
+    all_topics = []
+    if subsection_ids:
+        ph2 = ",".join(["%s"] * len(subsection_ids))
+        all_topics = (
             db_execute(
-                "SELECT * FROM subsections WHERE subject_id=%s ORDER BY position, created_at",
-                (s["id"],),
+                f"SELECT * FROM topics WHERE subsection_id IN ({ph2}) ORDER BY position, created_at",
+                subsection_ids,
                 fetch="all",
             )
             or []
         )
-        for ss in subsections:
-            ss["done"] = bool(ss["done"])
-            topics = (
-                db_execute(
-                    "SELECT * FROM topics WHERE subsection_id=%s ORDER BY position, created_at",
-                    (ss["id"],),
-                    fetch="all",
-                )
-                or []
-            )
-            for t in topics:
-                t["done"] = bool(t["done"])
-                t["created_at"] = str(t["created_at"])
-            ss["topics"] = topics
-            ss["created_at"] = str(ss["created_at"])
-        s["subsections"] = subsections
+
+    # Group topics by subsection_id
+    topics_by_ss = {}
+    for t in all_topics:
+        t["done"] = bool(t["done"])
+        t["created_at"] = str(t["created_at"])
+        topics_by_ss.setdefault(t["subsection_id"], []).append(t)
+
+    # Group subsections by subject_id
+    ss_by_subject = {}
+    for ss in all_subsections:
+        ss["done"] = bool(ss["done"])
+        ss["created_at"] = str(ss["created_at"])
+        ss["topics"] = topics_by_ss.get(ss["id"], [])
+        ss_by_subject.setdefault(ss["subject_id"], []).append(ss)
+
+    # Assemble final structure
+    for s in subjects:
+        s["subsections"] = ss_by_subject.get(s["id"], [])
         s["created_at"] = str(s["created_at"])
+
     return subjects
 
 
@@ -550,29 +594,88 @@ def reset_password():
 @app.route("/api/profiles", methods=["GET"])
 def list_profiles():
     try:
+        # One query for all users
         users = db_execute("SELECT * FROM users ORDER BY created_at", fetch="all") or []
+        if not users:
+            return jsonify([])
+
+        # One query for all subject counts
+        subject_counts = (
+            db_execute(
+                """
+            SELECT user_id, COUNT(*) as c
+            FROM subjects GROUP BY user_id
+        """,
+                fetch="all",
+            )
+            or []
+        )
+        sc_map = {r["user_id"]: int(r["c"]) for r in subject_counts}
+
+        # One query for all topic progress
+        topic_progress = (
+            db_execute(
+                """
+            SELECT s.user_id,
+                   COUNT(t.id) as total,
+                   SUM(CASE WHEN t.done THEN 1 ELSE 0 END) as done
+            FROM subjects s
+            LEFT JOIN subsections ss ON ss.subject_id = s.id
+            LEFT JOIN topics t ON t.subsection_id = ss.id
+            GROUP BY s.user_id
+        """,
+                fetch="all",
+            )
+            or []
+        )
+        tp_map = {
+            r["user_id"]: (int(r["total"] or 0), int(r["done"] or 0))
+            for r in topic_progress
+        }
+
+        # One query for subsection-only progress (no topics)
+        ss_progress = (
+            db_execute(
+                """
+            SELECT ss.user_id,
+                   COUNT(ss.id) as cnt,
+                   SUM(CASE WHEN ss.done THEN 1 ELSE 0 END) as done_cnt
+            FROM subsections ss
+            WHERE NOT EXISTS (SELECT 1 FROM topics t WHERE t.subsection_id=ss.id)
+            GROUP BY ss.user_id
+        """,
+                fetch="all",
+            )
+            or []
+        )
+        ssp_map = {
+            r["user_id"]: (int(r["cnt"] or 0), int(r["done_cnt"] or 0))
+            for r in ss_progress
+        }
+
+        profiles = []
+        for u in users:
+            uid = u["id"]
+            t_total, t_done = tp_map.get(uid, (0, 0))
+            s_cnt, s_done = ssp_map.get(uid, (0, 0))
+            total = t_total + s_cnt
+            done = t_done + s_done
+            pct = 0 if total == 0 else round((done / total) * 100)
+            profiles.append({
+                "id": uid,
+                "username": u["username"],
+                "display_name": u["display_name"],
+                "avatar": u.get("avatar"),
+                "subject_count": sc_map.get(uid, 0),
+                "progress_pct": pct,
+                "created_at": str(u["created_at"]),
+            })
+        return jsonify(profiles)
     except Exception as e:
         print(f"[DB ERROR] list_profiles: {e}")
-        return jsonify({"error": f"Database connection failed: {str(e)}"}), 500
-    profiles = []
-    for u in users:
-        total, done = calc_progress_db(u["id"])
-        pct = 0 if total == 0 else round((done / total) * 100)
-        sc = db_execute(
-            "SELECT COUNT(*) as c FROM subjects WHERE user_id=%s",
-            (u["id"],),
-            fetch="one",
-        )
-        profiles.append({
-            "id": u["id"],
-            "username": u["username"],
-            "display_name": u["display_name"],
-            "avatar": u.get("avatar"),
-            "subject_count": int(sc["c"] or 0),
-            "progress_pct": pct,
-            "created_at": str(u["created_at"]),
-        })
-    return jsonify(profiles)
+        return jsonify({
+            "error": "Could not load profiles. Please refresh the page."
+        }), 500
 
 
 @app.route("/api/profiles/<user_id>", methods=["GET"])

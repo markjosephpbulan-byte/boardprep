@@ -1880,7 +1880,7 @@ Important rules:
     console.log('[Motivation] Subjects count:', subjects.length, '| Names:', subjects.map(s=>s.name).join(', ') || 'NONE');
     console.log('[Motivation] Calling Gemini API...');
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${key}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

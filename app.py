@@ -979,6 +979,11 @@ def admin_page():
     return send_from_directory("static", "admin.html")
 
 
+@app.route("/privacy")
+def privacy_page():
+    return send_from_directory("static", "privacy.html")
+
+
 @app.route("/<path:path>")
 def catch_all(path):
     return send_from_directory("static", "index.html")

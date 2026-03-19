@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Privacy Policy — BoardPrep PH</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:       #0d1117;
+    --bg2:      #161b22;
+    --surface:  #1e2736;
+    --border:   rgba(255,255,255,0.08);
+    --border2:  rgba(255,255,255,0.14);
+    --text:     #e8edf5;
+    --text2:    #8b97a8;
+    --text3:    #5a6678;
+    --gold:     #f5c842;
+    --green:    #3ecf8e;
+    --radius:   14px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    font-size: 1rem;
+  }
+
+  /* ── Header ── */
+  .site-header {
+    background: rgba(13,17,23,0.95);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-inner {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+  }
+  .logo-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--text);
+  }
+  .logo-text span { color: var(--gold); }
+  .back-btn {
+    font-size: 0.85rem;
+    color: var(--text3);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.2s;
+  }
+  .back-btn:hover { color: var(--gold); }
+
+  /* ── Page ── */
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 3rem 2rem 6rem;
+  }
+
+  /* ── Hero ── */
+  .page-hero {
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .page-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(245,200,66,0.08);
+    border: 1px solid rgba(245,200,66,0.2);
+    border-radius: 99px;
+    padding: 4px 14px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--gold);
+    font-family: 'Syne', sans-serif;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 1.25rem;
+  }
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 2.25rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.5px;
+  }
+  .page-meta {
+    font-size: 0.85rem;
+    color: var(--text3);
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .page-meta span { display: flex; align-items: center; gap: 5px; }
+
+  /* ── Summary card ── */
+  .summary-card {
+    background: linear-gradient(135deg, rgba(245,200,66,0.06), rgba(62,207,142,0.04));
+    border: 1px solid rgba(245,200,66,0.2);
+    border-radius: var(--radius);
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 2.5rem;
+  }
+  .summary-card p {
+    color: var(--text2);
+    font-size: 0.95rem;
+    margin: 0;
+  }
+  .summary-card strong { color: var(--text); }
+
+  /* ── Sections ── */
+  .section {
+    margin-bottom: 2.5rem;
+  }
+  h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2 .section-num {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--gold);
+    flex-shrink: 0;
+  }
+  p {
+    color: var(--text2);
+    margin-bottom: 0.85rem;
+    font-size: 0.95rem;
+  }
+  p:last-child { margin-bottom: 0; }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  ul li {
+    color: var(--text2);
+    font-size: 0.95rem;
+    padding-left: 1.25rem;
+    position: relative;
+  }
+  ul li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--gold);
+    font-size: 0.8rem;
+  }
+
+  /* ── Divider ── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 2.5rem 0;
+  }
+
+  /* ── Contact box ── */
+  .contact-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 1.5rem 1.75rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .contact-icon { font-size: 1.75rem; flex-shrink: 0; }
+  .contact-box h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+  }
+  .contact-box p { font-size: 0.88rem; color: var(--text2); margin: 0; }
+  .contact-box a { color: var(--gold); text-decoration: none; }
+  .contact-box a:hover { text-decoration: underline; }
+
+  /* ── Footer ── */
+  .page-footer {
+    margin-top: 4rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text3);
+  }
+  .page-footer a { color: var(--gold); text-decoration: none; }
+
+  @media (max-width: 640px) {
+    h1 { font-size: 1.75rem; }
+    .header-inner { padding: 0 1rem; }
+    .page { padding: 2rem 1rem 4rem; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a href="/" class="logo">
+      <span>📚</span>
+      <span class="logo-text">BoardPrep <span>PH</span></span>
+    </a>
+    <a href="/" class="back-btn">← Back to App</a>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- Hero -->
+  <div class="page-hero">
+    <div class="page-badge">📄 Legal</div>
+    <h1>Privacy Policy</h1>
+    <div class="page-meta">
+      <span>🗓️ Effective: January 1, 2025</span>
+      <span>✏️ Last updated: January 1, 2025</span>
+    </div>
+  </div>
+
+  <!-- Plain-English Summary -->
+  <div class="summary-card">
+    <p>
+      <strong>Plain English summary:</strong> BoardPrep PH collects only what is needed to run your account —
+      your username, email, and the study data you create. We do not sell your data, show you ads, or share
+      your information with anyone except the email service we use to send verification codes.
+      You can delete your account at any time and all your data will be permanently removed.
+    </p>
+  </div>
+
+  <!-- Section 1 -->
+  <div class="section">
+    <h2><span class="section-num">1</span> Who We Are</h2>
+    <p>
+      BoardPrep PH is a free online learning tracker designed to help Filipino students prepare for their
+      professional board examinations. The service is operated by an individual developer based in the Philippines.
+    </p>
+    <p>
+      If you have any questions about this Privacy Policy, you can contact us at the details provided at
+      the bottom of this page.
+    </p>
+  </div>
+
+  <!-- Section 2 -->
+  <div class="section">
+    <h2><span class="section-num">2</span> What Information We Collect</h2>
+    <p>We collect only the information necessary to provide the service:</p>
+    <ul>
+      <li><strong>Username</strong> — chosen by you when creating your profile</li>
+      <li><strong>Display name</strong> — the name shown on your public profile card</li>
+      <li><strong>Email address</strong> — used only to verify your account and for password recovery</li>
+      <li><strong>Password</strong> — stored as a secure hash (we never store your actual password)</li>
+      <li><strong>Study data</strong> — the subjects, sub-subjects, topics, notes, and exam date you add</li>
+      <li><strong>Profile picture</strong> — if you choose to upload one</li>
+    </ul>
+    <p>
+      We do <strong>not</strong> collect your location, device information, browsing history, or any
+      information beyond what is listed above.
+    </p>
+  </div>
+
+  <!-- Section 3 -->
+  <div class="section">
+    <h2><span class="section-num">3</span> How We Use Your Information</h2>
+    <p>Your information is used exclusively to provide and improve BoardPrep PH:</p>
+    <ul>
+      <li>To create and manage your account</li>
+      <li>To send a one-time verification code when you register</li>
+      <li>To send a password reset code if you request one</li>
+      <li>To display your study progress within the app</li>
+      <li>To generate personalized AI motivational messages based on your subjects and progress</li>
+    </ul>
+    <p>
+      We do <strong>not</strong> use your information for marketing emails, targeted advertising,
+      or any purpose beyond operating the app.
+    </p>
+  </div>
+
+  <!-- Section 4 -->
+  <div class="section">
+    <h2><span class="section-num">4</span> How We Share Your Information</h2>
+    <p>
+      We do not sell, trade, or rent your personal information to any third party. We share limited
+      data only with the following service providers, strictly to operate the app:
+    </p>
+    <ul>
+      <li>
+        <strong>Brevo (email service)</strong> — receives your email address to deliver verification
+        and password reset codes. Brevo does not use your email for any other purpose.
+        <a href="https://www.brevo.com/legal/privacypolicy/" target="_blank" style="color:var(--gold)">Brevo Privacy Policy →</a>
+      </li>
+      <li>
+        <strong>Google Gemini AI</strong> — receives your display name, subject names, and overall
+        progress percentage to generate your daily motivational message. No personally identifiable
+        information beyond these details is shared.
+        <a href="https://policies.google.com/privacy" target="_blank" style="color:var(--gold)">Google Privacy Policy →</a>
+      </li>
+      <li>
+        <strong>Railway (hosting)</strong> — hosts our servers and stores all app data on servers
+        located outside the Philippines.
+        <a href="https://railway.app/legal/privacy" target="_blank" style="color:var(--gold)">Railway Privacy Policy →</a>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Section 5 -->
+  <div class="section">
+    <h2><span class="section-num">5</span> Data Storage and Security</h2>
+    <p>
+      All data is stored on Railway's servers. Your password is never stored in plain text —
+      it is converted to a secure hash using industry-standard encryption (bcrypt) before being saved.
+    </p>
+    <p>
+      While we take reasonable measures to protect your data, no internet service can guarantee
+      100% security. We encourage you to use a strong, unique password for your BoardPrep PH account.
+    </p>
+    <p>
+      Data is retained for as long as your account exists. When you delete your account, all your
+      data — including subjects, topics, notes, and profile information — is permanently and
+      immediately deleted from our servers.
+    </p>
+  </div>
+
+  <!-- Section 6 -->
+  <div class="section">
+    <h2><span class="section-num">6</span> Your Rights</h2>
+    <p>You have full control over your data:</p>
+    <ul>
+      <li><strong>Access</strong> — you can view all your data at any time by logging into your account</li>
+      <li><strong>Edit</strong> — you can update your username, display name, email, and password in your profile settings</li>
+      <li><strong>Delete</strong> — you can permanently delete your account and all associated data at any time via the "Delete My Profile" option in your profile menu</li>
+      <li><strong>Contact us</strong> — if you need help accessing or removing your data, contact us directly</li>
+    </ul>
+  </div>
+
+  <!-- Section 7 -->
+  <div class="section">
+    <h2><span class="section-num">7</span> Children's Privacy</h2>
+    <p>
+      BoardPrep PH is intended for users who are preparing for professional board examinations and is
+      therefore designed for adults and college-level students. We do not knowingly collect personal
+      information from children under 13 years of age. If you believe a child has provided us with
+      their information, please contact us and we will delete it immediately.
+    </p>
+  </div>
+
+  <!-- Section 8 -->
+  <div class="section">
+    <h2><span class="section-num">8</span> Cookies and Local Storage</h2>
+    <p>
+      BoardPrep PH uses browser session cookies to keep you logged in. We also use your browser's
+      local storage to cache your daily motivational message so it loads instantly on repeat visits.
+      No tracking cookies or third-party advertising cookies are used.
+    </p>
+  </div>
+
+  <!-- Section 9 -->
+  <div class="section">
+    <h2><span class="section-num">9</span> Changes to This Policy</h2>
+    <p>
+      We may update this Privacy Policy from time to time. When we do, we will update the
+      "Last updated" date at the top of this page. Continued use of BoardPrep PH after
+      any changes constitutes your acceptance of the updated policy.
+    </p>
+    <p>
+      We will never make changes that significantly reduce your privacy rights without giving
+      you clear notice within the app.
+    </p>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Contact -->
+  <div class="contact-box">
+    <div class="contact-icon">✉️</div>
+    <div>
+      <h3>Questions or Concerns?</h3>
+      <p>
+        If you have any questions about this Privacy Policy or how we handle your data,
+        please reach out to us. We are happy to help.<br/>
+        <a href="mailto:..">...</a>
+        &nbsp;·&nbsp;
+        <a href="/">boardprepph.com</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="page-footer">
+    <p>© 2025 BoardPrep PH · <a href="/">Back to App</a></p>
+    <p style="margin-top:6px">Made with ❤️ for Filipino board exam reviewers</p>
+  </div>
+
+</main>
+
+</body>
+</html>

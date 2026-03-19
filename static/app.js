@@ -360,7 +360,7 @@ async function doLogout() {
   if (overlay) overlay.classList.remove('open');
 
   // Stop & hide pomodoro
-  pomodoroReset();
+  resetPomodoro();
   document.getElementById('pomodoroFab').style.display = 'none';
   document.getElementById('pomodoroWidget').style.display = 'none';
 
@@ -414,7 +414,7 @@ async function confirmDeleteAccount() {
     // Success — wipe state and go back to landing
     closeModal('deleteAccountModal');
     currentUser = null; subjects = []; notes = [];
-    pomodoroReset();
+    resetPomodoro();
     document.getElementById('pomodoroFab').style.display = 'none';
     document.getElementById('pomodoroWidget').style.display = 'none';
     showView('landing');

@@ -374,3 +374,170 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   .profiles-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
   .header-actions { gap: 6px; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   COUNTDOWN CHIP
+   ══════════════════════════════════════════════════════════════ */
+.countdown-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(245,200,66,0.12), rgba(62,207,142,0.08));
+  border: 1px solid rgba(245,200,66,0.3);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.countdown-chip:hover { border-color: var(--gold); background: linear-gradient(135deg, rgba(245,200,66,0.2), rgba(62,207,142,0.12)); }
+.countdown-icon { font-size: 1.2rem; }
+.countdown-days {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--gold);
+  line-height: 1;
+}
+.countdown-label { font-size: 0.68rem; color: var(--text3); margin-top: 1px; white-space: nowrap; }
+.countdown-chip.urgent .countdown-days { color: var(--red); }
+.countdown-chip.urgent { border-color: rgba(245,101,101,0.4); background: rgba(245,101,101,0.08); }
+.countdown-chip.done .countdown-days { color: var(--green); font-size: 0.85rem; }
+
+/* ══════════════════════════════════════════════════════════════
+   POMODORO
+   ══════════════════════════════════════════════════════════════ */
+
+/* Floating action button */
+.pomodoro-fab {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid var(--border2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  cursor: pointer;
+  z-index: 150;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  transition: all 0.2s;
+  user-select: none;
+}
+.pomodoro-fab:hover { transform: scale(1.1); border-color: var(--gold); box-shadow: 0 6px 24px rgba(245,200,66,0.2); }
+.pomodoro-fab.running { border-color: var(--green); box-shadow: 0 0 0 3px rgba(62,207,142,0.2); animation: pom-pulse 2s ease infinite; }
+.pomodoro-fab.break-running { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,0.2); }
+
+@keyframes pom-pulse { 0%,100% { box-shadow: 0 0 0 3px rgba(62,207,142,0.2); } 50% { box-shadow: 0 0 0 6px rgba(62,207,142,0.08); } }
+
+/* Widget panel */
+.pomodoro-widget {
+  position: fixed;
+  bottom: 6rem;
+  right: 2rem;
+  width: 300px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  z-index: 149;
+  overflow: hidden;
+  animation: slideUpFade 0.25s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes slideUpFade { from { opacity:0; transform:translateY(16px) scale(0.96); } to { opacity:1; transform:translateY(0) scale(1); } }
+
+.pom-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.9rem 1rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.pom-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.9rem; }
+.pom-close { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 0.9rem; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; }
+.pom-close:hover { color: var(--text); background: var(--border); }
+
+/* Mode tabs */
+.pom-mode-tabs { display: flex; padding: 0.5rem; gap: 4px; background: var(--bg3); }
+.pom-tab {
+  flex: 1; background: transparent; border: none;
+  color: var(--text3); font-size: 0.75rem; font-weight: 500;
+  padding: 0.4rem 0.3rem; border-radius: 6px; cursor: pointer;
+  transition: all 0.2s; font-family: 'DM Sans', sans-serif;
+}
+.pom-tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.pom-tab:hover:not(.active) { color: var(--text2); }
+
+/* Timer ring */
+.pom-timer-display {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  padding: 1.25rem 0 0.5rem;
+}
+.pom-ring-svg { width: 140px; height: 140px; transform: rotate(-90deg); }
+.pom-ring-bg { fill: none; stroke: var(--bg3); stroke-width: 8; }
+.pom-ring-progress {
+  fill: none; stroke: var(--green); stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 326.7;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1s linear, stroke 0.3s;
+}
+.pom-ring-progress.break-mode { stroke: #60a5fa; }
+.pom-time {
+  position: absolute;
+  font-family: 'Syne', sans-serif;
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -1px;
+}
+
+/* Session dots */
+.pom-session-info {
+  text-align: center; font-size: 0.78rem; color: var(--text3);
+  padding: 0 1rem 0.5rem;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.pom-session-dots { display: flex; gap: 4px; }
+.pom-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--border2); transition: background 0.3s;
+}
+.pom-dot.done { background: var(--green); }
+.pom-dot.current { background: var(--gold); }
+
+/* Controls */
+.pom-controls {
+  display: flex; align-items: center; justify-content: center;
+  gap: 16px; padding: 0.5rem 1rem 0.75rem;
+}
+.pom-btn-play {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--green); color: white; border: none;
+  font-size: 1.2rem; cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+}
+.pom-btn-play:hover { transform: scale(1.08); }
+.pom-btn-play.break-mode { background: #60a5fa; }
+.pom-btn-ctrl {
+  background: transparent; border: 1px solid var(--border2);
+  color: var(--text2); width: 36px; height: 36px; border-radius: 50%;
+  font-size: 1rem; cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+}
+.pom-btn-ctrl:hover { border-color: var(--text2); color: var(--text); }
+
+.pom-footer {
+  text-align: center; font-size: 0.75rem; color: var(--text3);
+  padding: 0 1rem 0.85rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+}
+
+@media (max-width: 640px) {
+  .pomodoro-widget { right: 1rem; left: 1rem; width: auto; bottom: 5rem; }
+  .pomodoro-fab { bottom: 1.25rem; right: 1.25rem; }
+  .countdown-chip { display: none !important; }
+}

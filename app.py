@@ -158,6 +158,7 @@ def safe_user(u):
         "username": u["username"],
         "display_name": u["display_name"],
         "avatar": u.get("avatar"),
+        "exam_date": u.get("exam_date", None),
         "created_at": u["created_at"],
     }
 
@@ -236,6 +237,8 @@ def update_profile(user_id):
         dn = body["display_name"].strip()
         if dn:
             user["display_name"] = dn
+    if "exam_date" in body:
+        user["exam_date"] = body["exam_date"]  # "YYYY-MM-DD" or None to clear
     if "new_password" in body and body["new_password"]:
         if not body.get("current_password"):
             return jsonify({"error": "Current password required"}), 400

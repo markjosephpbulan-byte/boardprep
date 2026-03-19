@@ -93,6 +93,14 @@
           <div class="logo-sub">Board Exam Learning Tracker</div>
         </div>
       </div>
+      <!-- Countdown chip -->
+      <div class="countdown-chip" id="countdownChip" style="display:none" onclick="openProfileModal()">
+        <span class="countdown-icon">🗓️</span>
+        <div class="countdown-info">
+          <div class="countdown-days" id="countdownDays">—</div>
+          <div class="countdown-label" id="countdownLabel">days to board exam</div>
+        </div>
+      </div>
       <div class="header-actions">
         <button class="btn-notes-toggle" onclick="toggleNotesSidebar()">
           🗒️ Quick Notes <span class="notes-badge" id="notesBadge">0</span>
@@ -216,6 +224,8 @@
       </div>
       <label>Display Name</label>
       <input type="text" id="profileDisplayName" placeholder="Your display name" maxlength="40"/>
+      <label>Board Exam Date <span class="opt">(for countdown timer)</span></label>
+      <input type="date" id="profileExamDate"/>
       <div class="divider"></div>
       <label>Change Password <span class="opt">(leave blank to keep current)</span></label>
       <input type="password" id="profileCurrentPw" placeholder="Current password"/>
@@ -238,6 +248,43 @@
       <button class="btn-ghost" onclick="closeModal('confirmModal')">Cancel</button>
       <button class="btn-danger" id="confirmDeleteBtn">Delete</button>
     </div>
+  </div>
+</div>
+
+<!-- ══ POMODORO ══════════════════════════════════════════════════════════════ -->
+<div class="pomodoro-fab" id="pomodoroFab" onclick="togglePomodoro()" title="Pomodoro Timer" style="display:none">
+  🍅
+  <span class="pom-fab-ring" id="pomFabRing"></span>
+</div>
+
+<div class="pomodoro-widget" id="pomodoroWidget" style="display:none">
+  <div class="pom-header">
+    <div class="pom-title">🍅 Pomodoro Timer</div>
+    <button class="pom-close" onclick="togglePomodoro()">✕</button>
+  </div>
+  <div class="pom-mode-tabs">
+    <button class="pom-tab active" id="tab-focus" onclick="switchMode('focus')">Focus</button>
+    <button class="pom-tab" id="tab-short" onclick="switchMode('short')">Short Break</button>
+    <button class="pom-tab" id="tab-long" onclick="switchMode('long')">Long Break</button>
+  </div>
+  <div class="pom-timer-display">
+    <svg class="pom-ring-svg" viewBox="0 0 120 120">
+      <circle class="pom-ring-bg" cx="60" cy="60" r="52"/>
+      <circle class="pom-ring-progress" id="pomRingProgress" cx="60" cy="60" r="52"/>
+    </svg>
+    <div class="pom-time" id="pomTime">25:00</div>
+  </div>
+  <div class="pom-session-info">
+    Session <span id="pomSession">1</span> of 4
+    <span class="pom-session-dots" id="pomDots"></span>
+  </div>
+  <div class="pom-controls">
+    <button class="pom-btn-ctrl" onclick="resetPomodoro()" title="Reset">↺</button>
+    <button class="pom-btn-play" id="pomPlayBtn" onclick="togglePomodoro_timer()">▶</button>
+    <button class="pom-btn-ctrl" onclick="skipPomodoro()" title="Skip">⏭</button>
+  </div>
+  <div class="pom-footer">
+    <span id="pomModeLabel">Stay focused for 25 minutes!</span>
   </div>
 </div>
 

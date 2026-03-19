@@ -182,6 +182,9 @@ async function doLogout() {
   await fetch('/api/auth/logout', { method: 'POST' });
   currentUser = null; subjects = []; notes = [];
   closeProfileMenu();
+  pomodoroReset();
+  document.getElementById('pomodoroFab').style.display = 'none';
+  document.getElementById('pomodoroWidget').style.display = 'none';
   showView('landing');
   loadProfiles();
 }
@@ -191,7 +194,9 @@ async function doLogout() {
 // ══════════════════════════════════════════════════════════════
 async function enterTracker() {
   updateHeaderProfile();
+  updateCountdown();
   showView('tracker');
+  showPomodoroFab();
   await Promise.all([loadSubjects(), loadNotes()]);
 }
 
@@ -230,6 +235,7 @@ function openProfileModal() {
   document.getElementById('profileCurrentPw').value   = '';
   document.getElementById('profileNewPw').value       = '';
   document.getElementById('profile-error').textContent = '';
+  document.getElementById('profileExamDate').value    = currentUser.exam_date || '';
   avatarDataUrl = null;
   // Show current avatar
   const prev = document.getElementById('avatarPreview');
@@ -281,8 +287,12 @@ async function saveProfile() {
     }
   }
 
-  // Update display name / password
-  const body = { display_name: document.getElementById('profileDisplayName').value.trim() };
+  // Update display name / password / exam date
+  const examDateVal = document.getElementById('profileExamDate').value;
+  const body = {
+    display_name: document.getElementById('profileDisplayName').value.trim(),
+    exam_date: examDateVal || null
+  };
   const newPw = document.getElementById('profileNewPw').value;
   if (newPw) {
     body.new_password     = newPw;
@@ -298,6 +308,7 @@ async function saveProfile() {
 
   currentUser = { ...currentUser, ...d2 };
   updateHeaderProfile();
+  updateCountdown();
   closeModal('profileModal');
   showToast('Profile updated!');
 }
@@ -804,3 +815,229 @@ document.querySelectorAll('.modal-backdrop').forEach(b => {
 
 // ══════════════════════════════════════════════════════════════
 boot();
+
+// ══════════════════════════════════════════════════════════════
+//  COUNTDOWN TIMER
+// ══════════════════════════════════════════════════════════════
+
+function updateCountdown() {
+  const chip = document.getElementById('countdownChip');
+  const daysEl = document.getElementById('countdownDays');
+  const labelEl = document.getElementById('countdownLabel');
+
+  if (!currentUser || !currentUser.exam_date) {
+    chip.style.display = 'none';
+    return;
+  }
+
+  const today    = new Date();
+  today.setHours(0, 0, 0, 0);
+  const examDate = new Date(currentUser.exam_date + 'T00:00:00');
+  const diffMs   = examDate - today;
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+  chip.style.display = 'flex';
+  chip.classList.remove('urgent', 'done');
+
+  if (diffDays < 0) {
+    daysEl.textContent  = '🎓 Exam Day Passed';
+    labelEl.textContent = 'Hope it went well!';
+    chip.classList.add('done');
+  } else if (diffDays === 0) {
+    daysEl.textContent  = '🔥 TODAY!';
+    labelEl.textContent = 'Good luck on your board exam!';
+    chip.classList.add('urgent');
+  } else if (diffDays === 1) {
+    daysEl.textContent  = '1 day';
+    labelEl.textContent = 'Tomorrow is your board exam!';
+    chip.classList.add('urgent');
+  } else if (diffDays <= 7) {
+    daysEl.textContent  = diffDays + ' days';
+    labelEl.textContent = 'days to board exam';
+    chip.classList.add('urgent');
+  } else {
+    daysEl.textContent  = diffDays + ' days';
+    labelEl.textContent = 'days to board exam';
+  }
+}
+
+// Refresh countdown every minute (in case browser stays open overnight)
+setInterval(() => { if (currentUser) updateCountdown(); }, 60 * 1000);
+
+
+// ══════════════════════════════════════════════════════════════
+//  POMODORO TIMER
+// ══════════════════════════════════════════════════════════════
+
+const POM_MODES = {
+  focus: { label: 'Stay focused for 25 minutes!', minutes: 25, color: 'var(--green)' },
+  short: { label: 'Short break — relax for 5 minutes.', minutes: 5,  color: '#60a5fa' },
+  long:  { label: 'Long break — rest for 15 minutes.',  minutes: 15, color: '#a78bfa' }
+};
+const CIRCUMFERENCE = 2 * Math.PI * 52; // r=52
+
+let pomMode      = 'focus';
+let pomRunning   = false;
+let pomSeconds   = 25 * 60;
+let pomTotal     = 25 * 60;
+let pomInterval  = null;
+let pomSession   = 1;
+let pomCompleted = 0;   // completed focus sessions
+let pomWidgetOpen = false;
+
+function showPomodoroFab() {
+  document.getElementById('pomodoroFab').style.display = 'flex';
+}
+
+function togglePomodoro() {
+  pomWidgetOpen = !pomWidgetOpen;
+  document.getElementById('pomodoroWidget').style.display = pomWidgetOpen ? 'block' : 'none';
+}
+
+function switchMode(mode) {
+  // Don't switch if running
+  if (pomRunning) { showToast('Pause the timer before switching modes'); return; }
+  pomMode = mode;
+  pomSeconds = POM_MODES[mode].minutes * 60;
+  pomTotal   = pomSeconds;
+
+  // Update tabs
+  document.querySelectorAll('.pom-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`tab-${mode}`).classList.add('active');
+
+  // Update ring color
+  const ring = document.getElementById('pomRingProgress');
+  ring.style.stroke = POM_MODES[mode].color;
+  ring.classList.toggle('break-mode', mode !== 'focus');
+
+  // Update play button color
+  const playBtn = document.getElementById('pomPlayBtn');
+  playBtn.classList.toggle('break-mode', mode !== 'focus');
+  playBtn.style.background = POM_MODES[mode].color;
+
+  // Update footer label
+  document.getElementById('pomModeLabel').textContent = POM_MODES[mode].label;
+
+  renderPomTimer();
+}
+
+function togglePomodoro_timer() {
+  if (pomRunning) {
+    pausePomodoro();
+  } else {
+    startPomodoro();
+  }
+}
+
+function startPomodoro() {
+  pomRunning = true;
+  document.getElementById('pomPlayBtn').textContent = '⏸';
+  document.getElementById('pomodoroFab').classList.toggle('running', pomMode === 'focus');
+  document.getElementById('pomodoroFab').classList.toggle('break-running', pomMode !== 'focus');
+
+  pomInterval = setInterval(() => {
+    pomSeconds--;
+    renderPomTimer();
+    if (pomSeconds <= 0) {
+      clearInterval(pomInterval);
+      pomRunning = false;
+      onPomComplete();
+    }
+  }, 1000);
+}
+
+function pausePomodoro() {
+  pomRunning = false;
+  clearInterval(pomInterval);
+  document.getElementById('pomPlayBtn').textContent = '▶';
+  document.getElementById('pomodoroFab').classList.remove('running', 'break-running');
+}
+
+function resetPomodoro() {
+  pausePomodoro();
+  pomSeconds = POM_MODES[pomMode].minutes * 60;
+  pomTotal   = pomSeconds;
+  renderPomTimer();
+}
+
+function skipPomodoro() {
+  pausePomodoro();
+  onPomComplete();
+}
+
+function onPomComplete() {
+  document.getElementById('pomodoroFab').classList.remove('running', 'break-running');
+  document.getElementById('pomPlayBtn').textContent = '▶';
+
+  if (pomMode === 'focus') {
+    pomCompleted++;
+    pomSession = Math.min(pomSession + 1, 4);
+    // Auto suggest break
+    if (pomCompleted % 4 === 0) {
+      showToast('🎉 4 sessions done! Take a long break!');
+      switchMode('long');
+    } else {
+      showToast('✅ Focus session done! Take a short break.');
+      switchMode('short');
+    }
+  } else {
+    // Break done — back to focus
+    showToast('⏰ Break over! Time to focus.');
+    if (pomSession > 4) pomSession = 1;
+    switchMode('focus');
+  }
+
+  // Open widget so user sees the transition
+  pomWidgetOpen = true;
+  document.getElementById('pomodoroWidget').style.display = 'block';
+  renderPomDots();
+
+  // Browser notification if supported
+  if (Notification.permission === 'granted') {
+    new Notification('BoardPrep PH 🍅', {
+      body: pomMode === 'focus' ? 'Break time! You earned it.' : 'Back to studying!',
+      icon: '📚'
+    });
+  }
+}
+
+function renderPomTimer() {
+  // Time display
+  const m = Math.floor(pomSeconds / 60).toString().padStart(2, '0');
+  const s = (pomSeconds % 60).toString().padStart(2, '0');
+  document.getElementById('pomTime').textContent = `${m}:${s}`;
+
+  // Ring progress
+  const progress  = pomSeconds / pomTotal;
+  const offset    = CIRCUMFERENCE * (1 - progress);
+  document.getElementById('pomRingProgress').style.strokeDashoffset = offset;
+
+  // Update page title when running
+  if (pomRunning) {
+    document.title = `${m}:${s} — BoardPrep PH`;
+  } else {
+    document.title = 'BoardPrep PH';
+  }
+}
+
+function renderPomDots() {
+  const dotsEl = document.getElementById('pomDots');
+  document.getElementById('pomSession').textContent = Math.min(pomSession, 4);
+  dotsEl.innerHTML = [1,2,3,4].map(i => {
+    let cls = 'pom-dot';
+    if (i < pomSession) cls += ' done';
+    else if (i === pomSession) cls += ' current';
+    return `<div class="${cls}"></div>`;
+  }).join('');
+}
+
+// Request notification permission when user first interacts with pomodoro
+document.getElementById('pomodoroFab').addEventListener('click', () => {
+  if (Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}, { once: true });
+
+// Init ring dasharray
+document.getElementById('pomRingProgress').style.strokeDasharray = CIRCUMFERENCE;
+renderPomDots();

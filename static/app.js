@@ -765,6 +765,9 @@ async function saveProfile() {
     body.current_password = document.getElementById('profileCurrentPw').value;
   }
 
+  // Keep the avatar state we already handled above
+  const avatarBeforeSave = currentUser.avatar;
+
   const r2 = await fetch(`/api/profiles/${uid}/settings`, {
     method: 'PUT', headers: {'Content-Type':'application/json'},
     body: JSON.stringify(body)
@@ -772,7 +775,15 @@ async function saveProfile() {
   const d2 = await r2.json();
   if (!r2.ok) { errEl.textContent = d2.error; return; }
 
+  // Merge settings response but preserve the avatar we already handled
   currentUser = { ...currentUser, ...d2 };
+  if (avatarDataUrl === 'remove') {
+    currentUser.avatar = null;  // force null — don't let stale cache restore it
+  } else if (avatarDataUrl === null) {
+    currentUser.avatar = avatarBeforeSave;  // unchanged — keep existing
+  }
+  // if avatarDataUrl is a new upload, currentUser.avatar already updated above
+
   updateHeaderProfile();
   updateCountdown();
   closeModal('profileModal');
@@ -1620,7 +1631,13 @@ renderPomDots();
 // ══════════════════════════════════════════════════════════════
 
 const GEMINI_API_KEY = 'REPLACE_WITH_YOUR_GEMINI_KEY';  // ← replaced via env in production
-const MOTIVATION_CACHE_KEY = () => `boardprep_motivation_${currentUser?.id || 'anon'}`;
+// Motivation cache — keyed by user + date + slot
+// Slot increments on each manual refresh so each refresh is independently cached
+let _motivationSlot = 0;
+const MOTIVATION_CACHE_KEY = (slot) => {
+  const s = slot !== undefined ? slot : _motivationSlot;
+  return `boardprep_motivation_${currentUser?.id || 'anon'}_${getTodayKey()}_${s}`;
+};
 
 const STUDY_TIPS = [
   "Use the Pomodoro technique — 25 minutes of focused study, then a 5-minute break. Repeat.",
@@ -1703,18 +1720,17 @@ async function fetchMotivation(forceRefresh = false) {
 
   const todayKey = getTodayKey();
 
-  // forceRefresh = clear the cache first so we always get a fresh one
+  // forceRefresh — increment slot to get a fresh key, always goes to Gemini
   if (forceRefresh) {
-    try { localStorage.removeItem(MOTIVATION_CACHE_KEY()); } catch(e) {}
-    // Also clear the date so even a same-day refresh goes to Gemini
-    console.log('[Motivation] Force refresh — cache cleared');
+    _motivationSlot++;
+    console.log('[Motivation] Force refresh — new slot:', _motivationSlot);
   }
 
-  // Check cache — use stored message if same day and not forced
+  // Check cache using current slot — use stored message if available
   if (!forceRefresh) {
     try {
       const cached = JSON.parse(localStorage.getItem(MOTIVATION_CACHE_KEY()) || 'null');
-      if (cached && cached.date === todayKey && cached.message) {
+      if (cached && cached.message) {
         renderMotivation(cached.message, cached.tip, todayKey);
         return;
       }
@@ -1829,7 +1845,7 @@ Important rules:
       ];
       const msg = fallbacks[Math.floor(Math.random() * fallbacks.length)];
       const tip = getRandomTip(profession);
-      if (!forceRefresh) cacheMotivation(msg, tip, todayKey);  // don't cache on forced refresh
+      cacheMotivation(msg, tip, todayKey);
       renderMotivation(msg, tip, todayKey);
       return;
     }
@@ -1873,7 +1889,7 @@ Important rules:
     ];
     const fallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
     const tip = getRandomTip(profession);
-    if (!forceRefresh) cacheMotivation(fallback, tip, todayKey);
+    cacheMotivation(fallback, tip, todayKey);
     renderMotivation(fallback, tip, todayKey);
   } finally {
     if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
@@ -1882,7 +1898,7 @@ Important rules:
 
 function cacheMotivation(message, tip, dateKey) {
   try {
-    localStorage.setItem(MOTIVATION_CACHE_KEY(), JSON.stringify({ date: dateKey, message, tip }));
+    localStorage.setItem(MOTIVATION_CACHE_KEY(_motivationSlot), JSON.stringify({ date: dateKey, message, tip }));
   } catch(e) {}
 }
 

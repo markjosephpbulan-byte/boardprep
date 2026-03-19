@@ -348,33 +348,52 @@ async function doLogin() {
 }
 
 async function doLogout() {
-  await fetch('/api/auth/logout', { method: 'POST' });
+  // Always switch to landing no matter what — wrap everything in try/catch
+  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch(e) {}
+
+  // Wipe state immediately
   currentUser = null; subjects = []; notes = [];
 
-  // Close everything cleanly before switching view
-  closeProfileMenu();
-  ['subjectModal','noteModal','profileModal','confirmModal','deleteAccountModal'].forEach(closeModal);
-  const sidebar = document.getElementById('notesSidebar');
-  const overlay = document.getElementById('sidebarOverlay');
-  if (sidebar) sidebar.classList.remove('open');
-  if (overlay) overlay.classList.remove('open');
-
-  // Stop & hide pomodoro
-  resetPomodoro();
-  document.getElementById('pomodoroFab').style.display = 'none';
-  document.getElementById('pomodoroWidget').style.display = 'none';
-
-  // Reset tracker state so it's clean next login
-  document.getElementById('subjectsGrid').innerHTML = '';
-  document.getElementById('subjectProgressStrip').innerHTML = '';
-  document.getElementById('overallFill').style.width = '0%';
-  document.getElementById('overallPct').textContent = '0%';
-  document.getElementById('notesList').innerHTML = '';
-  document.getElementById('notesBadge').textContent = '0';
-  document.getElementById('countdownChip').style.display = 'none';
-
+  // Switch view FIRST — this is the most important step
   showView('landing');
-  await loadProfiles();
+
+  // Then clean up everything else safely
+  try { closeProfileMenu(); } catch(e) {}
+  try {
+    ['subjectModal','noteModal','profileModal','confirmModal','deleteAccountModal']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('open'); });
+  } catch(e) {}
+  try {
+    const sidebar = document.getElementById('notesSidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    if (sidebar) sidebar.classList.remove('open');
+    if (overlay) overlay.classList.remove('open');
+  } catch(e) {}
+  try {
+    pausePomodoro();
+    const fab = document.getElementById('pomodoroFab');
+    const widget = document.getElementById('pomodoroWidget');
+    if (fab) fab.style.display = 'none';
+    if (widget) widget.style.display = 'none';
+  } catch(e) {}
+  try {
+    const els = {
+      'subjectsGrid':          el => el.innerHTML = '',
+      'subjectProgressStrip':  el => el.innerHTML = '',
+      'overallFill':           el => el.style.width = '0%',
+      'overallPct':            el => el.textContent = '0%',
+      'notesList':             el => el.innerHTML = '',
+      'notesBadge':            el => el.textContent = '0',
+      'countdownChip':         el => el.style.display = 'none',
+    };
+    Object.entries(els).forEach(([id, fn]) => {
+      const el = document.getElementById(id);
+      if (el) fn(el);
+    });
+  } catch(e) {}
+
+  // Reload profiles on landing
+  try { await loadProfiles(); } catch(e) {}
 }
 
 function openDeleteAccountModal() {

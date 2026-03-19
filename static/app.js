@@ -587,11 +587,28 @@ async function confirmDeleteAccount() {
     // Success — wipe state and go back to landing
     closeModal('deleteAccountModal');
     currentUser = null; subjects = []; notes = [];
-    resetPomodoro();
-    document.getElementById('pomodoroFab').style.display = 'none';
-    document.getElementById('pomodoroWidget').style.display = 'none';
+
+    // Clean up tracker UI before switching
+    try { resetPomodoro(); } catch(e) {}
+    try { pausePomodoro(); } catch(e) {}
+    try { document.getElementById('pomodoroFab').style.display = 'none'; } catch(e) {}
+    try { document.getElementById('pomodoroWidget').style.display = 'none'; } catch(e) {}
+    try { document.getElementById('countdownChip').style.display = 'none'; } catch(e) {}
+    try {
+      const grid = document.getElementById('subjectsGrid');
+      if (grid) Array.from(grid.children).forEach(c => { if (c.id !== 'emptyState') c.remove(); });
+      document.getElementById('subjectProgressStrip').innerHTML = '';
+      document.getElementById('overallFill').style.width = '0%';
+      document.getElementById('overallPct').textContent = '0%';
+      document.getElementById('notesList').innerHTML = '';
+      document.getElementById('notesBadge').textContent = '0';
+    } catch(e) {}
+
+    // Clear motivation cache for this user
+    try { localStorage.removeItem(MOTIVATION_CACHE_KEY()); } catch(e) {}
+
     showView('landing');
-    loadProfiles();
+    await loadProfiles();
     showToast('Profile deleted successfully.');
   } catch(e) {
     errEl.textContent = 'Connection error. Please try again.';
@@ -714,8 +731,15 @@ async function saveProfile() {
   errEl.textContent = '';
   const uid = currentUser.id;
 
-  // Upload avatar if changed
-  if (avatarDataUrl && avatarDataUrl !== 'remove') {
+  // Handle avatar changes
+  if (avatarDataUrl === 'remove') {
+    // User clicked "Remove" — delete the avatar from backend
+    const r = await fetch(`/api/profiles/${uid}/avatar`, { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.error || 'Failed to remove picture.'; return; }
+    currentUser = d;
+  } else if (avatarDataUrl && avatarDataUrl !== null) {
+    // User picked a new photo — upload it
     const fileInput = document.getElementById('avatarInput');
     if (fileInput.files[0]) {
       const form = new FormData();
@@ -1679,6 +1703,13 @@ async function fetchMotivation(forceRefresh = false) {
 
   const todayKey = getTodayKey();
 
+  // forceRefresh = clear the cache first so we always get a fresh one
+  if (forceRefresh) {
+    try { localStorage.removeItem(MOTIVATION_CACHE_KEY()); } catch(e) {}
+    // Also clear the date so even a same-day refresh goes to Gemini
+    console.log('[Motivation] Force refresh — cache cleared');
+  }
+
   // Check cache — use stored message if same day and not forced
   if (!forceRefresh) {
     try {
@@ -1798,13 +1829,14 @@ Important rules:
       ];
       const msg = fallbacks[Math.floor(Math.random() * fallbacks.length)];
       const tip = getRandomTip(profession);
-      cacheMotivation(msg, tip, todayKey);
+      if (!forceRefresh) cacheMotivation(msg, tip, todayKey);  // don't cache on forced refresh
       renderMotivation(msg, tip, todayKey);
       return;
     }
 
+    console.log('[Motivation] Calling Gemini API...');
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1815,22 +1847,33 @@ Important rules:
       }
     );
 
-    if (!resp.ok) throw new Error(`Gemini error ${resp.status}`);
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(`Gemini error ${resp.status}: ${errData?.error?.message || 'unknown'}`);
+    }
 
     const data    = await resp.json();
     const message = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    console.log('[Motivation] Gemini responded:', message ? 'got message' : 'empty');
 
-    if (!message) throw new Error('Empty response');
+    if (!message) throw new Error('Empty response from Gemini');
 
     const tip = getRandomTip(profession);
     cacheMotivation(message, tip, todayKey);
     renderMotivation(message, tip, todayKey);
 
   } catch(e) {
-    console.warn('Motivation fetch failed:', e);
-    // Graceful fallback
-    const fallback = `You've got this, ${name}! Every great ${profession.replace(' board exam','').replace(' Exam','').replace(' (NLE)','')} professional started exactly where you are now — studying, pushing through, and choosing not to quit. Ang tagumpay ay hindi para sa pinakamatalino, kundi para sa pinaka-determinado. That's you. Keep going!`;
+    console.warn('Motivation fetch failed:', e.message || e);
+    // Pick a random fallback so refresh always gives something different
+    const fallbacks = [
+      `Kaya mo 'yan, ${name}! Every page you study for your ${profession} brings you one step closer to the life you are working toward. This journey is not easy — but that is exactly why passing will mean so much. Maniwala ka sa sarili mo. Your future is worth every sacrifice.`,
+      `Hindi madali ang daan, ${name}, but nothing worthwhile ever is. Today, show up for yourself and for everyone who believes in you. One topic at a time, one day at a time — that is how reviewers become licensed professionals. You are closer than you think!`,
+      `Every hour you invest today studying for your ${profession} is interest earned on your future, ${name}. The person who passes is not the smartest — it is the one who never stopped showing up. Ikaw 'yan. Believe it. Now open your book and let us get to work!`,
+      `Mahal na ${name}, the road to becoming a licensed professional is long, but you are already on it. Every checkbox you tick today is proof that you are serious. Your ${profession} is within reach — keep going, one day at a time.`,
+    ];
+    const fallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
     const tip = getRandomTip(profession);
+    if (!forceRefresh) cacheMotivation(fallback, tip, todayKey);
     renderMotivation(fallback, tip, todayKey);
   } finally {
     if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }

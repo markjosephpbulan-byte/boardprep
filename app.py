@@ -952,6 +952,16 @@ def upload_avatar(user_id):
     return jsonify(safe_user(get_user_by_id(user_id)))
 
 
+@app.route("/api/profiles/<user_id>/avatar", methods=["DELETE"])
+@owner_required
+def remove_avatar(user_id):
+    """Remove profile picture — set avatar to NULL."""
+    db_execute("UPDATE users SET avatar=NULL WHERE id=%s", (user_id,))
+    invalidate_user_cache(user_id)
+    invalidate_profiles_cache()
+    return jsonify(safe_user(get_user_by_id(user_id)))
+
+
 @app.route("/api/profiles/<user_id>/delete-account", methods=["POST"])
 @owner_required
 def delete_own_account(user_id):

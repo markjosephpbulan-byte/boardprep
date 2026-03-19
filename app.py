@@ -2,6 +2,8 @@ from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import json, os, uuid, base64, random, string
+import psycopg2
+import psycopg2.extras
 from datetime import datetime, timedelta
 from functools import wraps
 from collections import defaultdict
@@ -11,13 +13,118 @@ import requests as http_requests
 app = Flask(__name__, static_folder="static")
 app.secret_key = os.environ.get("SECRET_KEY", "boardprep-dev-secret-change-in-prod")
 
-DATA_FILE = os.environ.get("DATA_FILE", "data.json")
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
+UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  DATABASE
+# ══════════════════════════════════════════════════════════════════════════════
 
 
-# ── Rate Limiter (in-memory, no Redis needed) ─────────────────────────────────
+def get_db():
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL environment variable not set")
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    conn.autocommit = False
+    return conn
+
+
+def db_execute(query, params=(), fetch="none"):
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(query, params)
+        result = None
+        if fetch == "one":
+            row = cur.fetchone()
+            result = dict(row) if row else None
+        elif fetch == "all":
+            rows = cur.fetchall()
+            result = [dict(r) for r in rows]
+        conn.commit()
+        cur.close()
+        return result
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def init_db():
+    db_execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id            TEXT PRIMARY KEY,
+            username      TEXT UNIQUE NOT NULL,
+            display_name  TEXT NOT NULL,
+            email         TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            avatar        TEXT,
+            exam_date     TEXT,
+            created_at    TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    db_execute("""
+        CREATE TABLE IF NOT EXISTS subjects (
+            id         TEXT PRIMARY KEY,
+            user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name       TEXT NOT NULL,
+            color      TEXT DEFAULT '#4f8ef7',
+            position   INTEGER DEFAULT 0,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    db_execute("""
+        CREATE TABLE IF NOT EXISTS subsections (
+            id         TEXT PRIMARY KEY,
+            subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            user_id    TEXT NOT NULL,
+            name       TEXT NOT NULL,
+            done       BOOLEAN DEFAULT FALSE,
+            position   INTEGER DEFAULT 0,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    db_execute("""
+        CREATE TABLE IF NOT EXISTS topics (
+            id            TEXT PRIMARY KEY,
+            subsection_id TEXT NOT NULL REFERENCES subsections(id) ON DELETE CASCADE,
+            user_id       TEXT NOT NULL,
+            name          TEXT NOT NULL,
+            done          BOOLEAN DEFAULT FALSE,
+            position      INTEGER DEFAULT 0,
+            created_at    TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    db_execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            id         TEXT PRIMARY KEY,
+            user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            title      TEXT DEFAULT 'Untitled',
+            content    TEXT DEFAULT '',
+            color      TEXT DEFAULT '#fef08a',
+            done       BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+
+
+try:
+    init_db()
+    print("[DB] Tables ready")
+except Exception as e:
+    print(f"[DB] Init warning: {e}")
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  RATE LIMITER
+# ══════════════════════════════════════════════════════════════════════════════
+
+
 class RateLimiter:
-    """Simple in-memory rate limiter. Tracks requests per IP per window."""
-
     def __init__(self):
         self._counts = defaultdict(list)
         self._lock = threading.Lock()
@@ -26,31 +133,17 @@ class RateLimiter:
         now = datetime.now()
         cutoff = now - timedelta(seconds=window_seconds)
         with self._lock:
-            # Remove old entries outside the window
             self._counts[key] = [t for t in self._counts[key] if t > cutoff]
             if len(self._counts[key]) >= max_requests:
                 return False
             self._counts[key].append(now)
             return True
 
-    def cleanup(self):
-        """Remove all expired keys — call periodically."""
-        now = datetime.now()
-        with self._lock:
-            expired = [
-                k
-                for k, times in self._counts.items()
-                if not times or max(times) < now - timedelta(hours=1)
-            ]
-            for k in expired:
-                del self._counts[k]
-
 
 limiter = RateLimiter()
 
 
 def get_client_ip():
-    """Get real IP even behind Railway proxy."""
     return (
         request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
         or request.remote_addr
@@ -59,15 +152,12 @@ def get_client_ip():
 
 
 def rate_limit(max_requests, window_seconds, scope=""):
-    """Decorator: limit a route to max_requests per window_seconds per IP."""
-
     def decorator(f):
         @wraps(f)
         def wrapped(*args, **kwargs):
             ip = get_client_ip()
             key = f"{scope or f.__name__}:{ip}"
             if not limiter.is_allowed(key, max_requests, window_seconds):
-                retry_after = window_seconds
                 return jsonify({
                     "error": f"Too many requests. Please wait {window_seconds} seconds and try again."
                 }), 429
@@ -78,25 +168,16 @@ def rate_limit(max_requests, window_seconds, scope=""):
     return decorator
 
 
-UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# ══════════════════════════════════════════════════════════════════════════════
+#  EMAIL (Brevo)
+# ══════════════════════════════════════════════════════════════════════════════
 
-ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
-
-# ── Email (Brevo) ──────────────────────────────────────────────────────────────
-# Brevo (formerly Sendinblue) — free plan sends to ANY email, no domain needed
-# Sign up at brevo.com → SMTP & API → API Keys → copy key
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
 EMAIL_FROM = os.environ.get("EMAIL_FROM", "BoardPrep PH")
 EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS", "noreply@boardprep.ph")
 EMAIL_ENABLED = bool(BREVO_API_KEY)
 
-# In-memory store for pending verifications
-# { email: { code, username, display_name, password_hash, expires_at } }
 pending_verifications = {}
-
-# In-memory store for password reset codes
-# { email: { code, user_id, expires_at } }
 pending_resets = {}
 
 
@@ -104,81 +185,18 @@ def generate_code():
     return "".join(random.choices(string.digits, k=6))
 
 
-def send_verification_email(to_email, code, display_name):
-    """Send 6-digit code via Brevo API. Returns (ok, error_msg)."""
+def _brevo_send(to_email, subject, html_body):
     if not EMAIL_ENABLED:
-        print(f"[DEV] Verification code for {to_email}: {code}")
+        print(f"[DEV EMAIL] To: {to_email} | Subject: {subject}")
         return True, None
     try:
-        html_body = f"""
-        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#0d1117;color:#e8edf5;border-radius:12px;">
-          <div style="text-align:center;margin-bottom:24px;">
-            <div style="font-size:2rem">&#128218;</div>
-            <h1 style="color:#f5c842;font-size:1.4rem;margin:8px 0">BoardPrep PH</h1>
-            <p style="color:#8b97a8;font-size:0.9rem">Board Exam Learning Tracker</p>
-          </div>
-          <p style="margin-bottom:8px">Hi <strong>{display_name}</strong>,</p>
-          <p style="color:#8b97a8;margin-bottom:24px">Enter this verification code to complete your registration:</p>
-          <div style="background:#1e2736;border:2px solid #f5c842;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
-            <div style="font-size:2.5rem;font-weight:800;letter-spacing:12px;color:#f5c842;font-family:monospace">{code}</div>
-            <div style="color:#8b97a8;font-size:0.8rem;margin-top:8px">This code expires in 10 minutes</div>
-          </div>
-          <p style="color:#5a6678;font-size:0.8rem;text-align:center">If you did not request this, you can safely ignore this email.</p>
-        </div>
-        """
         resp = http_requests.post(
             "https://api.brevo.com/v3/smtp/email",
             headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json"},
             json={
                 "sender": {"name": EMAIL_FROM, "email": EMAIL_ADDRESS},
                 "to": [{"email": to_email}],
-                "subject": "Your BoardPrep PH Verification Code",
-                "htmlContent": html_body,
-            },
-            timeout=10,
-        )
-        if resp.status_code in (200, 201):
-            return True, None
-        # Parse Brevo error for a helpful message
-        try:
-            body = resp.json()
-            err = body.get("message") or body.get("error") or str(resp.status_code)
-        except Exception:
-            err = str(resp.status_code)
-        return False, f"({resp.status_code}) {err}"
-    except Exception as e:
-        return False, str(e)
-
-
-def send_reset_email(to_email, code, display_name):
-    """Send password reset code. Returns (ok, error_msg)."""
-    if not EMAIL_ENABLED:
-        print(f"[DEV] Password reset code for {to_email}: {code}")
-        return True, None
-    try:
-        html_body = f"""
-        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#0d1117;color:#e8edf5;border-radius:12px;">
-          <div style="text-align:center;margin-bottom:24px;">
-            <div style="font-size:2rem">&#128218;</div>
-            <h1 style="color:#f5c842;font-size:1.4rem;margin:8px 0">BoardPrep PH</h1>
-            <p style="color:#8b97a8;font-size:0.9rem">Board Exam Learning Tracker</p>
-          </div>
-          <p style="margin-bottom:8px">Hi <strong>{display_name}</strong>,</p>
-          <p style="color:#8b97a8;margin-bottom:24px">You requested a password reset. Use this code to set a new password:</p>
-          <div style="background:#1e2736;border:2px solid #f56565;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
-            <div style="font-size:2.5rem;font-weight:800;letter-spacing:12px;color:#f56565;font-family:monospace">{code}</div>
-            <div style="color:#8b97a8;font-size:0.8rem;margin-top:8px">This code expires in 10 minutes</div>
-          </div>
-          <p style="color:#5a6678;font-size:0.8rem;text-align:center">If you did not request this, you can safely ignore this email. Your password has not been changed.</p>
-        </div>
-        """
-        resp = http_requests.post(
-            "https://api.brevo.com/v3/smtp/email",
-            headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json"},
-            json={
-                "sender": {"name": EMAIL_FROM, "email": EMAIL_ADDRESS},
-                "to": [{"email": to_email}],
-                "subject": "BoardPrep PH — Password Reset Code",
+                "subject": subject,
                 "htmlContent": html_body,
             },
             timeout=10,
@@ -194,60 +212,155 @@ def send_reset_email(to_email, code, display_name):
         return False, str(e)
 
 
-# ── Data helpers ──────────────────────────────────────────────────────────────
+def _code_email_html(code, code_color, subtitle, footer):
+    return f"""
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;
+                background:#0d1117;color:#e8edf5;border-radius:12px;">
+      <div style="text-align:center;margin-bottom:24px;">
+        <div style="font-size:2rem">&#128218;</div>
+        <h1 style="color:#f5c842;font-size:1.4rem;margin:8px 0">BoardPrep PH</h1>
+        <p style="color:#8b97a8;font-size:0.9rem">Board Exam Learning Tracker</p>
+      </div>
+      <p style="color:#8b97a8;margin-bottom:24px">{subtitle}</p>
+      <div style="background:#1e2736;border:2px solid {code_color};border-radius:12px;
+                  padding:24px;text-align:center;margin-bottom:24px;">
+        <div style="font-size:2.5rem;font-weight:800;letter-spacing:12px;
+                    color:{code_color};font-family:monospace">{code}</div>
+        <div style="color:#8b97a8;font-size:0.8rem;margin-top:8px">
+          This code expires in 10 minutes</div>
+      </div>
+      <p style="color:#5a6678;font-size:0.8rem;text-align:center">{footer}</p>
+    </div>"""
 
 
-def load_data():
-    if not os.path.exists(DATA_FILE):
-        return {"users": []}
-    with open(DATA_FILE, "r") as f:
-        data = json.load(f)
-    # Migrate old format (had "subjects"/"notes" at root) to new format
-    if "users" not in data:
-        data = {"users": []}
-        save_data(data)
-    return data
+def send_verification_email(to_email, code, display_name):
+    html = _code_email_html(
+        code,
+        "#f5c842",
+        f"Hi <strong>{display_name}</strong>, enter this code to complete your registration:",
+        "If you did not request this, you can safely ignore this email.",
+    )
+    return _brevo_send(to_email, "Your BoardPrep PH Verification Code", html)
 
 
-def save_data(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+def send_reset_email(to_email, code, display_name):
+    html = _code_email_html(
+        code,
+        "#f56565",
+        f"Hi <strong>{display_name}</strong>, use this code to reset your password:",
+        "If you did not request this, your password has not been changed.",
+    )
+    return _brevo_send(to_email, "BoardPrep PH — Password Reset Code", html)
 
 
-def init_data():
-    if not os.path.exists(DATA_FILE):
-        save_data({"users": []})
+# ══════════════════════════════════════════════════════════════════════════════
+#  DB HELPERS
+# ══════════════════════════════════════════════════════════════════════════════
 
 
-init_data()
+def get_user_by_id(user_id):
+    return db_execute("SELECT * FROM users WHERE id=%s", (user_id,), fetch="one")
 
 
-def get_user(data, user_id):
-    return next((u for u in data["users"] if u["id"] == user_id), None)
-
-
-def get_user_by_username(data, username):
-    return next(
-        (u for u in data["users"] if u["username"].lower() == username.lower()), None
+def get_user_by_username(username):
+    return db_execute(
+        "SELECT * FROM users WHERE LOWER(username)=LOWER(%s)", (username,), fetch="one"
     )
 
 
-# ── Auth decorator ────────────────────────────────────────────────────────────
+def get_user_by_email(email):
+    return db_execute(
+        "SELECT * FROM users WHERE LOWER(email)=LOWER(%s)", (email,), fetch="one"
+    )
 
 
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if "user_id" not in session:
-            return jsonify({"error": "Unauthorized"}), 401
-        return f(*args, **kwargs)
+def safe_user(u):
+    return {
+        "id": u["id"],
+        "username": u["username"],
+        "display_name": u["display_name"],
+        "email": u.get("email", ""),
+        "avatar": u.get("avatar"),
+        "exam_date": u.get("exam_date"),
+        "created_at": str(u.get("created_at", "")),
+    }
 
-    return decorated
+
+def get_subjects_for_user(user_id):
+    subjects = (
+        db_execute(
+            "SELECT * FROM subjects WHERE user_id=%s ORDER BY position, created_at",
+            (user_id,),
+            fetch="all",
+        )
+        or []
+    )
+    for s in subjects:
+        subsections = (
+            db_execute(
+                "SELECT * FROM subsections WHERE subject_id=%s ORDER BY position, created_at",
+                (s["id"],),
+                fetch="all",
+            )
+            or []
+        )
+        for ss in subsections:
+            ss["done"] = bool(ss["done"])
+            topics = (
+                db_execute(
+                    "SELECT * FROM topics WHERE subsection_id=%s ORDER BY position, created_at",
+                    (ss["id"],),
+                    fetch="all",
+                )
+                or []
+            )
+            for t in topics:
+                t["done"] = bool(t["done"])
+                t["created_at"] = str(t["created_at"])
+            ss["topics"] = topics
+            ss["created_at"] = str(ss["created_at"])
+        s["subsections"] = subsections
+        s["created_at"] = str(s["created_at"])
+    return subjects
+
+
+def calc_progress_db(user_id):
+    row = db_execute(
+        """
+        SELECT COUNT(t.id) as total,
+               SUM(CASE WHEN t.done THEN 1 ELSE 0 END) as done
+        FROM topics t
+        JOIN subsections ss ON ss.id = t.subsection_id
+        JOIN subjects s ON s.id = ss.subject_id
+        WHERE s.user_id = %s
+    """,
+        (user_id,),
+        fetch="one",
+    )
+    total = int(row["total"] or 0)
+    done = int(row["done"] or 0)
+    nt = db_execute(
+        """
+        SELECT COUNT(ss.id) as cnt,
+               SUM(CASE WHEN ss.done THEN 1 ELSE 0 END) as done_cnt
+        FROM subsections ss
+        WHERE ss.user_id=%s
+          AND NOT EXISTS (SELECT 1 FROM topics t WHERE t.subsection_id=ss.id)
+    """,
+        (user_id,),
+        fetch="one",
+    )
+    total += int(nt["cnt"] or 0)
+    done += int(nt["done_cnt"] or 0)
+    return total, done
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  AUTH DECORATORS
+# ══════════════════════════════════════════════════════════════════════════════
 
 
 def owner_required(f):
-    """Route must have <user_id> param — checks session matches it."""
-
     @wraps(f)
     def decorated(*args, **kwargs):
         if "user_id" not in session:
@@ -260,22 +373,19 @@ def owner_required(f):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  AUTH
+#  AUTH ROUTES
 # ══════════════════════════════════════════════════════════════════════════════
 
 
 @app.route("/api/auth/request-code", methods=["POST"])
 @rate_limit(5, 600, "request_code")
 def request_code():
-    """Step 1: Validate fields, store pending registration, send code to email."""
-    data = load_data()
     body = request.json or {}
     username = (body.get("username") or "").strip()
     password = (body.get("password") or "").strip()
     email = (body.get("email") or "").strip().lower()
     display_name = (body.get("display_name") or username).strip()
 
-    # Validate
     if not username:
         return jsonify({"error": "Username is required"}), 400
     if len(username) < 3:
@@ -284,13 +394,11 @@ def request_code():
         return jsonify({"error": "Password must be at least 4 characters"}), 400
     if not email or "@" not in email:
         return jsonify({"error": "A valid email address is required"}), 400
-    if get_user_by_username(data, username):
+    if get_user_by_username(username):
         return jsonify({"error": "Username already taken"}), 409
-    # Check email not already used
-    if any(u.get("email", "").lower() == email for u in data["users"]):
+    if get_user_by_email(email):
         return jsonify({"error": "An account with this email already exists"}), 409
 
-    # Generate code and store pending
     code = generate_code()
     pending_verifications[email] = {
         "code": code,
@@ -299,20 +407,15 @@ def request_code():
         "password_hash": generate_password_hash(password),
         "expires_at": (datetime.now() + timedelta(minutes=10)).isoformat(),
     }
-
-    # Send email
     ok, err = send_verification_email(email, code, display_name)
     if not ok:
         return jsonify({"error": f"Failed to send email: {err}"}), 500
-
     return jsonify({"ok": True, "email": email, "dev_mode": not EMAIL_ENABLED})
 
 
 @app.route("/api/auth/register", methods=["POST"])
 @rate_limit(10, 600, "register")
 def register():
-    """Step 2: Verify code and create the account."""
-    data = load_data()
     body = request.json or {}
     email = (body.get("email") or "").strip().lower()
     code = (body.get("code") or "").strip()
@@ -320,57 +423,45 @@ def register():
     pending = pending_verifications.get(email)
     if not pending:
         return jsonify({
-            "error": "No pending verification for this email. Please request a new code."
+            "error": "No pending verification. Please request a new code."
         }), 400
-
-    # Check expiry
     if datetime.now() > datetime.fromisoformat(pending["expires_at"]):
         del pending_verifications[email]
         return jsonify({"error": "Code has expired. Please request a new one."}), 400
-
-    # Check code
     if pending["code"] != code:
         return jsonify({"error": "Incorrect code. Please try again."}), 401
-
-    # Double-check username/email not taken (race condition safety)
-    if get_user_by_username(data, pending["username"]):
+    if get_user_by_username(pending["username"]):
         del pending_verifications[email]
         return jsonify({
             "error": "Username was just taken. Please choose another."
         }), 409
 
-    # Create user
-    user = {
-        "id": str(uuid.uuid4()),
-        "username": pending["username"],
-        "display_name": pending["display_name"],
-        "email": email,
-        "password_hash": pending["password_hash"],
-        "avatar": None,
-        "subjects": [],
-        "notes": [],
-        "created_at": datetime.now().isoformat(),
-    }
-    data["users"].append(user)
-    save_data(data)
+    uid = str(uuid.uuid4())
+    db_execute(
+        "INSERT INTO users (id, username, display_name, email, password_hash) VALUES (%s,%s,%s,%s,%s)",
+        (
+            uid,
+            pending["username"],
+            pending["display_name"],
+            email,
+            pending["password_hash"],
+        ),
+    )
     del pending_verifications[email]
-
-    session["user_id"] = user["id"]
+    user = get_user_by_id(uid)
+    session["user_id"] = uid
     return jsonify(safe_user(user)), 201
 
 
 @app.route("/api/auth/login", methods=["POST"])
 @rate_limit(10, 300, "login")
 def login():
-    data = load_data()
-    body = request.json
+    body = request.json or {}
     username = (body.get("username") or "").strip()
     password = (body.get("password") or "").strip()
-
-    user = get_user_by_username(data, username)
+    user = get_user_by_username(username)
     if not user or not check_password_hash(user["password_hash"], password):
         return jsonify({"error": "Invalid username or password"}), 401
-
     session["user_id"] = user["id"]
     return jsonify(safe_user(user))
 
@@ -381,23 +472,25 @@ def logout():
     return jsonify({"ok": True})
 
 
-# ── Forgot Password ───────────────────────────────────────────────────────────
+@app.route("/api/auth/me", methods=["GET"])
+def me():
+    if "user_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
+    user = get_user_by_id(session["user_id"])
+    if not user:
+        session.clear()
+        return jsonify({"error": "User not found"}), 404
+    return jsonify(safe_user(user))
 
 
 @app.route("/api/auth/forgot-password", methods=["POST"])
 @rate_limit(5, 600, "forgot_password")
 def forgot_password():
-    """Step 1: User enters email → send reset code."""
     body = request.json or {}
     email = (body.get("email") or "").strip().lower()
-
     if not email or "@" not in email:
         return jsonify({"error": "Please enter a valid email address."}), 400
-
-    data = load_data()
-    # Find user by email (silently succeed even if not found — security best practice)
-    user = next((u for u in data["users"] if u.get("email", "").lower() == email), None)
-
+    user = get_user_by_email(email)
     if user:
         code = generate_code()
         pending_resets[email] = {
@@ -408,132 +501,86 @@ def forgot_password():
         ok, err = send_reset_email(email, code, user["display_name"])
         if not ok:
             return jsonify({"error": f"Failed to send email: {err}"}), 500
-
-    # Always return success — don't reveal if email exists
     return jsonify({"ok": True, "dev_mode": not EMAIL_ENABLED})
 
 
 @app.route("/api/auth/reset-password", methods=["POST"])
 @rate_limit(10, 600, "reset_password")
 def reset_password():
-    """Step 2: Verify code and set new password."""
     body = request.json or {}
     email = (body.get("email") or "").strip().lower()
     code = (body.get("code") or "").strip()
     new_password = (body.get("new_password") or "").strip()
-
     if not email or not code or not new_password:
         return jsonify({"error": "All fields are required."}), 400
     if len(new_password) < 4:
         return jsonify({"error": "Password must be at least 4 characters."}), 400
-
     pending = pending_resets.get(email)
     if not pending:
         return jsonify({
             "error": "No reset request found. Please request a new code."
         }), 400
-
     if datetime.now() > datetime.fromisoformat(pending["expires_at"]):
         del pending_resets[email]
         return jsonify({"error": "Code has expired. Please request a new one."}), 400
-
     if pending["code"] != code:
         return jsonify({"error": "Incorrect code. Please try again."}), 401
-
-    # Update password
-    data = load_data()
-    user = get_user(data, pending["user_id"])
+    user = get_user_by_id(pending["user_id"])
     if not user:
         del pending_resets[email]
         return jsonify({"error": "Account not found."}), 404
-
-    user["password_hash"] = generate_password_hash(new_password)
-    save_data(data)
+    db_execute(
+        "UPDATE users SET password_hash=%s WHERE id=%s",
+        (generate_password_hash(new_password), pending["user_id"]),
+    )
     del pending_resets[email]
-
     return jsonify({"ok": True})
 
 
-@app.route("/api/auth/me", methods=["GET"])
-def me():
-    if "user_id" not in session:
-        return jsonify({"error": "Not logged in"}), 401
-    data = load_data()
-    user = get_user(data, session["user_id"])
-    if not user:
-        session.clear()
-        return jsonify({"error": "User not found"}), 404
-    return jsonify(safe_user(user))
-
-
-def safe_user(u):
-    """Return user object without password hash."""
-    return {
-        "id": u["id"],
-        "username": u["username"],
-        "display_name": u["display_name"],
-        "email": u.get("email", ""),
-        "avatar": u.get("avatar"),
-        "exam_date": u.get("exam_date", None),
-        "created_at": u["created_at"],
-    }
-
-
 # ══════════════════════════════════════════════════════════════════════════════
-#  PROFILES  (public listing — anyone can see, no auth needed)
+#  PROFILES  (public)
 # ══════════════════════════════════════════════════════════════════════════════
 
 
 @app.route("/api/profiles", methods=["GET"])
 def list_profiles():
-    data = load_data()
+    users = db_execute("SELECT * FROM users ORDER BY created_at", fetch="all") or []
     profiles = []
-    for u in data["users"]:
-        total, done = calc_progress(u)
+    for u in users:
+        total, done = calc_progress_db(u["id"])
         pct = 0 if total == 0 else round((done / total) * 100)
+        sc = db_execute(
+            "SELECT COUNT(*) as c FROM subjects WHERE user_id=%s",
+            (u["id"],),
+            fetch="one",
+        )
         profiles.append({
             "id": u["id"],
             "username": u["username"],
             "display_name": u["display_name"],
             "avatar": u.get("avatar"),
-            "subject_count": len(u.get("subjects", [])),
+            "subject_count": int(sc["c"] or 0),
             "progress_pct": pct,
-            "created_at": u["created_at"],
+            "created_at": str(u["created_at"]),
         })
     return jsonify(profiles)
 
 
 @app.route("/api/profiles/<user_id>", methods=["GET"])
 def get_profile(user_id):
-    """
-    Public profile info only (no subjects/notes).
-    Must supply correct password to get full data — see /api/profiles/<id>/unlock
-    """
-    data = load_data()
-    user = get_user(data, user_id)
+    user = get_user_by_id(user_id)
     if not user:
         return jsonify({"error": "Not found"}), 404
-    total, done = calc_progress(user)
+    total, done = calc_progress_db(user_id)
     pct = 0 if total == 0 else round((done / total) * 100)
+    sc = db_execute(
+        "SELECT COUNT(*) as c FROM subjects WHERE user_id=%s", (user_id,), fetch="one"
+    )
     return jsonify({
         **safe_user(user),
-        "subject_count": len(user.get("subjects", [])),
+        "subject_count": int(sc["c"] or 0),
         "progress_pct": pct,
     })
-
-
-def calc_progress(user):
-    total = done = 0
-    for s in user.get("subjects", []):
-        for ss in s.get("subsections", []):
-            if not ss.get("topics"):
-                total += 1
-                if ss.get("done"):
-                    done += 1
-            else:
-                total += len(ss["topics"])
-                done += sum(1 for t in ss["topics"] if t.get("done"))
-    return total, done
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -544,13 +591,12 @@ def calc_progress(user):
 @app.route("/api/profiles/<user_id>/settings", methods=["PUT"])
 @owner_required
 def update_profile(user_id):
-    data = load_data()
-    user = get_user(data, user_id)
+    user = get_user_by_id(user_id)
     if not user:
         return jsonify({"error": "Not found"}), 404
-    body = request.json
+    body = request.json or {}
     if "username" in body:
-        new_username = body["username"].strip().lower()
+        new_username = (body["username"] or "").strip().lower()
         if not new_username:
             return jsonify({"error": "Username cannot be empty"}), 400
         if len(new_username) < 3:
@@ -559,112 +605,121 @@ def update_profile(user_id):
             return jsonify({
                 "error": "Username can only contain letters, numbers, _ and ."
             }), 400
-        # Check not taken by someone else
-        existing = get_user_by_username(data, new_username)
+        existing = get_user_by_username(new_username)
         if existing and existing["id"] != user_id:
             return jsonify({"error": "Username already taken"}), 409
-        user["username"] = new_username
+        db_execute("UPDATE users SET username=%s WHERE id=%s", (new_username, user_id))
     if "display_name" in body:
-        dn = body["display_name"].strip()
+        dn = (body["display_name"] or "").strip()
         if dn:
-            user["display_name"] = dn
+            db_execute("UPDATE users SET display_name=%s WHERE id=%s", (dn, user_id))
     if "exam_date" in body:
-        user["exam_date"] = body["exam_date"]  # "YYYY-MM-DD" or None to clear
+        db_execute(
+            "UPDATE users SET exam_date=%s WHERE id=%s", (body["exam_date"], user_id)
+        )
     if "new_password" in body and body["new_password"]:
         if not body.get("current_password"):
             return jsonify({"error": "Current password required"}), 400
         if not check_password_hash(user["password_hash"], body["current_password"]):
             return jsonify({"error": "Current password is wrong"}), 401
-        user["password_hash"] = generate_password_hash(body["new_password"])
-    save_data(data)
-    return jsonify(safe_user(user))
+        db_execute(
+            "UPDATE users SET password_hash=%s WHERE id=%s",
+            (generate_password_hash(body["new_password"]), user_id),
+        )
+    return jsonify(safe_user(get_user_by_id(user_id)))
 
 
 @app.route("/api/profiles/<user_id>/avatar", methods=["POST"])
 @owner_required
 def upload_avatar(user_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    if not user:
-        return jsonify({"error": "Not found"}), 404
-
     if "avatar" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
-
     f = request.files["avatar"]
     ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
     if ext not in ALLOWED_EXT:
         return jsonify({"error": "Invalid file type"}), 400
-
-    # Store as base64 data-URL so we don't need static file serving complexity
     raw = f.read()
-    if len(raw) > 2 * 1024 * 1024:  # 2 MB limit
+    if len(raw) > 2 * 1024 * 1024:
         return jsonify({"error": "Image too large (max 2MB)"}), 400
-
     mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
     b64 = base64.b64encode(raw).decode()
-    user["avatar"] = f"data:{mime};base64,{b64}"
-    save_data(data)
-    return jsonify(safe_user(user))
+    avatar = f"data:{mime};base64,{b64}"
+    db_execute("UPDATE users SET avatar=%s WHERE id=%s", (avatar, user_id))
+    return jsonify(safe_user(get_user_by_id(user_id)))
+
+
+@app.route("/api/profiles/<user_id>/delete-account", methods=["POST"])
+@owner_required
+def delete_own_account(user_id):
+    user = get_user_by_id(user_id)
+    if not user:
+        return jsonify({"error": "Not found"}), 404
+    body = request.json or {}
+    password = body.get("password", "")
+    if not check_password_hash(user["password_hash"], password):
+        return jsonify({"error": "Incorrect password"}), 401
+    db_execute("DELETE FROM users WHERE id=%s", (user_id,))
+    session.clear()
+    return jsonify({"ok": True})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  SUBJECTS  (owner only)
+#  SUBJECTS
 # ══════════════════════════════════════════════════════════════════════════════
 
 
 @app.route("/api/profiles/<user_id>/subjects", methods=["GET"])
 @owner_required
 def get_subjects(user_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    return jsonify(user.get("subjects", []))
+    return jsonify(get_subjects_for_user(user_id))
 
 
 @app.route("/api/profiles/<user_id>/subjects", methods=["POST"])
 @owner_required
 def add_subject(user_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    body = request.json
-    subject = {
-        "id": str(uuid.uuid4()),
-        "name": body["name"],
-        "color": body.get("color", "#4f8ef7"),
-        "subsections": [],
-        "created_at": datetime.now().isoformat(),
-    }
-    user.setdefault("subjects", []).append(subject)
-    save_data(data)
-    return jsonify(subject), 201
+    body = request.json or {}
+    name = body.get("name", "").strip()
+    color = body.get("color", "#4f8ef7")
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    sid = str(uuid.uuid4())
+    db_execute(
+        "INSERT INTO subjects (id, user_id, name, color) VALUES (%s,%s,%s,%s)",
+        (sid, user_id, name, color),
+    )
+    s = db_execute("SELECT * FROM subjects WHERE id=%s", (sid,), fetch="one")
+    s["subsections"] = []
+    s["created_at"] = str(s["created_at"])
+    return jsonify(s), 201
 
 
 @app.route("/api/profiles/<user_id>/subjects/<subject_id>", methods=["PUT"])
 @owner_required
 def update_subject(user_id, subject_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    body = request.json
-    for s in user.get("subjects", []):
-        if s["id"] == subject_id:
-            s["name"] = body.get("name", s["name"])
-            s["color"] = body.get("color", s["color"])
-            save_data(data)
-            return jsonify(s)
-    return jsonify({"error": "Not found"}), 404
+    body = request.json or {}
+    name = body.get("name", "").strip()
+    color = body.get("color", "#4f8ef7")
+    db_execute(
+        "UPDATE subjects SET name=%s, color=%s WHERE id=%s AND user_id=%s",
+        (name, color, subject_id, user_id),
+    )
+    s = db_execute("SELECT * FROM subjects WHERE id=%s", (subject_id,), fetch="one")
+    if not s:
+        return jsonify({"error": "Not found"}), 404
+    s["created_at"] = str(s["created_at"])
+    return jsonify(s)
 
 
 @app.route("/api/profiles/<user_id>/subjects/<subject_id>", methods=["DELETE"])
 @owner_required
 def delete_subject(user_id, subject_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    user["subjects"] = [s for s in user.get("subjects", []) if s["id"] != subject_id]
-    save_data(data)
+    db_execute("DELETE FROM subjects WHERE id=%s AND user_id=%s", (subject_id, user_id))
     return jsonify({"ok": True})
 
 
-# ── Subsections ───────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  SUBSECTIONS
+# ══════════════════════════════════════════════════════════════════════════════
 
 
 @app.route(
@@ -672,22 +727,20 @@ def delete_subject(user_id, subject_id):
 )
 @owner_required
 def add_subsection(user_id, subject_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    body = request.json
-    ss = {
-        "id": str(uuid.uuid4()),
-        "name": body["name"],
-        "done": False,
-        "topics": [],
-        "created_at": datetime.now().isoformat(),
-    }
-    for s in user.get("subjects", []):
-        if s["id"] == subject_id:
-            s["subsections"].append(ss)
-            save_data(data)
-            return jsonify(ss), 201
-    return jsonify({"error": "Not found"}), 404
+    body = request.json or {}
+    name = body.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    ssid = str(uuid.uuid4())
+    db_execute(
+        "INSERT INTO subsections (id, subject_id, user_id, name) VALUES (%s,%s,%s,%s)",
+        (ssid, subject_id, user_id, name),
+    )
+    ss = db_execute("SELECT * FROM subsections WHERE id=%s", (ssid,), fetch="one")
+    ss["done"] = bool(ss["done"])
+    ss["topics"] = []
+    ss["created_at"] = str(ss["created_at"])
+    return jsonify(ss), 201
 
 
 @app.route(
@@ -696,18 +749,23 @@ def add_subsection(user_id, subject_id):
 )
 @owner_required
 def update_subsection(user_id, subject_id, sub_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    body = request.json
-    for s in user.get("subjects", []):
-        if s["id"] == subject_id:
-            for ss in s["subsections"]:
-                if ss["id"] == sub_id:
-                    ss["name"] = body.get("name", ss["name"])
-                    ss["done"] = body.get("done", ss["done"])
-                    save_data(data)
-                    return jsonify(ss)
-    return jsonify({"error": "Not found"}), 404
+    body = request.json or {}
+    if "name" in body:
+        db_execute(
+            "UPDATE subsections SET name=%s WHERE id=%s AND user_id=%s",
+            (body["name"], sub_id, user_id),
+        )
+    if "done" in body:
+        db_execute(
+            "UPDATE subsections SET done=%s WHERE id=%s AND user_id=%s",
+            (bool(body["done"]), sub_id, user_id),
+        )
+    ss = db_execute("SELECT * FROM subsections WHERE id=%s", (sub_id,), fetch="one")
+    if not ss:
+        return jsonify({"error": "Not found"}), 404
+    ss["done"] = bool(ss["done"])
+    ss["created_at"] = str(ss["created_at"])
+    return jsonify(ss)
 
 
 @app.route(
@@ -716,17 +774,13 @@ def update_subsection(user_id, subject_id, sub_id):
 )
 @owner_required
 def delete_subsection(user_id, subject_id, sub_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    for s in user.get("subjects", []):
-        if s["id"] == subject_id:
-            s["subsections"] = [ss for ss in s["subsections"] if ss["id"] != sub_id]
-            save_data(data)
-            return jsonify({"ok": True})
-    return jsonify({"error": "Not found"}), 404
+    db_execute("DELETE FROM subsections WHERE id=%s AND user_id=%s", (sub_id, user_id))
+    return jsonify({"ok": True})
 
 
-# ── Topics ────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  TOPICS
+# ══════════════════════════════════════════════════════════════════════════════
 
 
 @app.route(
@@ -735,23 +789,19 @@ def delete_subsection(user_id, subject_id, sub_id):
 )
 @owner_required
 def add_topic(user_id, subject_id, sub_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    body = request.json
-    topic = {
-        "id": str(uuid.uuid4()),
-        "name": body["name"],
-        "done": False,
-        "created_at": datetime.now().isoformat(),
-    }
-    for s in user.get("subjects", []):
-        if s["id"] == subject_id:
-            for ss in s["subsections"]:
-                if ss["id"] == sub_id:
-                    ss["topics"].append(topic)
-                    save_data(data)
-                    return jsonify(topic), 201
-    return jsonify({"error": "Not found"}), 404
+    body = request.json or {}
+    name = body.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    tid = str(uuid.uuid4())
+    db_execute(
+        "INSERT INTO topics (id, subsection_id, user_id, name) VALUES (%s,%s,%s,%s)",
+        (tid, sub_id, user_id, name),
+    )
+    t = db_execute("SELECT * FROM topics WHERE id=%s", (tid,), fetch="one")
+    t["done"] = bool(t["done"])
+    t["created_at"] = str(t["created_at"])
+    return jsonify(t), 201
 
 
 @app.route(
@@ -760,20 +810,23 @@ def add_topic(user_id, subject_id, sub_id):
 )
 @owner_required
 def update_topic(user_id, subject_id, sub_id, topic_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    body = request.json
-    for s in user.get("subjects", []):
-        if s["id"] == subject_id:
-            for ss in s["subsections"]:
-                if ss["id"] == sub_id:
-                    for t in ss["topics"]:
-                        if t["id"] == topic_id:
-                            t["name"] = body.get("name", t["name"])
-                            t["done"] = body.get("done", t["done"])
-                            save_data(data)
-                            return jsonify(t)
-    return jsonify({"error": "Not found"}), 404
+    body = request.json or {}
+    if "name" in body:
+        db_execute(
+            "UPDATE topics SET name=%s WHERE id=%s AND user_id=%s",
+            (body["name"], topic_id, user_id),
+        )
+    if "done" in body:
+        db_execute(
+            "UPDATE topics SET done=%s WHERE id=%s AND user_id=%s",
+            (bool(body["done"]), topic_id, user_id),
+        )
+    t = db_execute("SELECT * FROM topics WHERE id=%s", (topic_id,), fetch="one")
+    if not t:
+        return jsonify({"error": "Not found"}), 404
+    t["done"] = bool(t["done"])
+    t["created_at"] = str(t["created_at"])
+    return jsonify(t)
 
 
 @app.route(
@@ -782,92 +835,89 @@ def update_topic(user_id, subject_id, sub_id, topic_id):
 )
 @owner_required
 def delete_topic(user_id, subject_id, sub_id, topic_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    for s in user.get("subjects", []):
-        if s["id"] == subject_id:
-            for ss in s["subsections"]:
-                if ss["id"] == sub_id:
-                    ss["topics"] = [t for t in ss["topics"] if t["id"] != topic_id]
-                    save_data(data)
-                    return jsonify({"ok": True})
-    return jsonify({"error": "Not found"}), 404
+    db_execute("DELETE FROM topics WHERE id=%s AND user_id=%s", (topic_id, user_id))
+    return jsonify({"ok": True})
 
 
-# ── Notes ─────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  NOTES
+# ══════════════════════════════════════════════════════════════════════════════
 
 
 @app.route("/api/profiles/<user_id>/notes", methods=["GET"])
 @owner_required
 def get_notes(user_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    return jsonify(user.get("notes", []))
+    notes = (
+        db_execute(
+            "SELECT * FROM notes WHERE user_id=%s ORDER BY created_at DESC",
+            (user_id,),
+            fetch="all",
+        )
+        or []
+    )
+    for n in notes:
+        n["done"] = bool(n["done"])
+        n["created_at"] = str(n["created_at"])
+        n["updated_at"] = str(n["updated_at"])
+    return jsonify(notes)
 
 
 @app.route("/api/profiles/<user_id>/notes", methods=["POST"])
 @owner_required
 def add_note(user_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    body = request.json
-    note = {
-        "id": str(uuid.uuid4()),
-        "title": body.get("title", "Untitled"),
-        "content": body.get("content", ""),
-        "color": body.get("color", "#fef08a"),
-        "done": False,
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat(),
-    }
-    user.setdefault("notes", []).append(note)
-    save_data(data)
-    return jsonify(note), 201
+    body = request.json or {}
+    nid = str(uuid.uuid4())
+    title = body.get("title", "Untitled")
+    content = body.get("content", "")
+    color = body.get("color", "#fef08a")
+    db_execute(
+        "INSERT INTO notes (id, user_id, title, content, color) VALUES (%s,%s,%s,%s,%s)",
+        (nid, user_id, title, content, color),
+    )
+    n = db_execute("SELECT * FROM notes WHERE id=%s", (nid,), fetch="one")
+    n["done"] = bool(n["done"])
+    n["created_at"] = str(n["created_at"])
+    n["updated_at"] = str(n["updated_at"])
+    return jsonify(n), 201
 
 
 @app.route("/api/profiles/<user_id>/notes/<note_id>", methods=["PUT"])
 @owner_required
 def update_note(user_id, note_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    body = request.json
-    for n in user.get("notes", []):
-        if n["id"] == note_id:
-            n["title"] = body.get("title", n["title"])
-            n["content"] = body.get("content", n["content"])
-            n["color"] = body.get("color", n["color"])
-            n["done"] = body.get("done", n.get("done", False))
-            n["updated_at"] = datetime.now().isoformat()
-            save_data(data)
-            return jsonify(n)
-    return jsonify({"error": "Not found"}), 404
+    body = request.json or {}
+    fields = []
+    vals = []
+    if "title" in body:
+        fields.append("title=%s")
+        vals.append(body["title"])
+    if "content" in body:
+        fields.append("content=%s")
+        vals.append(body["content"])
+    if "color" in body:
+        fields.append("color=%s")
+        vals.append(body["color"])
+    if "done" in body:
+        fields.append("done=%s")
+        vals.append(bool(body["done"]))
+    if fields:
+        fields.append("updated_at=NOW()")
+        vals.extend([note_id, user_id])
+        db_execute(
+            f"UPDATE notes SET {', '.join(fields)} WHERE id=%s AND user_id=%s", vals
+        )
+    n = db_execute("SELECT * FROM notes WHERE id=%s", (note_id,), fetch="one")
+    if not n:
+        return jsonify({"error": "Not found"}), 404
+    n["done"] = bool(n["done"])
+    n["created_at"] = str(n["created_at"])
+    n["updated_at"] = str(n["updated_at"])
+    return jsonify(n)
 
 
 @app.route("/api/profiles/<user_id>/notes/<note_id>", methods=["DELETE"])
 @owner_required
 def delete_note(user_id, note_id):
-    data = load_data()
-    user = get_user(data, user_id)
-    user["notes"] = [n for n in user.get("notes", []) if n["id"] != note_id]
-    save_data(data)
-    return jsonify({"ok": True})
-
-
-@app.route("/api/profiles/<user_id>/delete-account", methods=["POST"])
-@owner_required
-def delete_own_account(user_id):
-    """User deletes their own account — requires password confirmation."""
-    data = load_data()
-    user = get_user(data, user_id)
-    if not user:
-        return jsonify({"error": "Not found"}), 404
-    body = request.json or {}
-    password = body.get("password", "")
-    if not check_password_hash(user["password_hash"], password):
-        return jsonify({"error": "Incorrect password"}), 401
-    data["users"] = [u for u in data["users"] if u["id"] != user_id]
-    save_data(data)
-    session.clear()
+    db_execute("DELETE FROM notes WHERE id=%s AND user_id=%s", (note_id, user_id))
     return jsonify({"ok": True})
 
 
@@ -879,13 +929,10 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin1234")
 
 
 def check_admin_auth():
-    # Check password from header (sent with every request) OR session
     header_pw = request.headers.get("X-Admin-Password", "")
     if header_pw and header_pw == ADMIN_PASSWORD:
         return True
-    if session.get("is_admin"):
-        return True
-    return False
+    return bool(session.get("is_admin"))
 
 
 def admin_required(f):
@@ -901,7 +948,7 @@ def admin_required(f):
 @app.route("/api/admin/login", methods=["POST"])
 @rate_limit(5, 600, "admin_login")
 def admin_login():
-    body = request.json
+    body = request.json or {}
     if body.get("password") != ADMIN_PASSWORD:
         return jsonify({"error": "Wrong admin password"}), 401
     session["is_admin"] = True
@@ -924,21 +971,31 @@ def admin_me():
 @app.route("/api/admin/users", methods=["GET"])
 @admin_required
 def admin_list_users():
-    data = load_data()
+    users = (
+        db_execute("SELECT * FROM users ORDER BY created_at DESC", fetch="all") or []
+    )
     result = []
-    for u in data["users"]:
-        total, done = calc_progress(u)
+    for u in users:
+        total, done = calc_progress_db(u["id"])
         pct = 0 if total == 0 else round((done / total) * 100)
+        sc = db_execute(
+            "SELECT COUNT(*) as c FROM subjects WHERE user_id=%s",
+            (u["id"],),
+            fetch="one",
+        )
+        nc = db_execute(
+            "SELECT COUNT(*) as c FROM notes WHERE user_id=%s", (u["id"],), fetch="one"
+        )
         result.append({
             "id": u["id"],
             "username": u["username"],
             "display_name": u["display_name"],
             "email": u.get("email", "—"),
             "avatar": u.get("avatar"),
-            "subject_count": len(u.get("subjects", [])),
-            "notes_count": len(u.get("notes", [])),
+            "subject_count": int(sc["c"] or 0),
+            "notes_count": int(nc["c"] or 0),
             "progress_pct": pct,
-            "created_at": u["created_at"],
+            "created_at": str(u["created_at"]),
         })
     return jsonify(result)
 
@@ -946,27 +1003,23 @@ def admin_list_users():
 @app.route("/api/admin/users/<user_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_user(user_id):
-    data = load_data()
-    before = len(data["users"])
-    data["users"] = [u for u in data["users"] if u["id"] != user_id]
-    if len(data["users"]) == before:
+    user = get_user_by_id(user_id)
+    if not user:
         return jsonify({"error": "User not found"}), 404
-    save_data(data)
+    db_execute("DELETE FROM users WHERE id=%s", (user_id,))
     return jsonify({"ok": True})
 
 
-# ── Gemini API Key (served to frontend safely) ────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  CONFIG + FRONTEND
+# ══════════════════════════════════════════════════════════════════════════════
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 
 @app.route("/api/config", methods=["GET"])
 def get_config():
-    """Return non-secret config to frontend — only Gemini key (it's a client-side key)."""
     return jsonify({"gemini_key": GEMINI_API_KEY})
-
-
-# ── Serve frontend ────────────────────────────────────────────────────────────
 
 
 @app.route("/")

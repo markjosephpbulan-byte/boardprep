@@ -350,12 +350,31 @@ async function doLogin() {
 async function doLogout() {
   await fetch('/api/auth/logout', { method: 'POST' });
   currentUser = null; subjects = []; notes = [];
+
+  // Close everything cleanly before switching view
   closeProfileMenu();
+  ['subjectModal','noteModal','profileModal','confirmModal','deleteAccountModal'].forEach(closeModal);
+  const sidebar = document.getElementById('notesSidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (sidebar) sidebar.classList.remove('open');
+  if (overlay) overlay.classList.remove('open');
+
+  // Stop & hide pomodoro
   pomodoroReset();
   document.getElementById('pomodoroFab').style.display = 'none';
   document.getElementById('pomodoroWidget').style.display = 'none';
+
+  // Reset tracker state so it's clean next login
+  document.getElementById('subjectsGrid').innerHTML = '';
+  document.getElementById('subjectProgressStrip').innerHTML = '';
+  document.getElementById('overallFill').style.width = '0%';
+  document.getElementById('overallPct').textContent = '0%';
+  document.getElementById('notesList').innerHTML = '';
+  document.getElementById('notesBadge').textContent = '0';
+  document.getElementById('countdownChip').style.display = 'none';
+
   showView('landing');
-  loadProfiles();
+  await loadProfiles();
 }
 
 function openDeleteAccountModal() {
@@ -450,6 +469,7 @@ document.addEventListener('click', e => {
 // ══════════════════════════════════════════════════════════════
 function openProfileModal() {
   closeProfileMenu();
+  document.getElementById('profileUsername').value    = currentUser.username;
   document.getElementById('profileDisplayName').value = currentUser.display_name;
   document.getElementById('profileCurrentPw').value   = '';
   document.getElementById('profileNewPw').value       = '';
@@ -506,11 +526,13 @@ async function saveProfile() {
     }
   }
 
-  // Update display name / password / exam date
-  const examDateVal = document.getElementById('profileExamDate').value;
+  // Update username / display name / password / exam date
+  const examDateVal    = document.getElementById('profileExamDate').value;
+  const newUsername    = document.getElementById('profileUsername').value.trim().toLowerCase();
   const body = {
+    username:     newUsername,
     display_name: document.getElementById('profileDisplayName').value.trim(),
-    exam_date: examDateVal || null
+    exam_date:    examDateVal || null
   };
   const newPw = document.getElementById('profileNewPw').value;
   if (newPw) {
@@ -529,7 +551,7 @@ async function saveProfile() {
   updateHeaderProfile();
   updateCountdown();
   closeModal('profileModal');
-  showToast('Profile updated!');
+  showToast('Profile updated! ✅');
 }
 
 // ══════════════════════════════════════════════════════════════

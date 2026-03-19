@@ -769,3 +769,27 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 @media (max-width: 640px) {
   .profile-search-wrap { max-width: 100%; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   USERNAME INPUT WITH @ PREFIX
+   ══════════════════════════════════════════════════════════════ */
+.username-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.username-at {
+  position: absolute;
+  left: 12px;
+  color: var(--gold);
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  pointer-events: none;
+  z-index: 1;
+}
+.username-input-wrap input {
+  padding-left: 28px !important;
+  font-family: 'DM Sans', monospace !important;
+  letter-spacing: 0.3px;
+}

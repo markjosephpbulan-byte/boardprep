@@ -357,6 +357,21 @@ def update_profile(user_id):
     if not user:
         return jsonify({"error": "Not found"}), 404
     body = request.json
+    if "username" in body:
+        new_username = body["username"].strip().lower()
+        if not new_username:
+            return jsonify({"error": "Username cannot be empty"}), 400
+        if len(new_username) < 3:
+            return jsonify({"error": "Username must be at least 3 characters"}), 400
+        if not new_username.replace("_", "").replace(".", "").isalnum():
+            return jsonify({
+                "error": "Username can only contain letters, numbers, _ and ."
+            }), 400
+        # Check not taken by someone else
+        existing = get_user_by_username(data, new_username)
+        if existing and existing["id"] != user_id:
+            return jsonify({"error": "Username already taken"}), 409
+        user["username"] = new_username
     if "display_name" in body:
         dn = body["display_name"].strip()
         if dn:

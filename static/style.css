@@ -620,3 +620,18 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   line-height: 1.6;
 }
 .notes-done-empty .done-empty-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+
+/* ══════════════════════════════════════════════════════════════
+   PROFILE MENU — DANGER ITEM + DIVIDER
+   ══════════════════════════════════════════════════════════════ */
+.profile-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.profile-menu-danger {
+  color: var(--red) !important;
+}
+.profile-menu-danger:hover {
+  background: rgba(245, 101, 101, 0.1) !important;
+}

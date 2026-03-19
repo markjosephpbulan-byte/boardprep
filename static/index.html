@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BoardPrep PH</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="/static/style.css"/>
 </head>
@@ -115,6 +116,8 @@
         <div class="profile-menu" id="profileMenu" style="display:none">
           <div class="profile-menu-item" onclick="openProfileModal()">⚙️ Edit Profile</div>
           <div class="profile-menu-item" onclick="doLogout()">🚪 Log Out</div>
+          <div class="profile-menu-divider"></div>
+          <div class="profile-menu-item profile-menu-danger" onclick="openDeleteAccountModal()">🗑️ Delete My Profile</div>
         </div>
       </div>
     </div>
@@ -294,6 +297,29 @@
   </div>
   <div class="pom-footer">
     <span id="pomModeLabel">Stay focused for 25 minutes!</span>
+  </div>
+</div>
+
+<!-- Delete Account Modal -->
+<div class="modal-backdrop" id="deleteAccountModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 style="color:var(--red)">⚠️ Delete Profile</h3>
+      <button class="modal-close" onclick="closeModal('deleteAccountModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text2);font-size:0.88rem;line-height:1.6;margin-bottom:4px">
+        This will <strong style="color:var(--red)">permanently delete</strong> your profile, all subjects, topics, and notes. This cannot be undone.
+      </p>
+      <label>Enter your password to confirm</label>
+      <input type="password" id="deleteAccountPw" placeholder="Your password"
+             onkeydown="if(event.key==='Enter') confirmDeleteAccount()"/>
+      <div class="auth-error" id="deleteAccountError"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('deleteAccountModal')">Cancel</button>
+      <button class="btn-danger" id="deleteAccountBtn" onclick="confirmDeleteAccount()">Yes, Delete My Profile</button>
+    </div>
   </div>
 </div>
 

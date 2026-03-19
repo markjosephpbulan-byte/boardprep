@@ -522,6 +522,24 @@ def delete_note(user_id, note_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/profiles/<user_id>/delete-account", methods=["POST"])
+@owner_required
+def delete_own_account(user_id):
+    """User deletes their own account — requires password confirmation."""
+    data = load_data()
+    user = get_user(data, user_id)
+    if not user:
+        return jsonify({"error": "Not found"}), 404
+    body = request.json or {}
+    password = body.get("password", "")
+    if not check_password_hash(user["password_hash"], password):
+        return jsonify({"error": "Incorrect password"}), 401
+    data["users"] = [u for u in data["users"] if u["id"] != user_id]
+    save_data(data)
+    session.clear()
+    return jsonify({"ok": True})
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ADMIN
 # ══════════════════════════════════════════════════════════════════════════════

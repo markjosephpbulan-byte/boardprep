@@ -189,6 +189,56 @@ async function doLogout() {
   loadProfiles();
 }
 
+function openDeleteAccountModal() {
+  closeProfileMenu();
+  document.getElementById('deleteAccountPw').value = '';
+  document.getElementById('deleteAccountError').textContent = '';
+  const btn = document.getElementById('deleteAccountBtn');
+  btn.textContent = 'Yes, Delete My Profile';
+  btn.disabled = false;
+  openModal('deleteAccountModal');
+  setTimeout(() => document.getElementById('deleteAccountPw').focus(), 150);
+}
+
+async function confirmDeleteAccount() {
+  const pw    = document.getElementById('deleteAccountPw').value;
+  const errEl = document.getElementById('deleteAccountError');
+  const btn   = document.getElementById('deleteAccountBtn');
+  errEl.textContent = '';
+
+  if (!pw) { errEl.textContent = 'Please enter your password.'; return; }
+
+  btn.textContent = 'Deleting…';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch(`/api/profiles/${currentUser.id}/delete-account`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw })
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      errEl.textContent = d.error || 'Something went wrong.';
+      btn.textContent = 'Yes, Delete My Profile';
+      btn.disabled = false;
+      return;
+    }
+    // Success — wipe state and go back to landing
+    closeModal('deleteAccountModal');
+    currentUser = null; subjects = []; notes = [];
+    pomodoroReset();
+    document.getElementById('pomodoroFab').style.display = 'none';
+    document.getElementById('pomodoroWidget').style.display = 'none';
+    showView('landing');
+    loadProfiles();
+    showToast('Profile deleted successfully.');
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+    btn.textContent = 'Yes, Delete My Profile';
+    btn.disabled = false;
+  }
+}
+
 // ══════════════════════════════════════════════════════════════
 //  TRACKER — Enter
 // ══════════════════════════════════════════════════════════════

@@ -115,9 +115,14 @@ def init_db():
 
 try:
     init_db()
-    print("[DB] Tables ready")
+    print("[DB] Tables ready ✅")
 except Exception as e:
-    print(f"[DB] Init warning: {e}")
+    print(f"[DB] ❌ Init FAILED: {e}")
+    print(f"[DB] DATABASE_URL set: {bool(DATABASE_URL)}")
+    if DATABASE_URL:
+        # Print URL without password for debugging
+        safe_url = DATABASE_URL.split("@")[1] if "@" in DATABASE_URL else "unknown"
+        print(f"[DB] Connecting to: ...@{safe_url}")
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  RATE LIMITER
@@ -544,7 +549,11 @@ def reset_password():
 
 @app.route("/api/profiles", methods=["GET"])
 def list_profiles():
-    users = db_execute("SELECT * FROM users ORDER BY created_at", fetch="all") or []
+    try:
+        users = db_execute("SELECT * FROM users ORDER BY created_at", fetch="all") or []
+    except Exception as e:
+        print(f"[DB ERROR] list_profiles: {e}")
+        return jsonify({"error": f"Database connection failed: {str(e)}"}), 500
     profiles = []
     for u in users:
         total, done = calc_progress_db(u["id"])

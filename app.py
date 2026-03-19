@@ -126,6 +126,23 @@ def init_db():
             updated_at TIMESTAMPTZ DEFAULT NOW()
         )
     """)
+    # Indexes — make WHERE user_id=? and WHERE subject_id=? queries instant
+    db_execute("CREATE INDEX IF NOT EXISTS idx_subjects_user    ON subjects(user_id)")
+    db_execute(
+        "CREATE INDEX IF NOT EXISTS idx_subsections_subj ON subsections(subject_id)"
+    )
+    db_execute(
+        "CREATE INDEX IF NOT EXISTS idx_subsections_user ON subsections(user_id)"
+    )
+    db_execute(
+        "CREATE INDEX IF NOT EXISTS idx_topics_subsect   ON topics(subsection_id)"
+    )
+    db_execute("CREATE INDEX IF NOT EXISTS idx_topics_user      ON topics(user_id)")
+    db_execute("CREATE INDEX IF NOT EXISTS idx_notes_user       ON notes(user_id)")
+    db_execute(
+        "CREATE INDEX IF NOT EXISTS idx_users_username   ON users(LOWER(username))"
+    )
+    db_execute("CREATE INDEX IF NOT EXISTS idx_users_email      ON users(LOWER(email))")
 
 
 try:
@@ -160,6 +177,45 @@ class RateLimiter:
 
 
 limiter = RateLimiter()
+
+
+# ── Simple in-memory cache ────────────────────────────────────────────────────
+class SimpleCache:
+    """Cache values in memory with a TTL (time-to-live) in seconds."""
+
+    def __init__(self):
+        self._store = {}
+        self._lock = threading.Lock()
+
+    def get(self, key):
+        with self._lock:
+            item = self._store.get(key)
+            if item and datetime.now() < item["expires"]:
+                return item["value"]
+            if item:
+                del self._store[key]
+            return None
+
+    def set(self, key, value, ttl_seconds=30):
+        with self._lock:
+            self._store[key] = {
+                "value": value,
+                "expires": datetime.now() + timedelta(seconds=ttl_seconds),
+            }
+
+    def delete(self, key):
+        with self._lock:
+            self._store.pop(key, None)
+
+    def delete_prefix(self, prefix):
+        """Delete all keys starting with a prefix."""
+        with self._lock:
+            keys = [k for k in self._store if k.startswith(prefix)]
+            for k in keys:
+                del self._store[k]
+
+
+cache = SimpleCache()
 
 
 def get_client_ip():
@@ -497,6 +553,7 @@ def register():
         ),
     )
     del pending_verifications[email]
+    invalidate_profiles_cache()
     user = get_user_by_id(uid)
     session["user_id"] = uid
     return jsonify(safe_user(user)), 201
@@ -617,8 +674,17 @@ def reset_password():
 # ══════════════════════════════════════════════════════════════════════════════
 
 
+def invalidate_profiles_cache():
+    """Call this whenever any user's data changes."""
+    cache.delete("profiles_list")
+
+
 @app.route("/api/profiles", methods=["GET"])
 def list_profiles():
+    # Serve from cache if fresh — landing page doesn't need real-time data
+    cached = cache.get("profiles_list")
+    if cached is not None:
+        return jsonify(cached)
     try:
         # One query for all users
         users = db_execute("SELECT * FROM users ORDER BY created_at", fetch="all") or []
@@ -696,6 +762,7 @@ def list_profiles():
                 "progress_pct": pct,
                 "created_at": str(u["created_at"]),
             })
+        cache.set("profiles_list", profiles, ttl_seconds=30)
         return jsonify(profiles)
     except Exception as e:
         print(f"[DB ERROR] list_profiles: {e}")
@@ -764,6 +831,7 @@ def update_profile(user_id):
             "UPDATE users SET password_hash=%s WHERE id=%s",
             (generate_password_hash(body["new_password"]), user_id),
         )
+    invalidate_profiles_cache()
     return jsonify(safe_user(get_user_by_id(user_id)))
 
 
@@ -783,6 +851,7 @@ def upload_avatar(user_id):
     b64 = base64.b64encode(raw).decode()
     avatar = f"data:{mime};base64,{b64}"
     db_execute("UPDATE users SET avatar=%s WHERE id=%s", (avatar, user_id))
+    invalidate_profiles_cache()
     return jsonify(safe_user(get_user_by_id(user_id)))
 
 
@@ -797,6 +866,7 @@ def delete_own_account(user_id):
     if not check_password_hash(user["password_hash"], password):
         return jsonify({"error": "Incorrect password"}), 401
     db_execute("DELETE FROM users WHERE id=%s", (user_id,))
+    invalidate_profiles_cache()
     session.clear()
     return jsonify({"ok": True})
 
@@ -852,6 +922,7 @@ def update_subject(user_id, subject_id):
 @owner_required
 def delete_subject(user_id, subject_id):
     db_execute("DELETE FROM subjects WHERE id=%s AND user_id=%s", (subject_id, user_id))
+    invalidate_profiles_cache()
     return jsonify({"ok": True})
 
 
@@ -1145,6 +1216,7 @@ def admin_delete_user(user_id):
     if not user:
         return jsonify({"error": "User not found"}), 404
     db_execute("DELETE FROM users WHERE id=%s", (user_id,))
+    invalidate_profiles_cache()
     return jsonify({"ok": True})
 
 

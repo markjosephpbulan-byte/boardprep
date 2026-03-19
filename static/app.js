@@ -511,19 +511,30 @@ async function doLogout() {
     if (widget) widget.style.display = 'none';
   } catch(e) {}
   try {
-    const els = {
-      'subjectsGrid':          el => el.innerHTML = '',
-      'subjectProgressStrip':  el => el.innerHTML = '',
-      'overallFill':           el => el.style.width = '0%',
-      'overallPct':            el => el.textContent = '0%',
-      'notesList':             el => el.innerHTML = '',
-      'notesBadge':            el => el.textContent = '0',
-      'countdownChip':         el => el.style.display = 'none',
-    };
-    Object.entries(els).forEach(([id, fn]) => {
-      const el = document.getElementById(id);
-      if (el) fn(el);
-    });
+    // Remove subject cards but KEEP the emptyState div inside the grid
+    const grid = document.getElementById('subjectsGrid');
+    if (grid) {
+      // Remove all children except emptyState
+      Array.from(grid.children).forEach(child => {
+        if (child.id !== 'emptyState') child.remove();
+      });
+      // Make sure emptyState is inside grid and hidden
+      let empty = document.getElementById('emptyState');
+      if (empty && !grid.contains(empty)) grid.appendChild(empty);
+      if (empty) empty.style.display = 'none';
+    }
+    const strip = document.getElementById('subjectProgressStrip');
+    if (strip) strip.innerHTML = '';
+    const fill = document.getElementById('overallFill');
+    if (fill) fill.style.width = '0%';
+    const pct = document.getElementById('overallPct');
+    if (pct) pct.textContent = '0%';
+    const notesList = document.getElementById('notesList');
+    if (notesList) notesList.innerHTML = '';
+    const badge = document.getElementById('notesBadge');
+    if (badge) badge.textContent = '0';
+    const chip = document.getElementById('countdownChip');
+    if (chip) chip.style.display = 'none';
   } catch(e) {}
 
   // Reload profiles on landing
@@ -584,12 +595,16 @@ async function confirmDeleteAccount() {
 //  TRACKER — Enter
 // ══════════════════════════════════════════════════════════════
 async function enterTracker() {
-  updateHeaderProfile();
-  updateCountdown();
+  try { updateHeaderProfile(); } catch(e) {}
+  try { updateCountdown(); }     catch(e) {}
   showView('tracker');
-  showPomodoroFab();
-  await Promise.all([loadSubjects(), loadNotes()]);
-  fetchMotivation(false);  // load daily motivation (false = use cached if same day)
+  try { showPomodoroFab(); }     catch(e) {}
+  try {
+    await Promise.all([loadSubjects(), loadNotes()]);
+  } catch(e) {
+    console.error('Error loading data:', e);
+  }
+  try { fetchMotivation(false); } catch(e) {}
 }
 
 function updateHeaderProfile() {
@@ -728,15 +743,36 @@ function apiBase() { return `/api/profiles/${currentUser.id}`; }
 
 function renderSubjectsGrid() {
   const grid  = document.getElementById('subjectsGrid');
-  const empty = document.getElementById('emptyState');
-  if (subjects.length === 0) {
-    grid.innerHTML = '';
+  if (!grid) return;
+
+  // Always remove subject cards but never emptyState
+  Array.from(grid.children).forEach(child => {
+    if (child.id !== 'emptyState') child.remove();
+  });
+
+  // Ensure emptyState exists inside the grid
+  let empty = document.getElementById('emptyState');
+  if (!empty) {
+    // Recreate it if somehow it got destroyed
+    empty = document.createElement('div');
+    empty.id = 'emptyState';
+    empty.className = 'empty-state';
+    empty.innerHTML = `
+      <div class="empty-icon">🎓</div>
+      <h2>Start your review journey</h2>
+      <p>Add your first board exam subject to begin tracking your progress.</p>
+      <button class="btn-primary" onclick="openAddSubjectModal()">+ Add Your First Subject</button>`;
     grid.appendChild(empty);
+  } else if (!grid.contains(empty)) {
+    grid.appendChild(empty);
+  }
+
+  if (subjects.length === 0) {
     empty.style.display = 'block';
     return;
   }
+
   empty.style.display = 'none';
-  grid.innerHTML = '';
   subjects.forEach(s => grid.appendChild(buildSubjectCard(s)));
 }
 
@@ -903,7 +939,7 @@ async function saveSubject() {
     });
     const s = await r.json();
     subjects.push(s);
-    document.getElementById('emptyState').style.display = 'none';
+    const _es = document.getElementById('emptyState'); if (_es) _es.style.display = 'none';
     document.getElementById('subjectsGrid').appendChild(buildSubjectCard(s));
     const strip = document.getElementById('subjectProgressStrip');
     const chip  = document.createElement('div');
@@ -1163,7 +1199,7 @@ async function executeDelete(type, ...ids) {
     subjects = subjects.filter(x => x.id !== ids[0]);
     document.getElementById(`subject-${ids[0]}`)?.remove();
     document.getElementById(`chip-${ids[0]}`)?.remove();
-    if (!subjects.length) { const g = document.getElementById('subjectsGrid'); const e = document.getElementById('emptyState'); g.appendChild(e); e.style.display = 'block'; }
+    if (!subjects.length) { const g = document.getElementById('subjectsGrid'); let e = document.getElementById('emptyState'); if (g && e) { if (!g.contains(e)) g.appendChild(e); e.style.display = 'block'; } }
     refreshOverallProgress();
     showToast('Subject deleted');
   } else if (type === 'subsection') {

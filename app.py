@@ -35,7 +35,7 @@ def get_pool():
         if not DATABASE_URL:
             raise RuntimeError("DATABASE_URL environment variable not set")
         _pool = pg_pool.ThreadedConnectionPool(
-            minconn=1,  # keep at least 1 connection open
+            minconn=2,  # keep 2 connections warm always
             maxconn=10,  # max 10 simultaneous connections (free tier safe)
             dsn=DATABASE_URL,
             cursor_factory=psycopg2.extras.RealDictCursor,
@@ -530,6 +530,32 @@ def me():
         session.clear()
         return jsonify({"error": "User not found"}), 404
     return jsonify(safe_user(user))
+
+
+@app.route("/api/auth/me-full", methods=["GET"])
+def me_full():
+    """Return user + subjects + notes in ONE request — eliminates 2 round trips."""
+    if "user_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
+    uid = session["user_id"]
+    user = get_user_by_id(uid)
+    if not user:
+        session.clear()
+        return jsonify({"error": "User not found"}), 404
+    subjects = get_subjects_for_user(uid)
+    notes = (
+        db_execute(
+            "SELECT * FROM notes WHERE user_id=%s ORDER BY created_at DESC",
+            (uid,),
+            fetch="all",
+        )
+        or []
+    )
+    for n in notes:
+        n["done"] = bool(n["done"])
+        n["created_at"] = str(n["created_at"])
+        n["updated_at"] = str(n["updated_at"])
+    return jsonify({"user": safe_user(user), "subjects": subjects, "notes": notes})
 
 
 @app.route("/api/auth/forgot-password", methods=["POST"])

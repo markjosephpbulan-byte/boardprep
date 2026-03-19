@@ -18,24 +18,33 @@ let avatarDataUrl = null;  // pending avatar upload preview
 async function boot() {
   buildColorPickers();
 
-  // Load Gemini API key from backend (keeps it out of source code)
+  // Fire both requests in parallel — saves one full round trip on load
+  const [configResp, meResp] = await Promise.allSettled([
+    fetch('/api/config'),
+    fetch('/api/auth/me-full')
+  ]);
+
+  // Apply config
   try {
-    const r = await fetch('/api/config');
-    if (r.ok) {
-      const cfg = await r.json();
+    if (configResp.status === 'fulfilled' && configResp.value.ok) {
+      const cfg = await configResp.value.json();
       if (cfg.gemini_key) window.__GEMINI_KEY__ = cfg.gemini_key;
     }
   } catch(e) {}
 
-  // Check if already logged in
+  // Check if already logged in — me-full returns user + subjects + notes at once
   try {
-    const r = await fetch('/api/auth/me');
-    if (r.ok) {
-      currentUser = await r.json();
-      await enterTracker();
+    if (meResp.status === 'fulfilled' && meResp.value.ok) {
+      const full = await meResp.value.json();
+      currentUser = full.user;
+      subjects    = full.subjects || [];
+      notes       = full.notes    || [];
+      // Enter tracker and render immediately — no extra fetches needed
+      await enterTrackerWithData();
       return;
     }
   } catch(e) {}
+
   showView('landing');
   loadProfiles();
 }
@@ -594,15 +603,38 @@ async function confirmDeleteAccount() {
 // ══════════════════════════════════════════════════════════════
 //  TRACKER — Enter
 // ══════════════════════════════════════════════════════════════
+async function enterTrackerWithData() {
+  // Data (subjects + notes) already in memory — just render, no fetches
+  try { updateHeaderProfile(); } catch(e) {}
+  try { updateCountdown(); }     catch(e) {}
+  showView('tracker');
+  try { showPomodoroFab(); }     catch(e) {}
+  try { renderSubjectsGrid(); renderProgressOverview(); } catch(e) {}
+  try { renderNotes(); }         catch(e) {}
+  try { fetchMotivation(false); } catch(e) {}
+}
+
 async function enterTracker() {
+  // Fetch subjects + notes then render (used after login/register)
   try { updateHeaderProfile(); } catch(e) {}
   try { updateCountdown(); }     catch(e) {}
   showView('tracker');
   try { showPomodoroFab(); }     catch(e) {}
   try {
-    await Promise.all([loadSubjects(), loadNotes()]);
+    // Use me-full to get everything in one request
+    const r = await fetch('/api/auth/me-full');
+    if (r.ok) {
+      const full = await r.json();
+      subjects = full.subjects || [];
+      notes    = full.notes    || [];
+      renderSubjectsGrid(); renderProgressOverview();
+      renderNotes();
+    } else {
+      await Promise.all([loadSubjects(), loadNotes()]);
+    }
   } catch(e) {
     console.error('Error loading data:', e);
+    try { await Promise.all([loadSubjects(), loadNotes()]); } catch(e2) {}
   }
   try { fetchMotivation(false); } catch(e) {}
 }

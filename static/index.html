@@ -182,15 +182,60 @@
     <div class="subject-progress-strip" id="subjectProgressStrip"></div>
   </section>
 
-  <!-- Subjects grid -->
+  <!-- Two-column layout: AI motivation left, subjects right -->
   <main class="main-content">
-    <div class="subjects-grid" id="subjectsGrid">
-      <div class="empty-state" id="emptyState">
-        <div class="empty-icon">🎓</div>
-        <h2>Start your review journey</h2>
-        <p>Add your first board exam subject to begin tracking your progress.</p>
-        <button class="btn-primary" onclick="openAddSubjectModal()">+ Add Your First Subject</button>
+    <div class="tracker-layout">
+
+      <!-- ── LEFT: AI Motivation Sidebar ── -->
+      <aside class="motivation-panel" id="motivationPanel">
+        <div class="motivation-header">
+          <div class="motivation-title">
+            <span class="motivation-spark">✨</span>
+            Daily Motivation
+          </div>
+          <button class="motivation-refresh" id="motivationRefreshBtn"
+                  onclick="fetchMotivation(true)" title="Get new message">↻</button>
+        </div>
+
+        <!-- Message area -->
+        <div class="motivation-body" id="motivationBody">
+          <div class="motivation-loading" id="motivationLoading">
+            <div class="motivation-loading-dots">
+              <span></span><span></span><span></span>
+            </div>
+            <div style="font-size:0.8rem;color:var(--text3);margin-top:8px">Generating your message…</div>
+          </div>
+          <div class="motivation-message" id="motivationMessage" style="display:none"></div>
+        </div>
+
+        <!-- Date stamp -->
+        <div class="motivation-footer" id="motivationFooter" style="display:none">
+          <span class="motivation-date" id="motivationDate"></span>
+          <span class="motivation-powered">Powered by Gemini ✦</span>
+        </div>
+
+        <!-- Divider -->
+        <div class="motivation-divider"></div>
+
+        <!-- Study tip of the day -->
+        <div class="motivation-tip" id="motivationTip" style="display:none">
+          <div class="tip-label">💡 Study Tip</div>
+          <div class="tip-text" id="motivationTipText"></div>
+        </div>
+      </aside>
+
+      <!-- ── RIGHT: Subjects Grid ── -->
+      <div class="subjects-column">
+        <div class="subjects-grid" id="subjectsGrid">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon">🎓</div>
+            <h2>Start your review journey</h2>
+            <p>Add your first board exam subject to begin tracking your progress.</p>
+            <button class="btn-primary" onclick="openAddSubjectModal()">+ Add Your First Subject</button>
+          </div>
+        </div>
       </div>
+
     </div>
   </main>
 

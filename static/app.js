@@ -17,6 +17,16 @@ let avatarDataUrl = null;  // pending avatar upload preview
 // ══════════════════════════════════════════════════════════════
 async function boot() {
   buildColorPickers();
+
+  // Load Gemini API key from backend (keeps it out of source code)
+  try {
+    const r = await fetch('/api/config');
+    if (r.ok) {
+      const cfg = await r.json();
+      if (cfg.gemini_key) window.__GEMINI_KEY__ = cfg.gemini_key;
+    }
+  } catch(e) {}
+
   // Check if already logged in
   try {
     const r = await fetch('/api/auth/me');
@@ -455,6 +465,7 @@ async function enterTracker() {
   showView('tracker');
   showPomodoroFab();
   await Promise.all([loadSubjects(), loadNotes()]);
+  fetchMotivation(false);  // load daily motivation (false = use cached if same day)
 }
 
 function updateHeaderProfile() {
@@ -1387,3 +1398,177 @@ document.getElementById('pomodoroFab').addEventListener('click', () => {
 // Init ring dasharray
 document.getElementById('pomRingProgress').style.strokeDasharray = CIRCUMFERENCE;
 renderPomDots();
+
+// ══════════════════════════════════════════════════════════════
+//  AI DAILY MOTIVATION  (Gemini API)
+// ══════════════════════════════════════════════════════════════
+
+const GEMINI_API_KEY = 'REPLACE_WITH_YOUR_GEMINI_KEY';  // ← replaced via env in production
+const MOTIVATION_CACHE_KEY = 'boardprep_motivation';
+
+const STUDY_TIPS = [
+  "Use the Pomodoro technique — 25 minutes of focused study, then a 5-minute break. Repeat.",
+  "Teach what you've just learned to an imaginary student. If you can explain it, you know it.",
+  "Review your notes within 24 hours of studying to move info into long-term memory.",
+  "Don't just re-read — practice active recall. Close your notes and write what you remember.",
+  "Start with the hardest subject first when your mind is freshest.",
+  "Group related topics together. Your brain loves patterns and connections.",
+  "Sleep is when your brain consolidates memories. Never sacrifice sleep for cramming.",
+  "Use mnemonics and acronyms for lists. Create stories around difficult concepts.",
+  "Take practice exams under real conditions — same time limit, no distractions.",
+  "Hydrate! Your brain is 75% water. Dehydration reduces focus and memory.",
+  "Break big subjects into small chunks. One subsection at a time.",
+  "Exercise boosts brain-derived neurotrophic factor (BDNF) — walk before a study session.",
+  "Write by hand when memorizing. The physical act helps encode information.",
+  "Eliminate your phone during focus sessions. Every notification breaks your flow.",
+  "Celebrate small wins. Finished a subsection? That deserves a moment of pride.",
+];
+
+function getTodayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+}
+
+function getRandomTip() {
+  return STUDY_TIPS[Math.floor(Math.random() * STUDY_TIPS.length)];
+}
+
+async function fetchMotivation(forceRefresh = false) {
+  const btn     = document.getElementById('motivationRefreshBtn');
+  const loading = document.getElementById('motivationLoading');
+  const msgEl   = document.getElementById('motivationMessage');
+  const footer  = document.getElementById('motivationFooter');
+  const dateEl  = document.getElementById('motivationDate');
+  const tipEl   = document.getElementById('motivationTip');
+  const tipText = document.getElementById('motivationTipText');
+
+  if (!msgEl) return;  // not in tracker view
+
+  const todayKey = getTodayKey();
+
+  // Check cache — use stored message if same day and not forced
+  if (!forceRefresh) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(MOTIVATION_CACHE_KEY) || 'null');
+      if (cached && cached.date === todayKey && cached.message) {
+        renderMotivation(cached.message, cached.tip, todayKey);
+        return;
+      }
+    } catch(e) {}
+  }
+
+  // Show loading
+  if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+  if (loading) loading.style.display = 'block';
+  if (msgEl)   msgEl.style.display   = 'none';
+  if (footer)  footer.style.display  = 'none';
+  if (tipEl)   tipEl.style.display   = 'none';
+
+  // Build a personalised prompt
+  const { total, done } = subjects.reduce((acc, s) => {
+    const p = subjectProgress(s);
+    return { total: acc.total + p.total, done: acc.done + p.done };
+  }, { total: 0, done: 0 });
+  const pct      = total === 0 ? 0 : Math.round((done / total) * 100);
+  const name     = currentUser?.display_name || 'reviewer';
+  const subCount = subjects.length;
+
+  const prompt = `You are a warm, encouraging study coach for Filipino board exam reviewers.
+Write a short daily motivational message (3-5 sentences max) for ${name} who is preparing for their Philippine board exam.
+They have completed ${pct}% of their review across ${subCount} subject${subCount !== 1 ? 's' : ''}.
+${pct < 30 ? "They are just starting out — encourage them to build momentum." : ""}
+${pct >= 30 && pct < 70 ? "They are making good progress — encourage them to keep going." : ""}
+${pct >= 70 ? "They are almost done — fire them up for the final stretch!" : ""}
+Make it personal, warm, and Filipino in spirit (you can use a Tagalog word or phrase naturally).
+Do NOT use bullet points. Write in flowing, inspiring prose. Keep it under 80 words.
+End with one powerful sentence that will stick with them all day.`;
+
+  try {
+    const key = window.__GEMINI_KEY__ || GEMINI_API_KEY;
+    if (!key || key === 'REPLACE_WITH_YOUR_GEMINI_KEY') {
+      // No key — show a static fallback message
+      const fallbacks = [
+        `Kaya mo 'yan, ${name}! Every page you study today is a step closer to those three letters after your name. The board exam is not just a test of knowledge — it is a test of character, and you've already shown you have what it takes. Mag-aral nang husto at maniwala sa sarili mo. Your dream is worth every sacrifice.`,
+        `Hindi madali ang daan, ${name}, but nothing worthwhile ever is. Today, show up for yourself and for everyone who believes in you. One topic at a time, one day at a time — that's how reviewers become professionals. You are closer than you think. Keep going!`,
+        `Every hour you invest today is interest earned on your future, ${name}. The person who passes the board exam is not the smartest — it's the one who never stopped showing up. Ikaw 'yan. Believe it. Now open your book and let's get to work!`,
+      ];
+      const msg = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      const tip = getRandomTip();
+      cacheMotivation(msg, tip, todayKey);
+      renderMotivation(msg, tip, todayKey);
+      return;
+    }
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 200, temperature: 0.9 }
+        })
+      }
+    );
+
+    if (!resp.ok) throw new Error(`Gemini error ${resp.status}`);
+
+    const data    = await resp.json();
+    const message = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+    if (!message) throw new Error('Empty response');
+
+    const tip = getRandomTip();
+    cacheMotivation(message, tip, todayKey);
+    renderMotivation(message, tip, todayKey);
+
+  } catch(e) {
+    console.warn('Motivation fetch failed:', e);
+    // Graceful fallback
+    const fallback = `You've got this, ${name}! Every great professional started exactly where you are now — studying, pushing through, and choosing not to quit. Ang tagumpay ay hindi para sa pinakamatalino, kundi para sa pinaka-determinado. That's you. Keep going!`;
+    const tip = getRandomTip();
+    renderMotivation(fallback, tip, todayKey);
+  } finally {
+    if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+  }
+}
+
+function cacheMotivation(message, tip, dateKey) {
+  try {
+    localStorage.setItem(MOTIVATION_CACHE_KEY, JSON.stringify({ date: dateKey, message, tip }));
+  } catch(e) {}
+}
+
+function renderMotivation(message, tip, dateKey) {
+  const loading = document.getElementById('motivationLoading');
+  const msgEl   = document.getElementById('motivationMessage');
+  const footer  = document.getElementById('motivationFooter');
+  const dateEl  = document.getElementById('motivationDate');
+  const tipEl   = document.getElementById('motivationTip');
+  const tipText = document.getElementById('motivationTipText');
+
+  if (!msgEl) return;
+
+  if (loading) loading.style.display = 'none';
+
+  // Render message with simple formatting
+  const formatted = message
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+  msgEl.innerHTML = formatted;
+  msgEl.style.display = 'block';
+
+  // Footer
+  if (footer) footer.style.display = 'flex';
+  if (dateEl) {
+    const [y, m, d] = dateKey.split('-');
+    const date = new Date(y, m-1, d);
+    dateEl.textContent = date.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  // Tip
+  if (tip && tipText) {
+    tipText.textContent = tip;
+    if (tipEl) tipEl.style.display = 'block';
+  }
+}

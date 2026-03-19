@@ -762,6 +762,17 @@ def admin_delete_user(user_id):
     return jsonify({"ok": True})
 
 
+# ── Gemini API Key (served to frontend safely) ────────────────────────────────
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+
+@app.route("/api/config", methods=["GET"])
+def get_config():
+    """Return non-secret config to frontend — only Gemini key (it's a client-side key)."""
+    return jsonify({"gemini_key": GEMINI_API_KEY})
+
+
 # ── Serve frontend ────────────────────────────────────────────────────────────
 
 

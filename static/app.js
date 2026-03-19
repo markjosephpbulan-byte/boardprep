@@ -737,13 +737,21 @@ async function saveProfile() {
 
   // Handle avatar changes
   if (avatarDataUrl === 'remove') {
-    console.log('[Profile] Sending DELETE avatar request...');
-    const r = await fetch(`/api/profiles/${uid}/avatar`, { method: 'DELETE' });
-    const d = await r.json();
-    console.log('[Profile] DELETE avatar response:', r.status, JSON.stringify(d).substring(0, 100));
-    if (!r.ok) { errEl.textContent = d.error || 'Failed to remove picture.'; return; }
-    currentUser = d;
-    console.log('[Profile] After DELETE, currentUser.avatar:', currentUser.avatar);
+    console.log('[Avatar] Sending DELETE request to:', `/api/profiles/${uid}/avatar`);
+    try {
+      const r = await fetch(`/api/profiles/${uid}/avatar`, { method: 'DELETE' });
+      const text = await r.text();
+      console.log('[Avatar] Response status:', r.status, 'body:', text.substring(0, 200));
+      let d;
+      try { d = JSON.parse(text); } catch(e) { errEl.textContent = 'Server error removing picture.'; return; }
+      if (!r.ok) { errEl.textContent = d.error || `Error ${r.status} removing picture.`; return; }
+      currentUser = d;
+      console.log('[Avatar] Removed. New avatar value:', currentUser.avatar);
+    } catch(fetchErr) {
+      console.error('[Avatar] Fetch failed:', fetchErr);
+      errEl.textContent = 'Network error removing picture.';
+      return;
+    }
   } else if (avatarDataUrl && avatarDataUrl !== null) {
     // User picked a new photo — upload it
     const fileInput = document.getElementById('avatarInput');
@@ -1730,8 +1738,16 @@ async function fetchMotivation(forceRefresh = false) {
 
   const todayKey = getTodayKey();
 
-  // forceRefresh — increment slot to get a fresh key, always goes to Gemini
+  // forceRefresh — increment slot, but enforce 60s cooldown to avoid 429
   if (forceRefresh) {
+    const lastRefresh = parseInt(localStorage.getItem('motivation_last_refresh') || '0');
+    const now = Date.now();
+    const secondsSince = Math.floor((now - lastRefresh) / 1000);
+    if (secondsSince < 60 && lastRefresh > 0) {
+      showToast(`⏳ Please wait ${60 - secondsSince}s before refreshing again`);
+      return;
+    }
+    localStorage.setItem('motivation_last_refresh', now.toString());
     _motivationSlot++;
     console.log('[Motivation] Force refresh — new slot:', _motivationSlot);
   }
@@ -1875,6 +1891,11 @@ Important rules:
       }
     );
 
+    if (resp.status === 429) {
+      // Rate limited — show a static message silently, try again later
+      console.warn('[Motivation] Rate limited by Gemini (429) — using fallback');
+      throw new Error('Gemini error 429: rate limited');
+    }
     if (!resp.ok) {
       const errData = await resp.json().catch(() => ({}));
       throw new Error(`Gemini error ${resp.status}: ${errData?.error?.message || 'unknown'}`);

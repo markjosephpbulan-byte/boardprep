@@ -1404,7 +1404,7 @@ renderPomDots();
 // ══════════════════════════════════════════════════════════════
 
 const GEMINI_API_KEY = 'REPLACE_WITH_YOUR_GEMINI_KEY';  // ← replaced via env in production
-const MOTIVATION_CACHE_KEY = 'boardprep_motivation';
+const MOTIVATION_CACHE_KEY = () => `boardprep_motivation_${currentUser?.id || 'anon'}`;
 
 const STUDY_TIPS = [
   "Use the Pomodoro technique — 25 minutes of focused study, then a 5-minute break. Repeat.",
@@ -1429,8 +1429,49 @@ function getTodayKey() {
   return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
 }
 
-function getRandomTip() {
-  return STUDY_TIPS[Math.floor(Math.random() * STUDY_TIPS.length)];
+const PROFESSION_TIPS = {
+  'Nursing': [
+    "Use SBAR (Situation, Background, Assessment, Recommendation) to organize your clinical thinking.",
+    "For drug calculations, always identify what you have, what you need, and what to calculate.",
+    "Remember Maslow's hierarchy — physiological needs always come first in priority questions.",
+    "When answering NLE questions, ask: what is the safest, most therapeutic nursing action?",
+    "ABC (Airway, Breathing, Circulation) guides your priority among multiple patients.",
+  ],
+  'Engineering': [
+    "Derive formulas from first principles so you understand when and why to apply them.",
+    "In engineering board exams, always check units — wrong units mean wrong answers.",
+    "Practice time management: don't spend more than 2 minutes on any single problem.",
+    "Review past board exam problems — patterns repeat more than you think.",
+  ],
+  'CPA': [
+    "For taxation, focus on the exceptions and special rules — those are what the exam tests.",
+    "In auditing, always think from the auditor's perspective: what could go wrong?",
+    "Financial accounting standards change — make sure your review materials are current.",
+    "Practice mental math for quick computations — calculators aren't always faster.",
+  ],
+  'Law': [
+    "Master the exceptions to rules — bar exams love to test edge cases.",
+    "For each principle, know: the rule, the exception, and the exception to the exception.",
+    "Read case digests, not just the full text — you need the principle, not every detail.",
+    "Practice writing concise, structured answers: issue, rule, application, conclusion.",
+  ],
+  'Teachers': [
+    "For LET, focus on child development theories — Piaget, Vygotsky, Erikson are always tested.",
+    "Know the K-12 curriculum framework inside and out — it's the basis of many questions.",
+    "Professional education questions test your judgment as a teacher, not just knowledge.",
+    "For the general education component, review breadth over depth.",
+  ],
+};
+
+function getRandomTip(profession) {
+  // Find profession-specific tips
+  const key = Object.keys(PROFESSION_TIPS).find(k => profession && profession.includes(k));
+  const specificTips = key ? PROFESSION_TIPS[key] : [];
+  // Mix: 40% chance of profession-specific tip if available
+  const allTips = specificTips.length > 0 && Math.random() < 0.4
+    ? specificTips
+    : STUDY_TIPS;
+  return allTips[Math.floor(Math.random() * allTips.length)];
 }
 
 async function fetchMotivation(forceRefresh = false) {
@@ -1449,7 +1490,7 @@ async function fetchMotivation(forceRefresh = false) {
   // Check cache — use stored message if same day and not forced
   if (!forceRefresh) {
     try {
-      const cached = JSON.parse(localStorage.getItem(MOTIVATION_CACHE_KEY) || 'null');
+      const cached = JSON.parse(localStorage.getItem(MOTIVATION_CACHE_KEY()) || 'null');
       if (cached && cached.date === todayKey && cached.message) {
         renderMotivation(cached.message, cached.tip, todayKey);
         return;
@@ -1464,36 +1505,107 @@ async function fetchMotivation(forceRefresh = false) {
   if (footer)  footer.style.display  = 'none';
   if (tipEl)   tipEl.style.display   = 'none';
 
-  // Build a personalised prompt
+  // Build a deeply personalised prompt based on subjects + progress
   const { total, done } = subjects.reduce((acc, s) => {
     const p = subjectProgress(s);
     return { total: acc.total + p.total, done: acc.done + p.done };
   }, { total: 0, done: 0 });
   const pct      = total === 0 ? 0 : Math.round((done / total) * 100);
   const name     = currentUser?.display_name || 'reviewer';
-  const subCount = subjects.length;
+
+  // Collect subject names for Gemini to read
+  const subjectNames = subjects.map(s => s.name);
+
+  // Detect likely profession from subject names
+  const allSubText = subjectNames.join(' ').toLowerCase();
+  let profession = 'board exam';
+  if (/nurs|nclex|medic|surgical|pharma|anatomy|physiol|pediatr|obstet|maternal|psychiatric|community health/i.test(allSubText))
+    profession = 'Nursing Licensure Exam (NLE)';
+  else if (/civil|structural|hydraulic|geotechn|engineer|surveying|mathematics|physics|strength of materials/i.test(allSubText))
+    profession = 'Engineering board exam';
+  else if (/accountan|audit|taxation|financial|management accounting|business law|cpa/i.test(allSubText))
+    profession = 'CPA board exam';
+  else if (/architect|design|building|planning|history of arch/i.test(allSubText))
+    profession = 'Architecture board exam';
+  else if (/law|criminal|civil law|constitutional|legal|bar exam/i.test(allSubText))
+    profession = 'Bar exam';
+  else if (/medicine|anatomy|biochem|patholog|pharmacol|microbio|internal medicine|surgery/i.test(allSubText))
+    profession = 'Medical board exam';
+  else if (/dentist|oral|dental|periodont/i.test(allSubText))
+    profession = 'Dentistry board exam';
+  else if (/psycholog|mental health|counseling|psychopath/i.test(allSubText))
+    profession = 'Psychology board exam';
+  else if (/teacher|education|lept|professional education|social science/i.test(allSubText))
+    profession = 'Licensure Exam for Teachers (LET)';
+  else if (/physical therapy|pt |occupational therapy|rehabilitation/i.test(allSubText))
+    profession = 'Physical Therapy/Occupational Therapy board exam';
+  else if (/pharmacy|pharmacog|pharmaceutical|drug/i.test(allSubText))
+    profession = 'Pharmacy board exam';
+  else if (/veterinar|animal|zoology/i.test(allSubText))
+    profession = 'Veterinary board exam';
+  else if (/criminolog|crime|forensic/i.test(allSubText))
+    profession = 'Criminology board exam';
+
+  // Find weakest subject (lowest % done) to give targeted encouragement
+  let weakestSubject = null;
+  let weakestPct = 101;
+  subjects.forEach(s => {
+    const p = subjectProgress(s);
+    const sp = p.total === 0 ? 0 : Math.round((p.done / p.total) * 100);
+    if (sp < weakestPct && p.total > 0) { weakestPct = sp; weakestSubject = s.name; }
+  });
+
+  // Find strongest subject (most progress)
+  let strongestSubject = null;
+  let strongestPct = -1;
+  subjects.forEach(s => {
+    const p = subjectProgress(s);
+    const sp = p.total === 0 ? 0 : Math.round((p.done / p.total) * 100);
+    if (sp > strongestPct && p.total > 0) { strongestPct = sp; strongestSubject = s.name; }
+  });
+
+  const subjectContext = subjectNames.length > 0
+    ? `Their subjects include: ${subjectNames.slice(0, 6).join(', ')}${subjectNames.length > 6 ? ', and more' : ''}.`
+    : '';
+  const weakContext = weakestSubject && weakestPct < 60
+    ? `They are still working hard on ${weakestSubject} (${weakestPct}% done) — gently encourage them to tackle it.`
+    : '';
+  const strongContext = strongestSubject && strongestPct >= 70
+    ? `They have made great progress on ${strongestSubject} (${strongestPct}% done) — acknowledge this strength.`
+    : '';
 
   const prompt = `You are a warm, encouraging study coach for Filipino board exam reviewers.
-Write a short daily motivational message (3-5 sentences max) for ${name} who is preparing for their Philippine board exam.
-They have completed ${pct}% of their review across ${subCount} subject${subCount !== 1 ? 's' : ''}.
-${pct < 30 ? "They are just starting out — encourage them to build momentum." : ""}
-${pct >= 30 && pct < 70 ? "They are making good progress — encourage them to keep going." : ""}
-${pct >= 70 ? "They are almost done — fire them up for the final stretch!" : ""}
-Make it personal, warm, and Filipino in spirit (you can use a Tagalog word or phrase naturally).
-Do NOT use bullet points. Write in flowing, inspiring prose. Keep it under 80 words.
-End with one powerful sentence that will stick with them all day.`;
+
+Write a short daily motivational message (3-5 sentences, under 90 words) for ${name} who is preparing for the Philippine ${profession}.
+${subjectContext}
+They have completed ${pct}% of their overall review.
+${pct === 0 ? "They are just beginning — welcome them and encourage the first step." : ""}
+${pct > 0 && pct < 30 ? "They are in the early stages — encourage them to build momentum and consistency." : ""}
+${pct >= 30 && pct < 60 ? "They are making solid progress — acknowledge the hard work and push them to keep going." : ""}
+${pct >= 60 && pct < 85 ? "They are deep in the review — they can see the finish line, encourage the final push." : ""}
+${pct >= 85 ? "They are almost done — fire them up, the board exam is within reach!" : ""}
+${weakContext}
+${strongContext}
+
+Important rules:
+- Speak directly to ${name} by name at least once
+- Reference the specific profession (${profession}) naturally in the message
+- Use one Tagalog or Filipino word/phrase that fits naturally (e.g. kaya mo, diskarte, malakas ang loob)
+- Write in warm, flowing prose — NO bullet points, NO headers
+- End with ONE short powerful sentence (under 15 words) that will stick all day
+- Sound human and genuine, not like a template`;
 
   try {
     const key = window.__GEMINI_KEY__ || GEMINI_API_KEY;
     if (!key || key === 'REPLACE_WITH_YOUR_GEMINI_KEY') {
-      // No key — show a static fallback message
+      // No key — show a profession-aware static fallback message
       const fallbacks = [
-        `Kaya mo 'yan, ${name}! Every page you study today is a step closer to those three letters after your name. The board exam is not just a test of knowledge — it is a test of character, and you've already shown you have what it takes. Mag-aral nang husto at maniwala sa sarili mo. Your dream is worth every sacrifice.`,
-        `Hindi madali ang daan, ${name}, but nothing worthwhile ever is. Today, show up for yourself and for everyone who believes in you. One topic at a time, one day at a time — that's how reviewers become professionals. You are closer than you think. Keep going!`,
-        `Every hour you invest today is interest earned on your future, ${name}. The person who passes the board exam is not the smartest — it's the one who never stopped showing up. Ikaw 'yan. Believe it. Now open your book and let's get to work!`,
+        `Kaya mo 'yan, ${name}! Every page you study for your ${profession} brings you one step closer to the life you are working toward. This journey is not easy, but it was never meant to be — because the people who pass are those who refused to quit. Maniwala ka sa sarili mo. Your future patients, clients, and community are counting on you.`,
+        `Hindi madali ang daan, ${name}, but that is exactly why passing your ${profession} will mean so much. Today, show up for yourself and for every person who will one day benefit from your expertise. One topic at a time, one day at a time — that is how reviewers become licensed professionals. You are closer than you think!`,
+        `Every hour you invest today studying for your ${profession} is interest earned on your future, ${name}. The person who passes is not the smartest — it is the one who never stopped showing up, even on the hard days. Ikaw 'yan. Believe it. Now open your book and let us get to work!`,
       ];
       const msg = fallbacks[Math.floor(Math.random() * fallbacks.length)];
-      const tip = getRandomTip();
+      const tip = getRandomTip(profession);
       cacheMotivation(msg, tip, todayKey);
       renderMotivation(msg, tip, todayKey);
       return;
@@ -1518,15 +1630,15 @@ End with one powerful sentence that will stick with them all day.`;
 
     if (!message) throw new Error('Empty response');
 
-    const tip = getRandomTip();
+    const tip = getRandomTip(profession);
     cacheMotivation(message, tip, todayKey);
     renderMotivation(message, tip, todayKey);
 
   } catch(e) {
     console.warn('Motivation fetch failed:', e);
     // Graceful fallback
-    const fallback = `You've got this, ${name}! Every great professional started exactly where you are now — studying, pushing through, and choosing not to quit. Ang tagumpay ay hindi para sa pinakamatalino, kundi para sa pinaka-determinado. That's you. Keep going!`;
-    const tip = getRandomTip();
+    const fallback = `You've got this, ${name}! Every great ${profession.replace(' board exam','').replace(' Exam','').replace(' (NLE)','')} professional started exactly where you are now — studying, pushing through, and choosing not to quit. Ang tagumpay ay hindi para sa pinakamatalino, kundi para sa pinaka-determinado. That's you. Keep going!`;
+    const tip = getRandomTip(profession);
     renderMotivation(fallback, tip, todayKey);
   } finally {
     if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
@@ -1535,7 +1647,7 @@ End with one powerful sentence that will stick with them all day.`;
 
 function cacheMotivation(message, tip, dateKey) {
   try {
-    localStorage.setItem(MOTIVATION_CACHE_KEY, JSON.stringify({ date: dateKey, message, tip }));
+    localStorage.setItem(MOTIVATION_CACHE_KEY(), JSON.stringify({ date: dateKey, message, tip }));
   } catch(e) {}
 }
 

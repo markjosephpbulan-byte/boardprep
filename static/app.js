@@ -731,13 +731,19 @@ async function saveProfile() {
   errEl.textContent = '';
   const uid = currentUser.id;
 
+  console.log('[Profile] saveProfile called');
+  console.log('[Profile] avatarDataUrl:', avatarDataUrl === 'remove' ? 'REMOVE' : avatarDataUrl ? 'NEW_IMAGE' : 'null/unchanged');
+  console.log('[Profile] currentUser.avatar before:', currentUser.avatar ? 'HAS_AVATAR' : 'NO_AVATAR');
+
   // Handle avatar changes
   if (avatarDataUrl === 'remove') {
-    // User clicked "Remove" — delete the avatar from backend
+    console.log('[Profile] Sending DELETE avatar request...');
     const r = await fetch(`/api/profiles/${uid}/avatar`, { method: 'DELETE' });
     const d = await r.json();
+    console.log('[Profile] DELETE avatar response:', r.status, JSON.stringify(d).substring(0, 100));
     if (!r.ok) { errEl.textContent = d.error || 'Failed to remove picture.'; return; }
     currentUser = d;
+    console.log('[Profile] After DELETE, currentUser.avatar:', currentUser.avatar);
   } else if (avatarDataUrl && avatarDataUrl !== null) {
     // User picked a new photo — upload it
     const fileInput = document.getElementById('avatarInput');
@@ -775,13 +781,17 @@ async function saveProfile() {
   const d2 = await r2.json();
   if (!r2.ok) { errEl.textContent = d2.error; return; }
 
+  console.log('[Profile] Settings PUT response:', r2.status, 'd2.avatar:', d2.avatar ? 'HAS_AVATAR' : 'NO_AVATAR');
   // Merge settings response but preserve the avatar we already handled
   currentUser = { ...currentUser, ...d2 };
   if (avatarDataUrl === 'remove') {
     currentUser.avatar = null;  // force null — don't let stale cache restore it
+    console.log('[Profile] Forced avatar to null after remove');
   } else if (avatarDataUrl === null) {
     currentUser.avatar = avatarBeforeSave;  // unchanged — keep existing
+    console.log('[Profile] Kept existing avatar');
   }
+  console.log('[Profile] Final currentUser.avatar:', currentUser.avatar ? 'HAS_AVATAR' : 'NULL');
   // if avatarDataUrl is a new upload, currentUser.avatar already updated above
 
   updateHeaderProfile();
@@ -1850,6 +1860,8 @@ Important rules:
       return;
     }
 
+    console.log('[Motivation] Key available:', !!key, '| Key starts with:', key ? key.substring(0, 8) : 'NONE');
+    console.log('[Motivation] Subjects count:', subjects.length, '| Names:', subjects.map(s=>s.name).join(', ') || 'NONE');
     console.log('[Motivation] Calling Gemini API...');
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,

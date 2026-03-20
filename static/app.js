@@ -901,6 +901,7 @@ function buildSubjectCard(subject) {
         </div>
       </div>
       <div class="card-actions">
+        <button class="btn-icon btn-quiz" title="Start Quiz" onclick="openFlashcardQuiz('${subject.id}','${subject.name}','${subject.color}')">🎴 Quiz</button>
         <button class="btn-icon" title="Edit" onclick="openEditSubjectModal('${subject.id}')">✏️</button>
         <button class="btn-icon" title="Delete" onclick="confirmDelete('subject','${subject.id}')">🗑️</button>
       </div>
@@ -950,12 +951,28 @@ function buildSubsectionHTML(subjectId, ss) {
 }
 
 function buildTopicHTML(subjectId, ssId, t) {
+  const hasNote = t.note && t.note.trim().length > 0;
   return `
   <div class="topic-item" id="t-${t.id}">
     <div class="topic-checkbox ${t.done ? 'checked':''}" id="t-cb-${t.id}"
          onclick="toggleTopicDone('${subjectId}','${ssId}','${t.id}')">${t.done ? '✓':''}</div>
     <span class="topic-name ${t.done ? 'done-text':''}" id="t-name-${t.id}">${esc(t.name)}</span>
+    <button class="btn-icon topic-note-btn ${hasNote ? 'has-note' : ''}"
+            id="tnote-btn-${t.id}"
+            title="${hasNote ? 'Edit note' : 'Add note'}"
+            onclick="toggleTopicNote('${subjectId}','${ssId}','${t.id}')">📝</button>
     <button class="btn-icon" onclick="confirmDelete('topic','${subjectId}','${ssId}','${t.id}')">🗑️</button>
+  </div>
+  <div class="topic-note-row" id="tnote-${t.id}" style="display:none">
+    <textarea class="topic-note-input" id="tnote-text-${t.id}"
+              placeholder="Add a definition, formula, or key concept for this topic…"
+              onblur="saveTopicNote('${subjectId}','${ssId}','${t.id}')"
+              onkeydown="if(event.key==='Escape') closeTopicNote('${t.id}')"
+    >${esc(t.note || '')}</textarea>
+    <div class="topic-note-actions">
+      <span class="topic-note-hint">Tab or click outside to save · Esc to close</span>
+      <button class="btn-add-inline" onclick="saveTopicNote('${subjectId}','${ssId}','${t.id}')">Save</button>
+    </div>
   </div>`;
 }
 
@@ -2213,5 +2230,249 @@ document.addEventListener('click', function reqNotif() {
   document.removeEventListener('click', reqNotif);
 }, { once: true });
 
+
+// ══════════════════════════════════════════════════════════════
+//  FLASHCARD SIDEBAR
+// ══════════════════════════════════════════════════════════════
+
+let flashcards         = {};  // { subjectId: [{ id, question, answer }] }
+let fcSidebarSubjectId = null;
+let fcSidebarSubjectName = '';
+
+function toggleFlashcardSidebar() {
+  const sidebar  = document.getElementById('flashcardSidebar');
+  const overlay  = document.getElementById('flashcardOverlay');
+  const isOpen   = sidebar.classList.contains('open');
+  if (isOpen) {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+  } else {
+    sidebar.classList.add('open');
+    overlay.classList.add('open');
+    renderFlashcardSubjectList();
+  }
+}
+
+function renderFlashcardSubjectList() {
+  const list = document.getElementById('fc-subject-list');
+  if (!list) return;
+  if (!subjects.length) {
+    list.innerHTML = '<div class="fc-empty">No subjects yet. Add a subject first!</div>';
+    return;
+  }
+  list.innerHTML = subjects.map(s => `
+    <div class="fc-subject-item ${fcSidebarSubjectId === s.id ? 'active' : ''}"
+         id="fc-subj-${s.id}"
+         onclick="selectFlashcardSubject('${s.id}','${esc(s.name)}','${s.color}')">
+      <div class="fc-subject-dot" style="background:${s.color}"></div>
+      <span class="fc-subject-name">${esc(s.name)}</span>
+      <span class="fc-subject-count" id="fc-count-${s.id}">
+        ${(flashcards[s.id] || []).length}
+      </span>
+    </div>`).join('');
+}
+
+async function selectFlashcardSubject(subjectId, subjectName, color) {
+  fcSidebarSubjectId   = subjectId;
+  fcSidebarSubjectName = subjectName;
+
+  // Update active state in subject list
+  document.querySelectorAll('.fc-subject-item').forEach(el => el.classList.remove('active'));
+  const item = document.getElementById(`fc-subj-${subjectId}`);
+  if (item) item.classList.add('active');
+
+  // Show the card editor panel
+  document.getElementById('fc-subject-panel').style.display = 'block';
+  document.getElementById('fc-panel-title').textContent     = subjectName;
+  document.getElementById('fc-panel-bar').style.background  = color;
+
+  // Load flashcards for this subject
+  await loadFlashcardsForSubject(subjectId);
+}
+
+async function loadFlashcardsForSubject(subjectId) {
+  try {
+    const r = await fetch(`${apiBase()}/flashcards?subject_id=${subjectId}`);
+    if (!r.ok) return;
+    const cards = await r.json();
+    flashcards[subjectId] = cards;
+    renderFlashcardList(subjectId);
+    updateFlashcardCount(subjectId);
+  } catch(e) {}
+}
+
+function renderFlashcardList(subjectId) {
+  const list  = document.getElementById('fc-cards-list');
+  const cards = flashcards[subjectId] || [];
+  if (!cards.length) {
+    list.innerHTML = '<div class="fc-empty">No flashcards yet. Add your first one below!</div>';
+    return;
+  }
+  list.innerHTML = cards.map((c, i) => `
+    <div class="fc-card-item" id="fcard-${c.id}">
+      <div class="fc-card-num">${i + 1}</div>
+      <div class="fc-card-content">
+        <div class="fc-card-q">${esc(c.question)}</div>
+        <div class="fc-card-a">${esc(c.answer) || '<span style="color:var(--text3);font-style:italic">No answer yet</span>'}</div>
+      </div>
+      <button class="btn-icon" onclick="deleteFlashcard('${subjectId}','${c.id}')">🗑️</button>
+    </div>`).join('');
+}
+
+function updateFlashcardCount(subjectId) {
+  const el = document.getElementById(`fc-count-${subjectId}`);
+  if (el) el.textContent = (flashcards[subjectId] || []).length;
+}
+
+async function addFlashcard(subjectId) {
+  const qInput = document.getElementById('fc-new-question');
+  const aInput = document.getElementById('fc-new-answer');
+  const question = qInput.value.trim();
+  const answer   = aInput.value.trim();
+  if (!question) { qInput.focus(); return; }
+
+  // Optimistic
+  const tempId   = 'temp_' + Date.now();
+  const tempCard = { id: tempId, question, answer, subject_id: subjectId };
+  if (!flashcards[subjectId]) flashcards[subjectId] = [];
+  flashcards[subjectId].push(tempCard);
+  renderFlashcardList(subjectId);
+  updateFlashcardCount(subjectId);
+  qInput.value = '';
+  aInput.value = '';
+  qInput.focus();
+  showToast('Flashcard added! ✅');
+
+  try {
+    const r = await fetch(`${apiBase()}/flashcards`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject_id: subjectId, question, answer })
+    });
+    if (!r.ok) throw new Error();
+    const real = await r.json();
+    const idx  = flashcards[subjectId].findIndex(c => c.id === tempId);
+    if (idx !== -1) flashcards[subjectId][idx] = real;
+    renderFlashcardList(subjectId);
+  } catch(e) {
+    flashcards[subjectId] = flashcards[subjectId].filter(c => c.id !== tempId);
+    renderFlashcardList(subjectId);
+    updateFlashcardCount(subjectId);
+    showToast('❌ Failed to save flashcard. Please try again.');
+  }
+}
+
+async function deleteFlashcard(subjectId, cardId) {
+  const prev    = [...(flashcards[subjectId] || [])];
+  flashcards[subjectId] = flashcards[subjectId].filter(c => c.id !== cardId);
+  renderFlashcardList(subjectId);
+  updateFlashcardCount(subjectId);
+
+  try {
+    const r = await fetch(`${apiBase()}/flashcards/${cardId}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error();
+  } catch(e) {
+    flashcards[subjectId] = prev;
+    renderFlashcardList(subjectId);
+    updateFlashcardCount(subjectId);
+    showToast('❌ Failed to delete. Please try again.');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  FLASHCARD QUIZ
+// ══════════════════════════════════════════════════════════════
+
+let quizCards    = [];
+let quizIndex    = 0;
+let quizGot      = 0;
+let quizMissed   = 0;
+let quizRevealed = false;
+
+async function openFlashcardQuiz(subjectId, subjectName, color) {
+  // Load cards if not already loaded
+  if (!flashcards[subjectId]) {
+    await loadFlashcardsForSubject(subjectId);
+  }
+  const cards = flashcards[subjectId] || [];
+  if (!cards.length) {
+    showToast('🎴 No flashcards yet! Open the flashcard panel first to add some.');
+    return;
+  }
+
+  // Shuffle
+  quizCards    = [...cards].sort(() => Math.random() - 0.5);
+  quizIndex    = 0;
+  quizGot      = 0;
+  quizMissed   = 0;
+  quizRevealed = false;
+
+  document.getElementById('quiz-subject-name').textContent    = subjectName;
+  document.getElementById('quiz-subject-bar').style.background = color;
+  openModal('quizModal');
+  renderQuizCard();
+}
+
+function renderQuizCard() {
+  const total = quizCards.length;
+  const card  = quizCards[quizIndex];
+  const pct   = Math.round((quizIndex / total) * 100);
+
+  document.getElementById('quiz-progress-fill').style.width = pct + '%';
+  document.getElementById('quiz-counter').textContent       = `${quizIndex + 1} / ${total}`;
+  document.getElementById('quiz-got-count').textContent     = quizGot;
+  document.getElementById('quiz-missed-count').textContent  = quizMissed;
+  document.getElementById('quiz-question').textContent      = card.question;
+  document.getElementById('quiz-answer').textContent        = card.answer || '(No answer provided)';
+  document.getElementById('quiz-answer').style.display      = 'none';
+  document.getElementById('quiz-reveal-btn').style.display  = 'block';
+  document.getElementById('quiz-answer-btns').style.display = 'none';
+  document.getElementById('quiz-card-area').style.display   = 'block';
+  document.getElementById('quiz-result-area').style.display = 'none';
+  quizRevealed = false;
+}
+
+function revealQuizAnswer() {
+  document.getElementById('quiz-answer').style.display      = 'block';
+  document.getElementById('quiz-reveal-btn').style.display  = 'none';
+  document.getElementById('quiz-answer-btns').style.display = 'flex';
+  quizRevealed = true;
+}
+
+function answerQuiz(correct) {
+  if (!quizRevealed) return;
+  if (correct) quizGot++; else quizMissed++;
+  quizIndex++;
+  if (quizIndex >= quizCards.length) {
+    showQuizResult();
+  } else {
+    renderQuizCard();
+  }
+}
+
+function showQuizResult() {
+  const total = quizCards.length;
+  const pct   = Math.round((quizGot / total) * 100);
+  const emoji = pct >= 80 ? '🎉' : pct >= 50 ? '👍' : '💪';
+  const msg   = pct >= 80 ? 'Excellent work!' : pct >= 50 ? 'Good progress!' : 'Keep reviewing!';
+
+  document.getElementById('quiz-progress-fill').style.width  = '100%';
+  document.getElementById('quiz-counter').textContent        = `${total} / ${total}`;
+  document.getElementById('quiz-card-area').style.display    = 'none';
+  document.getElementById('quiz-result-area').style.display  = 'block';
+  document.getElementById('quiz-result-emoji').textContent   = emoji;
+  document.getElementById('quiz-result-msg').textContent     = msg;
+  document.getElementById('quiz-result-score').textContent   = `${quizGot} / ${total} correct (${pct}%)`;
+  document.getElementById('quiz-got-final').textContent      = quizGot;
+  document.getElementById('quiz-missed-final').textContent   = quizMissed;
+}
+
+function retryQuiz() {
+  quizCards    = [...quizCards].sort(() => Math.random() - 0.5);
+  quizIndex    = 0;
+  quizGot      = 0;
+  quizMissed   = 0;
+  quizRevealed = false;
+  renderQuizCard();
+}
 
 boot();

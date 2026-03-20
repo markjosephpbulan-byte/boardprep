@@ -156,6 +156,7 @@ def init_db():
             user_id       TEXT NOT NULL,
             name          TEXT NOT NULL,
             done          BOOLEAN DEFAULT FALSE,
+            note          TEXT DEFAULT '',
             position      INTEGER DEFAULT 0,
             created_at    TIMESTAMPTZ DEFAULT NOW()
         )
@@ -172,6 +173,16 @@ def init_db():
             updated_at TIMESTAMPTZ DEFAULT NOW()
         )
     """)
+    db_execute("""
+        CREATE TABLE IF NOT EXISTS flashcards (
+            id         TEXT PRIMARY KEY,
+            subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            user_id    TEXT NOT NULL,
+            question   TEXT NOT NULL,
+            answer     TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
     # Indexes — make WHERE user_id=? and WHERE subject_id=? queries instant
     db_execute("CREATE INDEX IF NOT EXISTS idx_subjects_user    ON subjects(user_id)")
     db_execute(
@@ -185,6 +196,12 @@ def init_db():
     )
     db_execute("CREATE INDEX IF NOT EXISTS idx_topics_user      ON topics(user_id)")
     db_execute("CREATE INDEX IF NOT EXISTS idx_notes_user       ON notes(user_id)")
+    db_execute(
+        "CREATE INDEX IF NOT EXISTS idx_flashcards_subject ON flashcards(subject_id)"
+    )
+    db_execute(
+        "CREATE INDEX IF NOT EXISTS idx_flashcards_user    ON flashcards(user_id)"
+    )
     db_execute(
         "CREATE INDEX IF NOT EXISTS idx_users_username   ON users(LOWER(username))"
     )
@@ -220,6 +237,32 @@ try:
         )
         db_execute("CREATE INDEX IF NOT EXISTS idx_topics_user      ON topics(user_id)")
         db_execute("CREATE INDEX IF NOT EXISTS idx_notes_user       ON notes(user_id)")
+        # Safe migrations for existing DBs
+        try:
+            db_execute(
+                "ALTER TABLE topics ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''"
+            )
+        except Exception:
+            pass
+        try:
+            db_execute("""
+                CREATE TABLE IF NOT EXISTS flashcards (
+                    id         TEXT PRIMARY KEY,
+                    subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+                    user_id    TEXT NOT NULL,
+                    question   TEXT NOT NULL,
+                    answer     TEXT NOT NULL DEFAULT '',
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            db_execute(
+                "CREATE INDEX IF NOT EXISTS idx_flashcards_subject ON flashcards(subject_id)"
+            )
+            db_execute(
+                "CREATE INDEX IF NOT EXISTS idx_flashcards_user    ON flashcards(user_id)"
+            )
+        except Exception:
+            pass
         print("[DB] Ready ✅ (tables already exist)")
 except Exception as e:
     print(f"[DB] ❌ FAILED: {e}")
@@ -493,6 +536,7 @@ def get_subjects_for_user(user_id):
     topics_by_ss = {}
     for t in all_topics:
         t["done"] = bool(t["done"])
+        t["note"] = t.get("note") or ""
         t["created_at"] = str(t["created_at"])
         topics_by_ss.setdefault(t["subsection_id"], []).append(t)
 
@@ -1111,11 +1155,12 @@ def add_topic(user_id, subject_id, sub_id):
         return jsonify({"error": "Name is required"}), 400
     tid = str(uuid.uuid4())
     db_execute(
-        "INSERT INTO topics (id, subsection_id, user_id, name) VALUES (%s,%s,%s,%s)",
-        (tid, sub_id, user_id, name),
+        "INSERT INTO topics (id, subsection_id, user_id, name, note) VALUES (%s,%s,%s,%s,%s)",
+        (tid, sub_id, user_id, name, ""),
     )
     t = db_execute("SELECT * FROM topics WHERE id=%s", (tid,), fetch="one")
     t["done"] = bool(t["done"])
+    t["note"] = t.get("note") or ""
     t["created_at"] = str(t["created_at"])
     return jsonify(t), 201
 
@@ -1137,10 +1182,16 @@ def update_topic(user_id, subject_id, sub_id, topic_id):
             "UPDATE topics SET done=%s WHERE id=%s AND user_id=%s",
             (bool(body["done"]), topic_id, user_id),
         )
+    if "note" in body:
+        db_execute(
+            "UPDATE topics SET note=%s WHERE id=%s AND user_id=%s",
+            (body["note"], topic_id, user_id),
+        )
     t = db_execute("SELECT * FROM topics WHERE id=%s", (topic_id,), fetch="one")
     if not t:
         return jsonify({"error": "Not found"}), 404
     t["done"] = bool(t["done"])
+    t["note"] = t.get("note") or ""
     t["created_at"] = str(t["created_at"])
     return jsonify(t)
 
@@ -1465,6 +1516,87 @@ def admin_delete_user(user_id):
         return jsonify({"error": "User not found"}), 404
     db_execute("DELETE FROM users WHERE id=%s", (user_id,))
     invalidate_profiles_cache()
+    return jsonify({"ok": True})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  FLASHCARDS
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@app.route("/api/profiles/<user_id>/flashcards", methods=["GET"])
+@owner_required
+def get_flashcards(user_id):
+    subject_id = request.args.get("subject_id")
+    if subject_id:
+        cards = (
+            db_execute(
+                "SELECT * FROM flashcards WHERE user_id=%s AND subject_id=%s ORDER BY created_at",
+                (user_id, subject_id),
+                fetch="all",
+            )
+            or []
+        )
+    else:
+        cards = (
+            db_execute(
+                "SELECT * FROM flashcards WHERE user_id=%s ORDER BY created_at",
+                (user_id,),
+                fetch="all",
+            )
+            or []
+        )
+    for c in cards:
+        c["created_at"] = str(c["created_at"])
+    return jsonify(cards)
+
+
+@app.route("/api/profiles/<user_id>/flashcards", methods=["POST"])
+@owner_required
+def add_flashcard(user_id):
+    body = request.json or {}
+    subject_id = body.get("subject_id", "").strip()
+    question = body.get("question", "").strip()
+    answer = body.get("answer", "").strip()
+    if not question:
+        return jsonify({"error": "Question is required"}), 400
+    if not subject_id:
+        return jsonify({"error": "Subject is required"}), 400
+    fid = str(uuid.uuid4())
+    db_execute(
+        "INSERT INTO flashcards (id, subject_id, user_id, question, answer) VALUES (%s,%s,%s,%s,%s)",
+        (fid, subject_id, user_id, question, answer),
+    )
+    card = db_execute("SELECT * FROM flashcards WHERE id=%s", (fid,), fetch="one")
+    card["created_at"] = str(card["created_at"])
+    return jsonify(card), 201
+
+
+@app.route("/api/profiles/<user_id>/flashcards/<card_id>", methods=["PUT"])
+@owner_required
+def update_flashcard(user_id, card_id):
+    body = request.json or {}
+    if "question" in body:
+        db_execute(
+            "UPDATE flashcards SET question=%s WHERE id=%s AND user_id=%s",
+            (body["question"], card_id, user_id),
+        )
+    if "answer" in body:
+        db_execute(
+            "UPDATE flashcards SET answer=%s WHERE id=%s AND user_id=%s",
+            (body["answer"], card_id, user_id),
+        )
+    card = db_execute("SELECT * FROM flashcards WHERE id=%s", (card_id,), fetch="one")
+    if not card:
+        return jsonify({"error": "Not found"}), 404
+    card["created_at"] = str(card["created_at"])
+    return jsonify(card)
+
+
+@app.route("/api/profiles/<user_id>/flashcards/<card_id>", methods=["DELETE"])
+@owner_required
+def delete_flashcard(user_id, card_id):
+    db_execute("DELETE FROM flashcards WHERE id=%s AND user_id=%s", (card_id, user_id))
     return jsonify({"ok": True})
 
 

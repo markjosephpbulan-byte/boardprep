@@ -230,6 +230,9 @@
         <button class="btn-notes-toggle" onclick="toggleNotesSidebar()">
           🗒️ Quick Notes <span class="notes-badge" id="notesBadge">0</span>
         </button>
+        <button class="btn-notes-toggle" onclick="toggleFlashcardSidebar()">
+          🎴 Flashcards
+        </button>
         <button class="btn-primary" onclick="openAddSubjectModal()">+ Add Subject</button>
         <!-- Theme Switcher -->
         <div class="theme-switcher" id="themeSwitcher">
@@ -517,6 +520,116 @@
       <button class="btn-ghost" onclick="closeModal('deleteAccountModal')">Cancel</button>
       <button class="btn-danger" id="deleteAccountBtn" onclick="confirmDeleteAccount()">Yes, Delete My Profile</button>
     </div>
+  </div>
+</div>
+
+<!-- ══ FLASHCARD SIDEBAR ═══════════════════════════════════════════════════ -->
+<aside class="flashcard-sidebar" id="flashcardSidebar">
+
+  <!-- Sidebar header -->
+  <div class="fc-sidebar-header">
+    <div class="fc-sidebar-title">🎴 Flashcards</div>
+    <button class="btn-close-sidebar" onclick="toggleFlashcardSidebar()">✕</button>
+  </div>
+
+  <div class="fc-sidebar-body">
+
+    <!-- Left column: subject list -->
+    <div class="fc-subject-col">
+      <div class="fc-col-label">Subjects</div>
+      <div id="fc-subject-list" class="fc-subject-list"></div>
+    </div>
+
+    <!-- Right column: card editor (shown when subject selected) -->
+    <div class="fc-panel" id="fc-subject-panel" style="display:none">
+      <div class="fc-panel-bar" id="fc-panel-bar"></div>
+      <div class="fc-panel-inner">
+        <div class="fc-panel-title" id="fc-panel-title"></div>
+
+        <!-- Existing cards list -->
+        <div class="fc-cards-list" id="fc-cards-list"></div>
+
+        <!-- Add new card form -->
+        <div class="fc-add-form">
+          <div class="fc-add-label">➕ New Flashcard</div>
+          <input  class="fc-input" id="fc-new-question"
+                  placeholder="Question…"
+                  onkeydown="if(event.key==='Enter') document.getElementById('fc-new-answer').focus()"/>
+          <textarea class="fc-textarea" id="fc-new-answer"
+                    placeholder="Answer…"
+                    rows="3"
+                    onkeydown="if(event.key==='Enter' && event.ctrlKey) addFlashcard(fcSidebarSubjectId)"></textarea>
+          <button class="btn-primary btn-full"
+                  onclick="addFlashcard(fcSidebarSubjectId)">Save Flashcard</button>
+          <div style="font-size:0.72rem;color:var(--text3);text-align:center;margin-top:4px">
+            Ctrl + Enter to save quickly
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</aside>
+<div class="flashcard-overlay" id="flashcardOverlay" onclick="toggleFlashcardSidebar()"></div>
+
+<!-- ══ QUIZ MODAL ═══════════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="quizModal">
+  <div class="modal modal-quiz">
+
+    <div class="modal-header">
+      <div>
+        <h3>🎴 Quiz Mode</h3>
+        <div class="quiz-subject-name" id="quiz-subject-name"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('quizModal')">✕</button>
+    </div>
+
+    <!-- Color bar + progress -->
+    <div class="quiz-color-bar" id="quiz-subject-bar"></div>
+    <div class="quiz-progress-wrap">
+      <div class="quiz-progress-fill" id="quiz-progress-fill"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="quiz-stats-row">
+      <span class="quiz-counter" id="quiz-counter">1 / 0</span>
+      <span class="quiz-stat got">✅ <span id="quiz-got-count">0</span></span>
+      <span class="quiz-stat missed">❌ <span id="quiz-missed-count">0</span></span>
+    </div>
+
+    <!-- Card area -->
+    <div class="quiz-card-area" id="quiz-card-area">
+      <div class="quiz-card">
+        <div class="quiz-card-label">Question</div>
+        <div class="quiz-question" id="quiz-question"></div>
+        <div class="quiz-divider"></div>
+        <div class="quiz-card-label">Answer</div>
+        <div class="quiz-answer" id="quiz-answer" style="display:none"></div>
+        <button class="quiz-reveal-btn" id="quiz-reveal-btn" onclick="revealQuizAnswer()">
+          👁️ Reveal Answer
+        </button>
+      </div>
+      <div class="quiz-answer-btns" id="quiz-answer-btns" style="display:none">
+        <button class="quiz-btn-missed" onclick="answerQuiz(false)">❌ Missed it</button>
+        <button class="quiz-btn-got"    onclick="answerQuiz(true)">✅ Got it!</button>
+      </div>
+    </div>
+
+    <!-- Result area -->
+    <div class="quiz-result-area" id="quiz-result-area" style="display:none">
+      <div class="quiz-result-emoji" id="quiz-result-emoji">🎉</div>
+      <div class="quiz-result-msg"   id="quiz-result-msg">Excellent!</div>
+      <div class="quiz-result-score" id="quiz-result-score"></div>
+      <div class="quiz-result-breakdown">
+        <span class="quiz-stat got">✅ Got it: <strong id="quiz-got-final">0</strong></span>
+        <span class="quiz-stat missed">❌ Missed: <strong id="quiz-missed-final">0</strong></span>
+      </div>
+      <div class="quiz-result-actions">
+        <button class="btn-ghost"   onclick="closeModal('quizModal')">Done</button>
+        <button class="btn-primary" onclick="retryQuiz()">🔄 Retry</button>
+      </div>
+    </div>
+
   </div>
 </div>
 

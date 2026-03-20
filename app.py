@@ -74,8 +74,8 @@ def get_pool():
         if not DATABASE_URL:
             raise RuntimeError("DATABASE_URL environment variable not set")
         _pool = pg_pool.ThreadedConnectionPool(
-            minconn=3,  # keep 3 connections warm (Singapore is close, worth it)
-            maxconn=10,  # max 10 simultaneous connections (free tier safe)
+            minconn=1,  # keep 1 connection warm (Railway free tier friendly)
+            maxconn=5,  # max 5 simultaneous connections (free tier safe)
             dsn=DATABASE_URL
             + (
                 ""

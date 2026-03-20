@@ -1369,6 +1369,94 @@ def admin_list_users():
     return jsonify(result)
 
 
+@app.route("/api/admin/analytics", methods=["GET"])
+@admin_required
+def admin_analytics():
+    # Total topics
+    total_topics = db_execute("SELECT COUNT(*) as c FROM topics", fetch="one") or {}
+
+    # Total notes
+    total_notes = db_execute("SELECT COUNT(*) as c FROM notes", fetch="one") or {}
+
+    # Active users (have at least 1 subject)
+    active_users = (
+        db_execute(
+            """
+        SELECT COUNT(DISTINCT user_id) as c FROM subjects
+    """,
+            fetch="one",
+        )
+        or {}
+    )
+
+    # Drop-off funnel
+    total_users = db_execute("SELECT COUNT(*) as c FROM users", fetch="one") or {}
+
+    # Users with 0 subjects (signed up but did nothing)
+    no_subjects = (
+        db_execute(
+            """
+        SELECT COUNT(*) as c FROM users u
+        WHERE NOT EXISTS (SELECT 1 FROM subjects s WHERE s.user_id = u.id)
+    """,
+            fetch="one",
+        )
+        or {}
+    )
+
+    # Users with subjects but no sub-subjects
+    no_subsections = (
+        db_execute(
+            """
+        SELECT COUNT(DISTINCT s.user_id) as c FROM subjects s
+        WHERE NOT EXISTS (SELECT 1 FROM subsections ss WHERE ss.user_id = s.user_id)
+    """,
+            fetch="one",
+        )
+        or {}
+    )
+
+    # Users with sub-subjects but no topics
+    no_topics = (
+        db_execute(
+            """
+        SELECT COUNT(DISTINCT ss.user_id) as c FROM subsections ss
+        WHERE NOT EXISTS (SELECT 1 FROM topics t WHERE t.user_id = ss.user_id)
+    """,
+            fetch="one",
+        )
+        or {}
+    )
+
+    # New users last 7 days grouped by date
+    growth = (
+        db_execute(
+            """
+        SELECT DATE(created_at) as day, COUNT(*) as c
+        FROM users
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY DATE(created_at)
+        ORDER BY day ASC
+    """,
+            fetch="all",
+        )
+        or []
+    )
+
+    return jsonify({
+        "total_topics": int(total_topics.get("c", 0)),
+        "total_notes": int(total_notes.get("c", 0)),
+        "active_users": int(active_users.get("c", 0)),
+        "total_users": int(total_users.get("c", 0)),
+        "funnel": {
+            "no_subjects": int(no_subjects.get("c", 0)),
+            "no_subsections": int(no_subsections.get("c", 0)),
+            "no_topics": int(no_topics.get("c", 0)),
+        },
+        "growth": [{"day": str(r["day"]), "count": int(r["c"])} for r in growth],
+    })
+
+
 @app.route("/api/admin/users/<user_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_user(user_id):

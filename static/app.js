@@ -1942,4 +1942,187 @@ function renderMotivation(message, tip, dateKey) {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+//  POMODORO TIMER
+// ══════════════════════════════════════════════════════════════
+
+const POM_MODES = {
+  focus: { label: 'Stay focused for 25 minutes!', secs: 25 * 60, color: 'var(--green)' },
+  short: { label: 'Short break — breathe!',        secs:  5 * 60, color: '#60a5fa'      },
+  long:  { label: 'Long break — you earned it!',   secs: 15 * 60, color: '#a78bfa'      }
+};
+const CIRCUMFERENCE = 2 * Math.PI * 52; // matches r="52" in SVG
+
+let pomMode    = 'focus';
+let pomSeconds = POM_MODES.focus.secs;
+let pomTotal   = POM_MODES.focus.secs;
+let pomRunning = false;
+let pomTimer   = null;
+let pomSession = 1;  // 1–4 focus sessions then long break
+
+function showPomodoroFab() {
+  const fab = document.getElementById('pomodoroFab');
+  if (fab) fab.style.display = 'flex';
+}
+
+function togglePomodoro() {
+  const widget = document.getElementById('pomodoroWidget');
+  const fab    = document.getElementById('pomodoroFab');
+  if (!widget) return;
+  const isOpen = widget.style.display !== 'none';
+  widget.style.display = isOpen ? 'none' : 'block';
+}
+
+function switchMode(mode) {
+  pomMode    = mode;
+  pomSeconds = POM_MODES[mode].secs;
+  pomTotal   = POM_MODES[mode].secs;
+  pomRunning = false;
+  clearInterval(pomTimer);
+
+  // Update tab styles
+  ['focus','short','long'].forEach(m => {
+    const tab = document.getElementById(`tab-${m}`);
+    if (tab) tab.classList.toggle('active', m === mode);
+  });
+
+  // Update ring color
+  const ring = document.getElementById('pomRingProgress');
+  if (ring) {
+    ring.style.stroke = POM_MODES[mode].color;
+    ring.classList.toggle('break-mode', mode !== 'focus');
+  }
+
+  // Update play button color
+  const play = document.getElementById('pomPlayBtn');
+  if (play) play.classList.toggle('break-mode', mode !== 'focus');
+
+  // Update footer label
+  const footer = document.getElementById('pomModeLabel');
+  if (footer) footer.textContent = POM_MODES[mode].label;
+
+  // Update display
+  renderPomTimer();
+  const playBtn = document.getElementById('pomPlayBtn');
+  if (playBtn) playBtn.textContent = '▶';
+}
+
+function togglePomodoro_timer() {
+  if (pomRunning) {
+    pausePomodoro();
+  } else {
+    startPomodoro();
+  }
+}
+
+function startPomodoro() {
+  pomRunning = true;
+  const playBtn = document.getElementById('pomPlayBtn');
+  if (playBtn) playBtn.textContent = '⏸';
+
+  const fab = document.getElementById('pomodoroFab');
+  if (fab) {
+    fab.classList.toggle('running',       pomMode === 'focus');
+    fab.classList.toggle('break-running', pomMode !== 'focus');
+  }
+
+  pomTimer = setInterval(() => {
+    pomSeconds--;
+    renderPomTimer();
+    if (pomSeconds <= 0) {
+      clearInterval(pomTimer);
+      pomRunning = false;
+      onPomodoroComplete();
+    }
+  }, 1000);
+}
+
+function pausePomodoro() {
+  pomRunning = false;
+  clearInterval(pomTimer);
+  const playBtn = document.getElementById('pomPlayBtn');
+  if (playBtn) playBtn.textContent = '▶';
+  const fab = document.getElementById('pomodoroFab');
+  if (fab) { fab.classList.remove('running'); fab.classList.remove('break-running'); }
+}
+
+function resetPomodoro() {
+  pausePomodoro();
+  pomSeconds = POM_MODES[pomMode].secs;
+  pomTotal   = POM_MODES[pomMode].secs;
+  renderPomTimer();
+}
+
+function skipPomodoro() {
+  pausePomodoro();
+  onPomodoroComplete();
+}
+
+function onPomodoroComplete() {
+  // Notify
+  if (Notification.permission === 'granted') {
+    new Notification('BoardPrep PH 🍅', {
+      body: pomMode === 'focus' ? 'Break time! You earned it.' : 'Back to studying!',
+      icon: '/static/favicon.svg'
+    });
+  }
+
+  // Cycle: focus → short break → focus → ... → after 4 focuses → long break
+  if (pomMode === 'focus') {
+    pomSession = Math.min(pomSession + 1, 5);
+    renderPomDots();
+    if (pomSession > 4) {
+      pomSession = 1;
+      switchMode('long');
+    } else {
+      switchMode('short');
+    }
+  } else {
+    switchMode('focus');
+  }
+
+  // Auto-start the next mode
+  startPomodoro();
+}
+
+function renderPomTimer() {
+  const m = Math.floor(pomSeconds / 60).toString().padStart(2, '0');
+  const s = (pomSeconds % 60).toString().padStart(2, '0');
+  const timeEl = document.getElementById('pomTime');
+  if (timeEl) timeEl.textContent = `${m}:${s}`;
+
+  // Ring progress
+  const progress = pomSeconds / pomTotal;
+  const offset   = CIRCUMFERENCE * (1 - progress);
+  const ring = document.getElementById('pomRingProgress');
+  if (ring) ring.style.strokeDashoffset = offset;
+
+  // Update page title when running
+  if (pomRunning) {
+    document.title = `${m}:${s} — BoardPrep PH`;
+  } else {
+    document.title = 'BoardPrep PH';
+  }
+}
+
+function renderPomDots() {
+  const dotsEl  = document.getElementById('pomDots');
+  const sessEl  = document.getElementById('pomSession');
+  if (sessEl) sessEl.textContent = Math.min(pomSession, 4);
+  if (!dotsEl) return;
+  dotsEl.innerHTML = '';
+  for (let i = 1; i <= 4; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'pom-dot' + (i < pomSession ? ' done' : i === pomSession ? ' current' : '');
+    dotsEl.appendChild(dot);
+  }
+}
+
+// Request notification permission on first interaction
+document.addEventListener('click', function reqNotif() {
+  if (Notification.permission === 'default') Notification.requestPermission();
+  document.removeEventListener('click', reqNotif);
+}, { once: true });
+
+
 boot();

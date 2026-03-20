@@ -852,28 +852,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   50%       { transform: scale(1.2) rotate(10deg); opacity: 0.8; }
 }
 
-.motivation-refresh {
-  background: transparent;
-  border: 1px solid var(--border2);
-  color: var(--text3);
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 0.9rem;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.25s;
-  line-height: 1;
-}
-.motivation-refresh:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-  transform: rotate(90deg);
-}
-.motivation-refresh.spinning {
-  animation: spin 0.7s linear infinite;
-  pointer-events: none;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
 
 .motivation-body { padding: 1rem; min-height: 120px; }
 
@@ -981,4 +959,17 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 /* Rate limit error styling */
 .auth-error.rate-limit {
   color: #f97316;
+}
+
+/* ── Motivation day badge ── */
+.motivation-day-badge {
+  font-size: 0.7rem;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  color: var(--text3);
+  background: var(--bg3);
+  border-radius: 99px;
+  padding: 2px 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }

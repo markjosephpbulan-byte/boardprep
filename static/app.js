@@ -730,70 +730,69 @@ async function saveProfile() {
   const errEl = document.getElementById('profile-error');
   errEl.textContent = '';
   const uid = currentUser.id;
+  const btn = document.querySelector('#profileModal .btn-primary');
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
 
-
-  // Handle avatar changes
-  if (avatarDataUrl === 'remove') {
-      try {
+  try {
+    // Handle avatar changes
+    if (avatarDataUrl === 'remove') {
       const r = await fetch(`/api/profiles/${uid}/avatar`, { method: 'DELETE' });
       const text = await r.text();
-          let d;
+      let d;
       try { d = JSON.parse(text); } catch(e) { errEl.textContent = 'Server error removing picture.'; return; }
       if (!r.ok) { errEl.textContent = d.error || `Error ${r.status} removing picture.`; return; }
       currentUser = d;
-        } catch(fetchErr) {
-          errEl.textContent = 'Network error removing picture.';
-      return;
+    } else if (avatarDataUrl && avatarDataUrl !== null) {
+      const fileInput = document.getElementById('avatarInput');
+      if (fileInput.files[0]) {
+        const form = new FormData();
+        form.append('avatar', fileInput.files[0]);
+        const r = await fetch(`/api/profiles/${uid}/avatar`, { method: 'POST', body: form });
+        const d = await r.json();
+        if (!r.ok) { errEl.textContent = d.error; return; }
+        currentUser = d;
+      }
     }
-  } else if (avatarDataUrl && avatarDataUrl !== null) {
-    // User picked a new photo — upload it
-    const fileInput = document.getElementById('avatarInput');
-    if (fileInput.files[0]) {
-      const form = new FormData();
-      form.append('avatar', fileInput.files[0]);
-      const r = await fetch(`/api/profiles/${uid}/avatar`, { method: 'POST', body: form });
-      const d = await r.json();
-      if (!r.ok) { errEl.textContent = d.error; return; }
-      currentUser = d;
+
+    // Update username / display name / password / exam date
+    const examDateVal = document.getElementById('profileExamDate').value;
+    const body = {
+      username:     document.getElementById('profileUsername').value.trim().toLowerCase(),
+      display_name: document.getElementById('profileDisplayName').value.trim(),
+      exam_date:    examDateVal || null
+    };
+    const newPw = document.getElementById('profileNewPw').value;
+    if (newPw) {
+      body.new_password     = newPw;
+      body.current_password = document.getElementById('profileCurrentPw').value;
     }
+
+    const avatarBeforeSave = currentUser.avatar;
+    const r2 = await fetch(`/api/profiles/${uid}/settings`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const d2 = await r2.json();
+    if (!r2.ok) { errEl.textContent = d2.error; return; }
+
+    // Merge + preserve avatar state
+    currentUser = { ...currentUser, ...d2 };
+    if (avatarDataUrl === 'remove') {
+      currentUser.avatar = null;
+    } else if (avatarDataUrl === null) {
+      currentUser.avatar = avatarBeforeSave;
+    }
+
+    updateHeaderProfile();
+    updateCountdown();
+    closeModal('profileModal');
+    showToast('Profile updated! ✅');
+
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+  } finally {
+    if (btn) { btn.textContent = 'Save Changes'; btn.disabled = false; }
   }
-
-  // Update username / display name / password / exam date
-  const examDateVal    = document.getElementById('profileExamDate').value;
-  const newUsername    = document.getElementById('profileUsername').value.trim().toLowerCase();
-  const body = {
-    username:     newUsername,
-    display_name: document.getElementById('profileDisplayName').value.trim(),
-    exam_date:    examDateVal || null
-  };
-  const newPw = document.getElementById('profileNewPw').value;
-  if (newPw) {
-    body.new_password     = newPw;
-    body.current_password = document.getElementById('profileCurrentPw').value;
-  }
-
-  // Keep the avatar state we already handled above
-  const avatarBeforeSave = currentUser.avatar;
-
-  const r2 = await fetch(`/api/profiles/${uid}/settings`, {
-    method: 'PUT', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(body)
-  });
-  const d2 = await r2.json();
-  if (!r2.ok) { errEl.textContent = d2.error; return; }
-
-  // Merge settings response but preserve the avatar we already handled
-  currentUser = { ...currentUser, ...d2 };
-  if (avatarDataUrl === 'remove') {
-    currentUser.avatar = null;             // force null
-  } else if (avatarDataUrl === null) {
-    currentUser.avatar = avatarBeforeSave; // unchanged — keep existing
-  }
-
-  updateHeaderProfile();
-  updateCountdown();
-  closeModal('profileModal');
-  showToast('Profile updated! ✅');
 }
 
 // ══════════════════════════════════════════════════════════════

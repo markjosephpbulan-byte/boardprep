@@ -668,6 +668,40 @@ function updateHeaderProfile() {
   }
 }
 
+function updateCountdown() {
+  const chip  = document.getElementById('countdownChip');
+  const days  = document.getElementById('countdownDays');
+  const label = document.getElementById('countdownLabel');
+  if (!chip) return;
+
+  const examDate = currentUser?.exam_date;
+  if (!examDate) { chip.style.display = 'none'; return; }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exam  = new Date(examDate); exam.setHours(0,0,0,0);
+  const diff  = Math.round((exam - today) / 86400000);
+
+  chip.style.display = 'flex';
+  chip.className = 'countdown-chip';
+
+  if (diff < 0) {
+    days.textContent  = '🎉';
+    label.textContent = 'Board exam passed!';
+    chip.classList.add('done');
+  } else if (diff === 0) {
+    days.textContent  = 'TODAY';
+    label.textContent = 'Board exam is today!';
+    chip.classList.add('urgent');
+  } else if (diff <= 7) {
+    days.textContent  = diff;
+    label.textContent = `day${diff !== 1 ? 's' : ''} to board exam`;
+    chip.classList.add('urgent');
+  } else {
+    days.textContent  = diff;
+    label.textContent = 'days to board exam';
+  }
+}
+
 // ══════════════════════════════════════════════════════════════
 //  PROFILE MENU
 // ══════════════════════════════════════════════════════════════
@@ -1619,8 +1653,14 @@ function toggleNotesSidebar() {
   document.getElementById('notesSidebar').classList.toggle('open');
   document.getElementById('sidebarOverlay').classList.toggle('open');
 }
-function openModal(id)  { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) { el.classList.add('open'); el.style.display = 'flex'; }
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) { el.classList.remove('open'); el.style.display = 'none'; }
+}
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');

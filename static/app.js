@@ -1002,6 +1002,17 @@ function openEditSubjectModal(id) {
   selectColor('subjectColorPicker', s.color);
   openModal('subjectModal');
 }
+// ── Shared helper: swap a tempId → realId across DOM + state ──
+function _swapTempId(root, tempId, realId) {
+  if (!root) return;
+  root.querySelectorAll('[id]').forEach(el => {
+    el.id = el.id.replaceAll(tempId, realId);
+  });
+  root.querySelectorAll('[onclick]').forEach(el => {
+    el.setAttribute('onclick', el.getAttribute('onclick').replaceAll(tempId, realId));
+  });
+}
+
 async function saveSubject() {
   const name  = document.getElementById('subjectNameInput').value.trim();
   if (!name) { showToast('Please enter a subject name'); return; }
@@ -1010,74 +1021,10 @@ async function saveSubject() {
   closeModal('subjectModal'); // close immediately — feels instant
 
   if (ctx.mode === 'add') {
-    // ── OPTIMISTIC ADD ──────────────────────────────────────────
-    // 1. Create a temporary subject with a fake ID
-    const tempId = 'temp_' + Date.now();
-    const tempSubject = { id: tempId, name, color, subsections: [] };
+    addSubject(name, color);
+    return;
 
-    // 2. Update local state immediately
-    subjects.push(tempSubject);
-
-    // 3. Render immediately — user sees it NOW
-    const _es = document.getElementById('emptyState');
-    if (_es) _es.style.display = 'none';
-    const card = buildSubjectCard(tempSubject);
-    card.style.opacity = '0.6'; // subtle "saving" indicator
-    document.getElementById('subjectsGrid').appendChild(card);
-    _addChipToStrip(tempSubject);
-    showToast('Adding subject…');
-
-    // 4. Send to server in background
-    try {
-      const r = await fetch(`${apiBase()}/subjects`, {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ name, color })
-      });
-      if (!r.ok) throw new Error('Server error');
-      const realSubject = await r.json();
-
-      // 5. Replace temp with real — swap IDs silently
-      const idx = subjects.findIndex(x => x.id === tempId);
-      if (idx !== -1) subjects[idx] = { ...realSubject, subsections: [] };
-
-      // Swap DOM element IDs to match real ID
-      const oldCard = document.getElementById(`subject-${tempId}`);
-      const oldChip = document.getElementById(`chip-${tempId}`);
-      if (oldCard) {
-        oldCard.id = `subject-${realSubject.id}`;
-        oldCard.style.opacity = '1';
-        // Fix internal IDs that reference tempId
-        oldCard.querySelectorAll('[id]').forEach(el => {
-          el.id = el.id.replace(tempId, realSubject.id);
-        });
-        oldCard.querySelectorAll('[onclick]').forEach(el => {
-          el.setAttribute('onclick', el.getAttribute('onclick').replaceAll(tempId, realSubject.id));
-        });
-      }
-      if (oldChip) {
-        oldChip.id = `chip-${realSubject.id}`;
-        const cb = oldChip.querySelector('[id^="chip-bar-"]');
-        const cp = oldChip.querySelector('[id^="chip-pct-"]');
-        if (cb) cb.id = `chip-bar-${realSubject.id}`;
-        if (cp) cp.id = `chip-pct-${realSubject.id}`;
-      }
-      showToast('Subject added! ✅');
-
-    } catch(e) {
-      // ── ROLLBACK on failure ─────────────────────────────────
-      subjects = subjects.filter(x => x.id !== tempId);
-      document.getElementById(`subject-${tempId}`)?.remove();
-      document.getElementById(`chip-${tempId}`)?.remove();
-      if (!subjects.length) {
-        const g = document.getElementById('subjectsGrid');
-        const em = document.getElementById('emptyState');
-        if (g && em) { if (!g.contains(em)) g.appendChild(em); em.style.display = 'block'; }
-      }
-      showToast('❌ Failed to add subject. Please try again.');
-    }
-
-  } else {
-    // ── OPTIMISTIC EDIT ─────────────────────────────────────────
+  // ── OPTIMISTIC EDIT ─────────────────────────────────────────
     // 1. Save previous state for rollback
     const idx = subjects.findIndex(x => x.id === ctx.id);
     const prev = idx !== -1 ? { ...subjects[idx] } : null;
@@ -1128,6 +1075,57 @@ async function saveSubject() {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+//  OPTIMISTIC ADD HELPERS
+// ══════════════════════════════════════════════════════════════
+
+async function addSubject(name, color) {
+  // 1. Optimistic — create temp + update state + render instantly
+  const tempId      = 'temp_' + Date.now();
+  const tempSubject = { id: tempId, name, color, subsections: [] };
+  subjects.push(tempSubject);
+
+  const _es = document.getElementById('emptyState');
+  if (_es) _es.style.display = 'none';
+  document.getElementById('subjectsGrid').appendChild(buildSubjectCard(tempSubject));
+  _addChipToStrip(tempSubject);
+
+  // 2. Background API call
+  try {
+    const r = await fetch(`${apiBase()}/subjects`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, color })
+    });
+    if (!r.ok) throw new Error('Server error');
+    const real = await r.json();
+
+    // 3. Silently promote temp → real (swap IDs in state + DOM)
+    const idx = subjects.findIndex(x => x.id === tempId);
+    if (idx !== -1) subjects[idx] = { ...real, subsections: [] };
+
+    const cardEl = document.getElementById(`subject-${tempId}`);
+    const chipEl = document.getElementById(`chip-${tempId}`);
+    if (cardEl) { cardEl.id = `subject-${real.id}`; _swapTempId(cardEl, tempId, real.id); }
+    if (chipEl) {
+      chipEl.id = `chip-${real.id}`;
+      chipEl.querySelectorAll('[id]').forEach(el => { el.id = el.id.replaceAll(tempId, real.id); });
+    }
+    showToast('Subject added! ✅');
+
+  } catch(e) {
+    // 4. Rollback
+    subjects = subjects.filter(x => x.id !== tempId);
+    document.getElementById(`subject-${tempId}`)?.remove();
+    document.getElementById(`chip-${tempId}`)?.remove();
+    if (!subjects.length) {
+      const g = document.getElementById('subjectsGrid');
+      const em = document.getElementById('emptyState');
+      if (g && em) { if (!g.contains(em)) g.appendChild(em); em.style.display = 'block'; }
+    }
+    showToast('❌ Failed to add subject. Please try again.');
+  }
+}
+
 // Helper — add a progress chip to the strip
 function _addChipToStrip(s) {
   const strip = document.getElementById('subjectProgressStrip');
@@ -1147,46 +1145,46 @@ async function quickAddSubsection(subjectId) {
   const input = document.getElementById(`ss-input-${subjectId}`);
   const name  = input.value.trim();
   if (!name) return;
+  input.value = '';
+  addSubSubject(subjectId, name);
+}
+function handleSSEnter(e, id) { if (e.key === 'Enter') quickAddSubsection(id); }
 
-  // Optimistic — show immediately with temp ID
+async function addSubSubject(subjectId, name) {
+  const s      = subjects.find(x => x.id === subjectId);
+  if (!s) return;
+
+  // 1. Optimistic — create temp + update state + render instantly
   const tempId = 'temp_' + Date.now();
   const tempSS = { id: tempId, name, done: false, topics: [] };
-  const s = subjects.find(x => x.id === subjectId);
-  if (s) s.subsections.push(tempSS);
+  s.subsections.push(tempSS);
   const list = document.getElementById(`ss-list-${subjectId}`);
   if (list) list.insertAdjacentHTML('beforeend', buildSubsectionHTML(subjectId, tempSS));
-  input.value = '';
   refreshCardProgress(subjectId);
 
+  // 2. Background API call
   try {
     const r = await fetch(`${apiBase()}/subjects/${subjectId}/subsections`, {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name })
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
     });
     if (!r.ok) throw new Error('Server error');
-    const realSS = await r.json();
+    const real = await r.json();
 
-    // Swap temp ID → real ID
-    if (s) {
-      const idx = s.subsections.findIndex(x => x.id === tempId);
-      if (idx !== -1) s.subsections[idx] = { ...realSS, topics: [] };
-    }
-    const ssEl = document.getElementById(`ss-${tempId}`);
-    if (ssEl) {
-      ssEl.id = `ss-${realSS.id}`;
-      ssEl.querySelectorAll('[id]').forEach(el => { el.id = el.id.replace(tempId, realSS.id); });
-      ssEl.querySelectorAll('[onclick]').forEach(el => {
-        el.setAttribute('onclick', el.getAttribute('onclick').replaceAll(tempId, realSS.id));
-      });
-    }
+    // 3. Silently promote temp → real
+    const idx = s.subsections.findIndex(x => x.id === tempId);
+    if (idx !== -1) s.subsections[idx] = { ...real, topics: [] };
+    const el = document.getElementById(`ss-${tempId}`);
+    if (el) { el.id = `ss-${real.id}`; _swapTempId(el, tempId, real.id); }
+
   } catch(e) {
-    // Rollback
-    if (s) s.subsections = s.subsections.filter(x => x.id !== tempId);
+    // 4. Rollback
+    s.subsections = s.subsections.filter(x => x.id !== tempId);
     document.getElementById(`ss-${tempId}`)?.remove();
     refreshCardProgress(subjectId);
     showToast('❌ Failed to add sub-subject. Please try again.');
   }
 }
-function handleSSEnter(e, id) { if (e.key === 'Enter') quickAddSubsection(id); }
 
 async function toggleSubsectionDone(subjectId, ssId) {
   const s  = subjects.find(x => x.id === subjectId);
@@ -1212,13 +1210,20 @@ async function quickAddTopic(subjectId, ssId) {
   const input = document.getElementById(`t-input-${ssId}`);
   const name  = input.value.trim();
   if (!name) return;
+  input.value = '';
+  addTopic(subjectId, ssId, name);
+}
+function handleTopicEnter(e, sid, ssid) { if (e.key === 'Enter') quickAddTopic(sid, ssid); }
 
-  // Optimistic — show immediately
-  const tempId = 'temp_' + Date.now();
-  const tempT  = { id: tempId, name, done: false };
+async function addTopic(subjectId, ssId, name) {
   const s  = subjects.find(x => x.id === subjectId);
   const ss = s?.subsections.find(x => x.id === ssId);
-  if (ss) ss.topics.push(tempT);
+  if (!ss) return;
+
+  // 1. Optimistic — create temp + update state + render instantly
+  const tempId = 'temp_' + Date.now();
+  const tempT  = { id: tempId, name, done: false };
+  ss.topics.push(tempT);
 
   const list = document.getElementById(`topic-list-${ssId}`);
   if (list) list.insertAdjacentHTML('beforeend', buildTopicHTML(subjectId, ssId, tempT));
@@ -1226,46 +1231,40 @@ async function quickAddTopic(subjectId, ssId) {
   // Open subsection body if closed
   const body   = document.getElementById(`ssb-${ssId}`);
   const toggle = document.getElementById(`sst-${ssId}`);
-  if (body) body.style.display = 'block';
+  if (body)   body.style.display = 'block';
   if (toggle) toggle.classList.add('open');
 
-  if (ss) {
+  // Update subsection % display
+  const pe = document.getElementById(`ss-pct-${ssId}`);
+  if (pe) {
     const d = ss.topics.filter(tp => tp.done).length;
-    const pe = document.getElementById(`ss-pct-${ssId}`);
-    if (pe) pe.textContent = Math.round((d / ss.topics.length) * 100) + '%';
+    pe.textContent = Math.round((d / ss.topics.length) * 100) + '%';
   }
-  input.value = '';
   refreshCardProgress(subjectId);
 
+  // 2. Background API call
   try {
     const r = await fetch(`${apiBase()}/subjects/${subjectId}/subsections/${ssId}/topics`, {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name })
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
     });
     if (!r.ok) throw new Error('Server error');
-    const realT = await r.json();
+    const real = await r.json();
 
-    // Swap temp ID → real ID
-    if (ss) {
-      const idx = ss.topics.findIndex(x => x.id === tempId);
-      if (idx !== -1) ss.topics[idx] = realT;
-    }
-    const tEl = document.getElementById(`t-${tempId}`);
-    if (tEl) {
-      tEl.id = `t-${realT.id}`;
-      tEl.querySelectorAll('[id]').forEach(el => { el.id = el.id.replace(tempId, realT.id); });
-      tEl.querySelectorAll('[onclick]').forEach(el => {
-        el.setAttribute('onclick', el.getAttribute('onclick').replaceAll(tempId, realT.id));
-      });
-    }
+    // 3. Silently promote temp → real
+    const idx = ss.topics.findIndex(x => x.id === tempId);
+    if (idx !== -1) ss.topics[idx] = real;
+    const el = document.getElementById(`t-${tempId}`);
+    if (el) { el.id = `t-${real.id}`; _swapTempId(el, tempId, real.id); }
+
   } catch(e) {
-    // Rollback
-    if (ss) ss.topics = ss.topics.filter(x => x.id !== tempId);
+    // 4. Rollback
+    ss.topics = ss.topics.filter(x => x.id !== tempId);
     document.getElementById(`t-${tempId}`)?.remove();
     refreshCardProgress(subjectId);
     showToast('❌ Failed to add topic. Please try again.');
   }
 }
-function handleTopicEnter(e, sid, ssid) { if (e.key === 'Enter') quickAddTopic(sid, ssid); }
 
 async function toggleTopicDone(subjectId, ssId, topicId) {
   const s  = subjects.find(x => x.id === subjectId);
@@ -1372,23 +1371,63 @@ async function saveNote() {
   const title   = document.getElementById('noteTitleInput').value.trim() || 'Untitled';
   const content = document.getElementById('noteContentInput').value.trim();
   const color   = getSelectedColor('noteColorPicker') || NOTE_COLORS[0];
+
+  closeModal('noteModal'); // close immediately — feels instant
+
   if (ctx.mode === 'add') {
-    const r = await fetch(`${apiBase()}/notes`, {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ title, content, color })
-    });
-    const n = await r.json();
-    notes.unshift(n);
-    showToast('Note saved!');
+    addNote(title, content, color);
   } else {
-    await fetch(`${apiBase()}/notes/${ctx.id}`, {
-      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ title, content, color })
-    });
+    // Edit: optimistic update then sync
     const idx = notes.findIndex(x => x.id === ctx.id);
-    if (idx !== -1) { notes[idx] = { ...notes[idx], title, content, color, updated_at: new Date().toISOString() }; }
-    showToast('Note updated!');
+    const prev = idx !== -1 ? { ...notes[idx] } : null;
+    if (idx !== -1) notes[idx] = { ...notes[idx], title, content, color, updated_at: new Date().toISOString() };
+    renderNotes();
+    showToast('Note updated! ✅');
+    try {
+      const r = await fetch(`${apiBase()}/notes/${ctx.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content, color })
+      });
+      if (!r.ok) throw new Error('Server error');
+    } catch(e) {
+      if (prev && idx !== -1) notes[idx] = prev;
+      renderNotes();
+      showToast('❌ Failed to update note. Changes reverted.');
+    }
   }
-  closeModal('noteModal');
+}
+
+async function addNote(title, content, color) {
+  // 1. Optimistic — create temp + update state + render instantly
+  const tempId   = 'temp_' + Date.now();
+  const tempNote = { id: tempId, title, content, color, done: false, updated_at: new Date().toISOString() };
+  notes.unshift(tempNote);
   renderNotes();
+  showToast('Note saved! ✅');
+
+  // 2. Background API call
+  try {
+    const r = await fetch(`${apiBase()}/notes`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, content, color })
+    });
+    if (!r.ok) throw new Error('Server error');
+    const real = await r.json();
+
+    // 3. Silently promote temp → real
+    const idx = notes.findIndex(x => x.id === tempId);
+    if (idx !== -1) notes[idx] = real;
+
+    // Update onclick references in the rendered list (tempId → real.id)
+    const noteEl = document.querySelector(`[onclick*="${tempId}"]`);
+    if (noteEl) noteEl.setAttribute('onclick', noteEl.getAttribute('onclick').replaceAll(tempId, real.id));
+
+  } catch(e) {
+    // 4. Rollback
+    notes = notes.filter(x => x.id !== tempId);
+    renderNotes();
+    showToast('❌ Failed to save note. Please try again.');
+  }
 }
 
 async function toggleNoteDone(noteId) {

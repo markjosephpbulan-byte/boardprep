@@ -15,9 +15,9 @@
 <noscript>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
 </noscript>
-<link rel="stylesheet" href="/static/style.css"/>
+<link rel="stylesheet" href="/static/style.min.css?v=3"/>
 <!-- Preload the JS so it's ready before needed -->
-<link rel="modulepreload" href="/static/app.js" as="script"/>
+<link rel="modulepreload" href="/static/app.min.js?v=3" as="script"/>
 </head>
 <body>
 
@@ -270,7 +270,8 @@
             <span class="motivation-spark">✨</span>
             Daily Motivation
           </div>
-          <span class="motivation-day-badge" id="motivationDayBadge"></span>
+          <button class="motivation-refresh" id="motivationRefreshBtn"
+                  onclick="fetchMotivation(true)" title="Get new message">↻</button>
         </div>
 
         <!-- Message area -->
@@ -499,6 +500,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/static/app.js" defer></script>
+<script src="/static/app.min.js?v=3" defer></script>
 </body>
 </html>

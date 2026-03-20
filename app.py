@@ -1486,6 +1486,7 @@ def index():
 
 
 @app.route("/admin")
+@app.route("/admin/")
 def admin_page():
     return send_from_directory("static", "admin.html")
 
@@ -1497,6 +1498,11 @@ def privacy_page():
 
 @app.route("/<path:path>")
 def catch_all(path):
+    # Never serve index.html for admin or api routes
+    if path.startswith("admin") or path.startswith("api/"):
+        from flask import abort
+
+        abort(404)
     return send_from_directory("static", "index.html")
 
 

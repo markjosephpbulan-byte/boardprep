@@ -1021,18 +1021,18 @@ async function saveSubject() {
   closeModal('subjectModal'); // close immediately — feels instant
 
   if (ctx.mode === 'add') {
+    // → delegate to addSubject() which handles optimistic UI
     addSubject(name, color);
-    return;
 
-  // ── OPTIMISTIC EDIT ─────────────────────────────────────────
-    // 1. Save previous state for rollback
-    const idx = subjects.findIndex(x => x.id === ctx.id);
+  } else {
+    // ── OPTIMISTIC EDIT ──────────────────────────────────────
+    const idx  = subjects.findIndex(x => x.id === ctx.id);
     const prev = idx !== -1 ? { ...subjects[idx] } : null;
 
-    // 2. Update local state immediately
+    // 1. Update local state immediately
     if (idx !== -1) { subjects[idx].name = name; subjects[idx].color = color; }
 
-    // 3. Update DOM immediately
+    // 2. Update DOM immediately — user sees change NOW
     const card = document.getElementById(`subject-${ctx.id}`);
     if (card) {
       card.querySelector('.card-title').textContent = name;
@@ -1053,16 +1053,16 @@ async function saveSubject() {
     }
     showToast('Subject updated! ✅');
 
-    // 4. Sync to server in background
+    // 3. Sync to server in background
     try {
       const r = await fetch(`${apiBase()}/subjects/${ctx.id}`, {
-        method: 'PUT', headers: {'Content-Type':'application/json'},
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, color })
       });
       if (!r.ok) throw new Error('Server error');
     } catch(e) {
-      // ── ROLLBACK on failure ─────────────────────────────────
-      if (prev && idx !== -1) { subjects[idx] = prev; }
+      // 4. Rollback — restore previous values
+      if (prev && idx !== -1) subjects[idx] = prev;
       const rollCard = document.getElementById(`subject-${ctx.id}`);
       if (rollCard && prev) {
         rollCard.querySelector('.card-title').textContent = prev.name;
@@ -1375,14 +1375,20 @@ async function saveNote() {
   closeModal('noteModal'); // close immediately — feels instant
 
   if (ctx.mode === 'add') {
+    // → delegate to addNote() which handles optimistic UI
     addNote(title, content, color);
+
   } else {
-    // Edit: optimistic update then sync
-    const idx = notes.findIndex(x => x.id === ctx.id);
+    // ── OPTIMISTIC EDIT ──────────────────────────────────────
+    const idx  = notes.findIndex(x => x.id === ctx.id);
     const prev = idx !== -1 ? { ...notes[idx] } : null;
+
+    // 1. Update local state + re-render immediately
     if (idx !== -1) notes[idx] = { ...notes[idx], title, content, color, updated_at: new Date().toISOString() };
     renderNotes();
     showToast('Note updated! ✅');
+
+    // 2. Sync to server in background
     try {
       const r = await fetch(`${apiBase()}/notes/${ctx.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -1390,6 +1396,7 @@ async function saveNote() {
       });
       if (!r.ok) throw new Error('Server error');
     } catch(e) {
+      // 3. Rollback — restore previous note
       if (prev && idx !== -1) notes[idx] = prev;
       renderNotes();
       showToast('❌ Failed to update note. Changes reverted.');
@@ -1398,14 +1405,24 @@ async function saveNote() {
 }
 
 async function addNote(title, content, color) {
-  // 1. Optimistic — create temp + update state + render instantly
+  // ── OPTIMISTIC ADD ────────────────────────────────────────────
+  // 1. Generate temp ID + build temp note object
   const tempId   = 'temp_' + Date.now();
-  const tempNote = { id: tempId, title, content, color, done: false, updated_at: new Date().toISOString() };
+  const tempNote = {
+    id:         tempId,
+    title,
+    content,
+    color,
+    done:       false,
+    updated_at: new Date().toISOString()
+  };
+
+  // 2. Add to local state + render immediately — user sees it NOW
   notes.unshift(tempNote);
   renderNotes();
   showToast('Note saved! ✅');
 
-  // 2. Background API call
+  // 3. Send to server in background
   try {
     const r = await fetch(`${apiBase()}/notes`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1414,16 +1431,17 @@ async function addNote(title, content, color) {
     if (!r.ok) throw new Error('Server error');
     const real = await r.json();
 
-    // 3. Silently promote temp → real
+    // 4. Silently promote temp → real ID in state
     const idx = notes.findIndex(x => x.id === tempId);
     if (idx !== -1) notes[idx] = real;
 
-    // Update onclick references in the rendered list (tempId → real.id)
-    const noteEl = document.querySelector(`[onclick*="${tempId}"]`);
-    if (noteEl) noteEl.setAttribute('onclick', noteEl.getAttribute('onclick').replaceAll(tempId, real.id));
+    // 5. Swap tempId → real.id in any rendered onclick attributes
+    document.querySelectorAll(`[onclick*="${tempId}"]`).forEach(el => {
+      el.setAttribute('onclick', el.getAttribute('onclick').replaceAll(tempId, real.id));
+    });
 
   } catch(e) {
-    // 4. Rollback
+    // 6. Rollback — remove temp note + re-render
     notes = notes.filter(x => x.id !== tempId);
     renderNotes();
     showToast('❌ Failed to save note. Please try again.');

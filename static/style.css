@@ -1180,3 +1180,56 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
   border: 2px solid rgba(255,255,255,0.2);
 }
+
+/* ── THEME 4: Ocean (Light blue & white — clean, fresh) ── */
+[data-theme="ocean"] {
+  --bg:         #f0f7ff;
+  --bg2:        #e3f0fd;
+  --bg3:        #d0e6fa;
+  --surface:    #ffffff;
+  --surface2:   #eaf4ff;
+  --border:     rgba(60,130,210,0.15);
+  --border2:    rgba(60,130,210,0.25);
+  --text:       #0d2340;
+  --text2:      #3a6898;
+  --text3:      #7aaace;
+  --gold:       #1a7fd4;
+  --gold2:      #1268b8;
+  --green:      #1a9e6e;
+  --green-dim:  #c8eee0;
+  --red:        #e03e3e;
+  --shadow:     0 8px 32px rgba(30,100,200,0.1);
+  --shadow-sm:  0 2px 12px rgba(30,100,200,0.07);
+}
+[data-theme="ocean"] body { background: var(--bg); color: var(--text); }
+[data-theme="ocean"] .site-header {
+  background: rgba(240,247,255,0.92);
+  border-bottom-color: var(--border2);
+}
+[data-theme="ocean"] .auth-wrap {
+  background: radial-gradient(ellipse at 50% 0%, rgba(26,127,212,0.08) 0%, transparent 60%), var(--bg);
+}
+[data-theme="ocean"] .btn-primary { color: #fff; }
+[data-theme="ocean"] .btn-primary:hover { box-shadow: 0 4px 16px rgba(26,127,212,0.3); }
+[data-theme="ocean"] .notes-badge { color: #fff; }
+[data-theme="ocean"] .progress-overview { background: var(--bg2); }
+[data-theme="ocean"] .overview-fill { background: linear-gradient(90deg, #1a7fd4, #1a9e6e); }
+[data-theme="ocean"] .custom-checkbox.checked { border-color: #1a9e6e; background: #1a9e6e; }
+[data-theme="ocean"] .custom-checkbox.partial { border-color: #1a7fd4; color: #1a7fd4; }
+[data-theme="ocean"] .topic-checkbox.checked { border-color: #1a9e6e; background: #1a9e6e; }
+[data-theme="ocean"] .modal-backdrop { background: rgba(10,30,60,0.45); }
+[data-theme="ocean"] .search-highlight { background: rgba(26,127,212,0.15); color: var(--gold); }
+[data-theme="ocean"] .countdown-chip {
+  background: linear-gradient(135deg, rgba(26,127,212,0.1), rgba(26,158,110,0.07));
+  border-color: rgba(26,127,212,0.3);
+}
+[data-theme="ocean"] .motivation-header {
+  background: linear-gradient(135deg, rgba(26,127,212,0.06), transparent);
+}
+[data-theme="ocean"] .motivation-loading-dots span { background: var(--gold); }
+[data-theme="ocean"] .pom-ring-progress { stroke: #1a7fd4; }
+[data-theme="ocean"] .pom-btn-play { background: #1a7fd4; }
+[data-theme="ocean"] .auth-success {
+  color: #1a9e6e; background: rgba(26,158,110,0.08);
+  border-color: rgba(26,158,110,0.25);
+}

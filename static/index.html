@@ -249,6 +249,9 @@
             <div class="theme-option" id="theme-opt-lavender" onclick="setTheme('lavender')">
               <div class="theme-swatch" style="background:#b48eff"></div> 🔮 Lavender
             </div>
+            <div class="theme-option" id="theme-opt-ocean" onclick="setTheme('ocean')">
+              <div class="theme-swatch" style="background:#1a7fd4"></div> 🌊 Ocean
+            </div>
           </div>
         </div>
         <!-- Profile pill -->
@@ -521,7 +524,7 @@
 
 <script>
 // ── Theme switcher (runs before app.js so theme applies immediately) ──
-const THEMES = ['dark','sakura','matcha','lavender'];
+const THEMES = ['dark','sakura','matcha','lavender','ocean'];
 
 function applyTheme(t) {
   if (t === 'dark') {

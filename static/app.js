@@ -2058,7 +2058,29 @@ function skipPomodoro() {
   onPomodoroComplete();
 }
 
+function playPomSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Play 3 short pleasant beeps
+    [0, 0.25, 0.5].forEach((delay, i) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type      = 'sine';
+      osc.frequency.value = i === 2 ? 880 : 660; // last beep is higher
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.3);
+    });
+  } catch(e) {}
+}
+
 function onPomodoroComplete() {
+  // Play sound
+  playPomSound();
+
   // Notify
   if (Notification.permission === 'granted') {
     new Notification('BoardPrep PH 🍅', {

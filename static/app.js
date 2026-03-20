@@ -1226,18 +1226,42 @@ async function toggleSubsectionDone(subjectId, ssId) {
   const s  = subjects.find(x => x.id === subjectId);
   const ss = s?.subsections.find(x => x.id === ssId);
   if (!ss) return;
+
   ss.done = !ss.done;
+  const nowDone = ss.done;
+
+  // ── Update subsection UI ──────────────────────────────────────
   const cb = document.getElementById(`ss-cb-${ssId}`);
   const nm = document.getElementById(`ss-name-${ssId}`);
   const pe = document.getElementById(`ss-pct-${ssId}`);
-  if (cb) { cb.className = 'custom-checkbox' + (ss.done ? ' checked' : ''); cb.textContent = ss.done ? '✓' : ''; }
-  if (nm) nm.className = 'subsection-name' + (ss.done ? ' done-text' : '');
-  const td = ss.topics.filter(t => t.done).length, tt = ss.topics.length;
-  const pct = tt === 0 ? (ss.done ? 100 : 0) : Math.round((td / tt) * 100);
-  if (pe) pe.textContent = pct + '%';
+  if (cb) { cb.className = 'custom-checkbox' + (nowDone ? ' checked' : ''); cb.textContent = nowDone ? '✓' : ''; }
+  if (nm) nm.className = 'subsection-name' + (nowDone ? ' done-text' : '');
+
+  // ── Cascade to all topics ────────────────────────────────────
+  ss.topics.forEach(t => {
+    t.done = nowDone;
+    const tcb = document.getElementById(`t-cb-${t.id}`);
+    const tnm = document.getElementById(`t-name-${t.id}`);
+    if (tcb) { tcb.className = 'topic-checkbox' + (nowDone ? ' checked' : ''); tcb.textContent = nowDone ? '✓' : ''; }
+    if (tnm) tnm.className = 'topic-name' + (nowDone ? ' done-text' : '');
+  });
+
+  // Update subsection % display
+  if (pe) pe.textContent = (nowDone ? 100 : 0) + '%';
   refreshCardProgress(subjectId);
+
+  // ── Save subsection to DB ─────────────────────────────────────
   fetch(`${apiBase()}/subjects/${subjectId}/subsections/${ssId}`, {
-    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ done: ss.done })
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ done: nowDone })
+  });
+
+  // ── Save each topic to DB (fire all in parallel) ──────────────
+  ss.topics.forEach(t => {
+    fetch(`${apiBase()}/subjects/${subjectId}/subsections/${ssId}/topics/${t.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ done: nowDone })
+    });
   });
 }
 

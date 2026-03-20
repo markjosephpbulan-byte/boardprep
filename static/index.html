@@ -231,6 +231,26 @@
           🗒️ Quick Notes <span class="notes-badge" id="notesBadge">0</span>
         </button>
         <button class="btn-primary" onclick="openAddSubjectModal()">+ Add Subject</button>
+        <!-- Theme Switcher -->
+        <div class="theme-switcher" id="themeSwitcher">
+          <button class="theme-btn" onclick="toggleThemeDropdown()" title="Change theme">
+            🎨
+          </button>
+          <div class="theme-dropdown" id="themeDropdown">
+            <div class="theme-option active" id="theme-opt-dark" onclick="setTheme('dark')">
+              <div class="theme-swatch" style="background:#1e2736"></div> Dark (Default)
+            </div>
+            <div class="theme-option" id="theme-opt-sakura" onclick="setTheme('sakura')">
+              <div class="theme-swatch" style="background:#e8607a"></div> 🌸 Sakura
+            </div>
+            <div class="theme-option" id="theme-opt-matcha" onclick="setTheme('matcha')">
+              <div class="theme-swatch" style="background:#5a9a40"></div> 🍵 Matcha
+            </div>
+            <div class="theme-option" id="theme-opt-lavender" onclick="setTheme('lavender')">
+              <div class="theme-swatch" style="background:#b48eff"></div> 🔮 Lavender
+            </div>
+          </div>
+        </div>
         <!-- Profile pill -->
         <div class="profile-pill" onclick="toggleProfileMenu()">
           <div class="profile-pill-avatar" id="headerAvatar"></div>
@@ -499,6 +519,47 @@
 
 <div class="toast" id="toast"></div>
 
+<script>
+// ── Theme switcher (runs before app.js so theme applies immediately) ──
+const THEMES = ['dark','sakura','matcha','lavender'];
+
+function applyTheme(t) {
+  if (t === 'dark') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', t);
+  }
+  // Update active state in dropdown
+  THEMES.forEach(th => {
+    const el = document.getElementById('theme-opt-' + th);
+    if (el) el.classList.toggle('active', th === t);
+  });
+}
+
+function setTheme(t) {
+  localStorage.setItem('boardprep_theme', t);
+  applyTheme(t);
+  toggleThemeDropdown(); // close dropdown
+}
+
+function toggleThemeDropdown() {
+  document.getElementById('themeDropdown').classList.toggle('open');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#themeSwitcher')) {
+    const dd = document.getElementById('themeDropdown');
+    if (dd) dd.classList.remove('open');
+  }
+});
+
+// Apply saved theme on page load
+(function() {
+  const saved = localStorage.getItem('boardprep_theme') || 'dark';
+  applyTheme(saved);
+})();
+</script>
 <script src="/static/app.js" defer></script>
 </body>
 </html>

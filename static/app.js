@@ -1037,11 +1037,15 @@ function openEditSubjectModal(id) {
 // ── Shared helper: swap a tempId → realId across DOM + state ──
 function _swapTempId(root, tempId, realId) {
   if (!root) return;
+  // Swap IDs
   root.querySelectorAll('[id]').forEach(el => {
     el.id = el.id.replaceAll(tempId, realId);
   });
-  root.querySelectorAll('[onclick]').forEach(el => {
-    el.setAttribute('onclick', el.getAttribute('onclick').replaceAll(tempId, realId));
+  // Swap all inline event handlers that reference the tempId
+  ['onclick', 'onkeydown', 'onkeyup', 'oninput'].forEach(attr => {
+    root.querySelectorAll(`[${attr}]`).forEach(el => {
+      el.setAttribute(attr, el.getAttribute(attr).replaceAll(tempId, realId));
+    });
   });
 }
 
@@ -2058,28 +2062,55 @@ function skipPomodoro() {
   onPomodoroComplete();
 }
 
-function playPomSound() {
+function playPomSound(mode) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    // Play 3 short pleasant beeps
-    [0, 0.25, 0.5].forEach((delay, i) => {
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type      = 'sine';
-      osc.frequency.value = i === 2 ? 880 : 660; // last beep is higher
-      gain.gain.setValueAtTime(0.4, ctx.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
-      osc.start(ctx.currentTime + delay);
-      osc.stop(ctx.currentTime + delay + 0.3);
-    });
+    const actx = new (window.AudioContext || window.webkitAudioContext)();
+
+    if (mode === 'focus') {
+      // Focus session done → warm ascending chime: "Great work, take a break!"
+      // 3 rising tones, each 0.5s long with slow fade
+      const notes = [523, 659, 784]; // C5 → E5 → G5 (major chord, uplifting)
+      notes.forEach((freq, i) => {
+        const osc  = actx.createOscillator();
+        const gain = actx.createGain();
+        osc.connect(gain);
+        gain.connect(actx.destination);
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const t = actx.currentTime + i * 0.55;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.45, t + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        osc.start(t);
+        osc.stop(t + 0.5);
+      });
+
+    } else {
+      // Break done → gentle low-to-high double ping: "Back to work!"
+      // 2 soft pings, lower pitch, shorter
+      const notes = [440, 554]; // A4 → C#5 (gentle nudge)
+      notes.forEach((freq, i) => {
+        const osc  = actx.createOscillator();
+        const gain = actx.createGain();
+        osc.connect(gain);
+        gain.connect(actx.destination);
+        osc.type = 'triangle'; // softer tone than sine
+        osc.frequency.value = freq;
+        const t = actx.currentTime + i * 0.45;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.3, t + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+        osc.start(t);
+        osc.stop(t + 0.4);
+      });
+    }
+
   } catch(e) {}
 }
 
 function onPomodoroComplete() {
-  // Play sound
-  playPomSound();
+  // Play sound — different tone for focus done vs break done
+  playPomSound(pomMode);
 
   // Notify
   if (Notification.permission === 'granted') {

@@ -785,11 +785,10 @@ async function saveProfile() {
   // Merge settings response but preserve the avatar we already handled
   currentUser = { ...currentUser, ...d2 };
   if (avatarDataUrl === 'remove') {
-    currentUser.avatar = null;  // force null — don't let stale cache restore it
-    } else if (avatarDataUrl === null) {
-    currentUser.avatar = avatarBeforeSave;  // unchanged — keep existing
-    }
-  // if avatarDataUrl is a new upload, currentUser.avatar already updated above
+    currentUser.avatar = null;             // force null
+  } else if (avatarDataUrl === null) {
+    currentUser.avatar = avatarBeforeSave; // unchanged — keep existing
+  }
 
   updateHeaderProfile();
   updateCountdown();

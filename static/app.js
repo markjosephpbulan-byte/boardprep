@@ -1317,6 +1317,9 @@ async function toggleTopicDone(subjectId, ssId, topicId) {
   const ssPe = document.getElementById(`ss-pct-${ssId}`);
   const ssNm = document.getElementById(`ss-name-${ssId}`);
   if (ssPe) ssPe.textContent = Math.round((td / tt) * 100) + '%';
+  // Track previous ss.done to detect auto-change
+  const prevSsDone = ss.done;
+
   if (td === tt && tt > 0) {
     ss.done = true;
     if (ssCb) { ssCb.className = 'custom-checkbox checked'; ssCb.textContent = '✓'; }
@@ -1331,9 +1334,18 @@ async function toggleTopicDone(subjectId, ssId, topicId) {
     if (ssNm) ssNm.className = 'subsection-name';
   }
   refreshCardProgress(subjectId);
+
+  // Always save the topic's done state
   fetch(`${apiBase()}/subjects/${subjectId}/subsections/${ssId}/topics/${topicId}`, {
     method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ done: t.done })
   });
+
+  // If subsection done state changed automatically, save that too
+  if (ss.done !== prevSsDone) {
+    fetch(`${apiBase()}/subjects/${subjectId}/subsections/${ssId}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ done: ss.done })
+    });
+  }
 }
 
 // ══════════════════════════════════════════════════════════════

@@ -172,8 +172,46 @@
 
   .empty-users { text-align: center; padding: 3rem; color: var(--text3); }
 
+  /* ── Analytics sections ── */
+  .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+  .analytics-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem;
+  }
+  .analytics-card-title {
+    font-family: 'Syne', sans-serif; font-size: 0.78rem; font-weight: 700;
+    color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px;
+    margin-bottom: 1rem;
+  }
+
+  /* Funnel */
+  .funnel-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+  }
+  .funnel-row:last-child { border-bottom: none; }
+  .funnel-label { font-size: 0.85rem; color: var(--text2); }
+  .funnel-count {
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem;
+  }
+  .funnel-count.warn { color: #f97316; }
+  .funnel-count.ok   { color: var(--green); }
+
+  /* Growth table */
+  .growth-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.5rem 0; border-bottom: 1px solid var(--border);
+  }
+  .growth-row:last-child { border-bottom: none; }
+  .growth-date { font-size: 0.83rem; color: var(--text2); }
+  .growth-bar-wrap { flex: 1; margin: 0 12px; height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
+  .growth-bar-fill { height: 100%; background: var(--gold); border-radius: 99px; transition: width 0.4s; }
+  .growth-num { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--gold); min-width: 24px; text-align: right; }
+  .growth-empty { color: var(--text3); font-size: 0.85rem; padding: 0.75rem 0; }
+
   @media (max-width: 640px) {
     .admin-main { padding: 1rem; }
+    .analytics-grid { grid-template-columns: 1fr; }
     .users-table th:nth-child(2), .users-table td:nth-child(2),
     .users-table th:nth-child(4), .users-table td:nth-child(4),
     .users-table th:nth-child(5), .users-table td:nth-child(5) { display: none; }
@@ -231,6 +269,43 @@
         <div class="stat-label">Avg. Progress</div>
         <div class="stat-value" id="statAvgProgress">—</div>
       </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Users</div>
+        <div class="stat-value" id="statActiveUsers">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Topics</div>
+        <div class="stat-value" id="statTopics">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Notes</div>
+        <div class="stat-value" id="statNotes">—</div>
+      </div>
+    </div>
+
+    <!-- Analytics: Funnel + Growth side by side -->
+    <div class="analytics-grid">
+
+      <!-- Drop-off Funnel -->
+      <div class="analytics-card">
+        <div class="analytics-card-title">📉 User Funnel / Drop-off</div>
+        <div id="funnelSection">
+          <div class="funnel-row">
+            <span class="funnel-label">Loading…</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- New Users Last 7 Days -->
+      <div class="analytics-card">
+        <div class="analytics-card-title">📈 New Users — Last 7 Days</div>
+        <div id="growthSection">
+          <div class="funnel-row">
+            <span class="funnel-label">Loading…</span>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- Users table -->
@@ -337,12 +412,15 @@ async function loadUsers() {
     if (!r.ok) { tbody.innerHTML = '<tr><td colspan="5" class="empty-users">Failed to load users.</td></tr>'; return; }
     const users = await r.json();
 
-    // Stats
+    // Stats (existing cards)
     document.getElementById('statUsers').textContent    = users.length;
     document.getElementById('statSubjects').textContent = users.reduce((a, u) => a + u.subject_count, 0);
     const avgPct = users.length === 0 ? 0 : Math.round(users.reduce((a, u) => a + u.progress_pct, 0) / users.length);
     document.getElementById('statAvgProgress').textContent = avgPct + '%';
     document.getElementById('userCountBadge').textContent  = users.length + ' user' + (users.length !== 1 ? 's' : '');
+
+    // Load analytics (new cards + funnel + growth) in parallel
+    loadAnalytics();
 
     if (users.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5" class="empty-users">No profiles created yet.</td></tr>';
@@ -464,6 +542,67 @@ function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Analytics ────────────────────────────────────────────────────────────────
+async function loadAnalytics() {
+  try {
+    const r = await adminFetch('/api/admin/analytics');
+    if (!r.ok) return;
+    const d = await r.json();
+
+    // Fill new stat cards
+    document.getElementById('statActiveUsers').textContent = d.active_users;
+    document.getElementById('statTopics').textContent      = d.total_topics;
+    document.getElementById('statNotes').textContent       = d.total_notes;
+
+    // Funnel section
+    const funnel = d.funnel;
+    const totalU = d.total_users;
+    document.getElementById('funnelSection').innerHTML = `
+      <div class="funnel-row">
+        <span class="funnel-label">✅ Signed up</span>
+        <span class="funnel-count ok">${totalU}</span>
+      </div>
+      <div class="funnel-row">
+        <span class="funnel-label">⚠️ No subjects added</span>
+        <span class="funnel-count ${funnel.no_subjects > 0 ? 'warn' : 'ok'}">${funnel.no_subjects}</span>
+      </div>
+      <div class="funnel-row">
+        <span class="funnel-label">⚠️ Has subjects, no sub-subjects</span>
+        <span class="funnel-count ${funnel.no_subsections > 0 ? 'warn' : 'ok'}">${funnel.no_subsections}</span>
+      </div>
+      <div class="funnel-row">
+        <span class="funnel-label">⚠️ Has sub-subjects, no topics</span>
+        <span class="funnel-count ${funnel.no_topics > 0 ? 'warn' : 'ok'}">${funnel.no_topics}</span>
+      </div>
+      <div class="funnel-row" style="margin-top:4px">
+        <span class="funnel-label" style="color:var(--text3);font-size:0.78rem">
+          Drop-off rate: ${totalU === 0 ? 0 : Math.round((funnel.no_subjects / totalU) * 100)}% never added a subject
+        </span>
+      </div>`;
+
+    // Growth section
+    const growth = d.growth;
+    if (!growth.length) {
+      document.getElementById('growthSection').innerHTML =
+        '<div class="growth-empty">No new users in the last 7 days.</div>';
+      return;
+    }
+    const maxCount = Math.max(...growth.map(g => g.count));
+    document.getElementById('growthSection').innerHTML = growth.map(g => {
+      const pct  = maxCount === 0 ? 0 : Math.round((g.count / maxCount) * 100);
+      const date = new Date(g.day + 'T00:00:00');
+      const label = date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', weekday: 'short' });
+      return `
+        <div class="growth-row">
+          <span class="growth-date">${label}</span>
+          <div class="growth-bar-wrap"><div class="growth-bar-fill" style="width:${pct}%"></div></div>
+          <span class="growth-num">+${g.count}</span>
+        </div>`;
+    }).join('');
+
+  } catch(e) { /* silent — analytics are non-critical */ }
 }
 
 document.addEventListener('keydown', e => {

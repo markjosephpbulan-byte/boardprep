@@ -3,613 +3,503 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>BoardPrep PH — Admin</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
-<style>
-  :root {
-    --bg: #0d1117; --bg2: #161b22; --bg3: #1c2330;
-    --surface: #1e2736; --surface2: #242f42;
-    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
-    --text: #e8edf5; --text2: #8b97a8; --text3: #5a6678;
-    --gold: #f5c842; --gold2: #e8b830;
-    --green: #3ecf8e; --red: #f56565;
-    --radius: 14px; --radius-sm: 8px;
-    --shadow: 0 8px 32px rgba(0,0,0,0.4);
-  }
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
-
-  /* ── Login Screen ── */
-  .login-wrap {
-    min-height: 100vh; display: flex; align-items: center;
-    justify-content: center; padding: 2rem;
-    background: radial-gradient(ellipse at 50% 0%, rgba(245,200,66,0.07) 0%, transparent 60%), var(--bg);
-  }
-  .login-card {
-    background: var(--surface); border: 1px solid var(--border2);
-    border-radius: var(--radius); padding: 2.5rem;
-    width: 100%; max-width: 380px;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
-    animation: fadeUp 0.3s ease;
-  }
-  @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-  .login-badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: rgba(245,200,66,0.1); border: 1px solid rgba(245,200,66,0.3);
-    border-radius: 99px; padding: 4px 12px;
-    font-size: 0.75rem; font-weight: 700; color: var(--gold);
-    font-family: 'Syne', sans-serif; letter-spacing: 1px;
-    text-transform: uppercase; margin-bottom: 1.25rem;
-  }
-  .login-card h1 { font-family: 'Syne', sans-serif; font-size: 1.6rem; font-weight: 800; margin-bottom: 6px; }
-  .login-card p { color: var(--text2); font-size: 0.88rem; margin-bottom: 1.5rem; }
-  label { display: block; font-size: 0.75rem; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 6px; }
-  input[type=password] {
-    width: 100%; background: var(--bg3); border: 1px solid var(--border2);
-    border-radius: var(--radius-sm); padding: 0.7rem 0.9rem;
-    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.9rem;
-    outline: none; transition: border-color 0.2s; margin-bottom: 10px;
-  }
-  input[type=password]:focus { border-color: var(--gold); }
-  input::placeholder { color: var(--text3); }
-  .error-msg { font-size: 0.82rem; color: var(--red); min-height: 18px; margin-bottom: 8px; }
-
-  /* ── Buttons ── */
-  .btn { border: none; border-radius: var(--radius-sm); cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; transition: all 0.2s; }
-  .btn-gold { background: var(--gold); color: #0d1117; padding: 0.65rem 1.25rem; font-size: 0.88rem; }
-  .btn-gold:hover { background: var(--gold2); transform: translateY(-1px); }
-  .btn-gold:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-  .btn-full { width: 100%; }
-  .btn-danger-sm {
-    background: rgba(245,101,101,0.12); color: var(--red);
-    border: 1px solid rgba(245,101,101,0.25); border-radius: 6px;
-    padding: 5px 12px; font-size: 0.8rem; cursor: pointer;
-    font-family: 'DM Sans', sans-serif; font-weight: 500;
-    transition: all 0.2s;
-  }
-  .btn-danger-sm:hover { background: rgba(245,101,101,0.22); border-color: var(--red); }
-  .btn-ghost-sm {
-    background: transparent; color: var(--text2);
-    border: 1px solid var(--border2); border-radius: 6px;
-    padding: 5px 12px; font-size: 0.8rem; cursor: pointer;
-    font-family: 'DM Sans', sans-serif; transition: all 0.2s;
-  }
-  .btn-ghost-sm:hover { border-color: var(--text2); color: var(--text); }
-
-  /* ── Admin Panel ── */
-  #adminPanel { display: none; }
-  .admin-header {
-    background: rgba(13,17,23,0.92); backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 100;
-  }
-  .admin-header-inner {
-    max-width: 1100px; margin: 0 auto; padding: 0 2rem;
-    height: 64px; display: flex; align-items: center; justify-content: space-between;
-  }
-  .admin-logo { font-family: 'Syne', sans-serif; font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 10px; }
-  .admin-logo span { color: var(--gold); }
-  .admin-tag {
-    background: rgba(245,200,66,0.1); border: 1px solid rgba(245,200,66,0.3);
-    border-radius: 99px; padding: 2px 10px;
-    font-size: 0.68rem; font-weight: 700; color: var(--gold);
-    letter-spacing: 1px; text-transform: uppercase;
-  }
-  .logout-btn {
-    background: transparent; color: var(--text3); border: 1px solid var(--border2);
-    border-radius: var(--radius-sm); padding: 0.45rem 0.9rem;
-    font-size: 0.82rem; cursor: pointer; transition: all 0.2s;
-  }
-  .logout-btn:hover { color: var(--text); border-color: var(--text2); }
-
-  .admin-main { max-width: 1100px; margin: 0 auto; padding: 2rem; }
-
-  /* Stats row */
-  .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
-  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
-  .stat-label { font-size: 0.75rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600; margin-bottom: 6px; }
-  .stat-value { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; color: var(--gold); }
-
-  /* Users table */
-  .section-title {
-    font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700;
-    margin-bottom: 1rem; display: flex; align-items: center; gap: 10px;
-  }
-  .user-count-badge {
-    background: var(--surface2); border-radius: 99px;
-    padding: 2px 10px; font-size: 0.75rem; color: var(--text2); font-family: 'DM Sans', sans-serif;
-  }
-
-  .users-table { width: 100%; border-collapse: collapse; }
-  .users-table th {
-    text-align: left; font-size: 0.72rem; font-weight: 600;
-    color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px;
-    padding: 0.6rem 1rem; border-bottom: 1px solid var(--border);
-  }
-  .users-table td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 0.88rem; }
-  .users-table tr:hover td { background: var(--surface2); }
-  .users-table tr:last-child td { border-bottom: none; }
-
-  .user-avatar-cell { display: flex; align-items: center; gap: 10px; }
-  .user-avatar-sm {
-    width: 36px; height: 36px; border-radius: 50%;
-    background: var(--surface2); overflow: hidden; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.9rem; border: 1px solid var(--border2);
-  }
-  .user-avatar-sm img { width: 100%; height: 100%; object-fit: cover; }
-  .user-display-name { font-weight: 500; }
-  .user-username { font-size: 0.78rem; color: var(--text3); }
-
-  .progress-inline { display: flex; align-items: center; gap: 8px; }
-  .bar-mini-wrap { width: 70px; height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
-  .bar-mini-fill { height: 100%; background: var(--gold); border-radius: 99px; }
-  .pct-mini { font-family: 'Syne', sans-serif; font-size: 0.75rem; font-weight: 700; color: var(--gold); min-width: 32px; }
-
-  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-
-  /* Confirm overlay */
-  .confirm-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-    display: none; align-items: center; justify-content: center;
-    z-index: 200; backdrop-filter: blur(4px);
-  }
-  .confirm-overlay.open { display: flex; }
-  .confirm-box {
-    background: var(--surface); border: 1px solid var(--border2);
-    border-radius: var(--radius); padding: 2rem; max-width: 380px; width: 100%;
-    box-shadow: var(--shadow); animation: fadeUp 0.2s ease;
-  }
-  .confirm-box h3 { font-family: 'Syne', sans-serif; font-weight: 700; margin-bottom: 8px; }
-  .confirm-box p { color: var(--text2); font-size: 0.88rem; margin-bottom: 1.5rem; line-height: 1.5; }
-  .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
-
-  /* Toast */
-  .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 0.65rem 1.25rem; font-size: 0.85rem; box-shadow: var(--shadow); z-index: 400; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-  .empty-users { text-align: center; padding: 3rem; color: var(--text3); }
-
-  /* ── Analytics sections ── */
-  .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
-  .analytics-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem;
-  }
-  .analytics-card-title {
-    font-family: 'Syne', sans-serif; font-size: 0.78rem; font-weight: 700;
-    color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px;
-    margin-bottom: 1rem;
-  }
-
-  /* Funnel */
-  .funnel-row {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0.6rem 0; border-bottom: 1px solid var(--border);
-  }
-  .funnel-row:last-child { border-bottom: none; }
-  .funnel-label { font-size: 0.85rem; color: var(--text2); }
-  .funnel-count {
-    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem;
-  }
-  .funnel-count.warn { color: #f97316; }
-  .funnel-count.ok   { color: var(--green); }
-
-  /* Growth table */
-  .growth-row {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0.5rem 0; border-bottom: 1px solid var(--border);
-  }
-  .growth-row:last-child { border-bottom: none; }
-  .growth-date { font-size: 0.83rem; color: var(--text2); }
-  .growth-bar-wrap { flex: 1; margin: 0 12px; height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
-  .growth-bar-fill { height: 100%; background: var(--gold); border-radius: 99px; transition: width 0.4s; }
-  .growth-num { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--gold); min-width: 24px; text-align: right; }
-  .growth-empty { color: var(--text3); font-size: 0.85rem; padding: 0.75rem 0; }
-
-  @media (max-width: 640px) {
-    .admin-main { padding: 1rem; }
-    .analytics-grid { grid-template-columns: 1fr; }
-    .users-table th:nth-child(2), .users-table td:nth-child(2),
-    .users-table th:nth-child(4), .users-table td:nth-child(4),
-    .users-table th:nth-child(5), .users-table td:nth-child(5) { display: none; }
-  }
-</style>
+<title>BoardPrep PH</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
+<!-- Preconnect to external domains — starts TCP handshake early -->
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<!-- Load fonts async so they don't block page render -->
+<link rel="preload" as="style"
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"/>
+<noscript>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+</noscript>
+<link rel="stylesheet" href="/static/style.min.css?v=3"/>
+<!-- Preload the JS so it's ready before needed -->
+<link rel="modulepreload" href="/static/app.min.js?v=3" as="script"/>
 </head>
 <body>
 
-<!-- ══ LOGIN ════════════════════════════════════════════════════════════════ -->
-<div id="loginScreen" class="login-wrap">
-  <div class="login-card">
-    <div class="login-badge">🔐 Admin Access</div>
-    <h1>BoardPrep PH</h1>
-    <p>Enter the admin password to manage all profiles.</p>
-    <label>Admin Password</label>
-    <input type="password" id="adminPwInput" placeholder="Enter admin password"
-           onkeydown="if(event.key==='Enter') doAdminLogin()"/>
-    <div class="error-msg" id="loginError"></div>
-    <button class="btn btn-gold btn-full" id="loginBtn" onclick="doAdminLogin()">Enter Admin Panel</button>
-    <div style="margin-top:1rem;text-align:center">
-      <a href="/" style="font-size:0.82rem;color:var(--text3);text-decoration:none">← Back to app</a>
+<!-- ══ VIEWS (only one shown at a time) ════════════════════════════════════ -->
+
+<!-- 1. LANDING — profile picker -->
+<div id="view-landing" class="view">
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">📚</span>
+        <div>
+          <div class="logo-title">BoardPrep <span>PH</span></div>
+          <div class="logo-sub">Board Exam Learning Tracker</div>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="showView('register')">+ Create Profile</button>
+    </div>
+  </header>
+  <main class="landing-main">
+    <div class="landing-hero">
+      <h1>Choose your profile</h1>
+      <p>Select your profile to continue reviewing, or create a new one.</p>
+      <!-- Search bar -->
+      <div class="profile-search-wrap">
+        <div class="profile-search-box">
+          <span class="profile-search-icon">🔍</span>
+          <input
+            type="text"
+            id="profileSearch"
+            class="profile-search-input"
+            placeholder="Search by name or username…"
+            oninput="filterProfiles(this.value)"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button class="profile-search-clear" id="searchClearBtn"
+                  onclick="clearProfileSearch()" style="display:none">✕</button>
+        </div>
+        <div class="profile-search-count" id="profileSearchCount"></div>
+      </div>
+    </div>
+    <div class="profiles-grid" id="profilesGrid">
+      <div class="loading-state">Loading profiles…</div>
+    </div>
+    <div style="text-align:center;padding:2rem 0 0.5rem;font-size:0.75rem;color:var(--text3)">
+      <a href="/privacy" target="_blank" style="color:var(--text3);text-decoration:none;transition:color 0.2s"
+         onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text3)'">
+        Privacy Policy
+      </a>
+      &nbsp;·&nbsp; © 2025 BoardPrep PH · Made for Filipino board exam reviewers 🇵🇭
+    </div>
+  </main>
+</div>
+
+<!-- 2. REGISTER — Step 1: Fill in details -->
+<div id="view-register" class="view" style="display:none">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">📚 <span>BoardPrep PH</span></div>
+      <h2>Create Profile</h2>
+      <p class="auth-sub">Set up your personal board exam tracker</p>
+      <div class="auth-form">
+        <label>Username</label>
+        <input type="text" id="reg-username" placeholder="e.g. juandelacruz" maxlength="30"
+               oninput="this.value=this.value.replace(/\s/g,'')"
+               onkeydown="if(event.key==='Enter') doRequestCode()" />
+        <label>Display Name <span class="opt">(optional)</span></label>
+        <input type="text" id="reg-display" placeholder="e.g. Juan dela Cruz" maxlength="40"
+               onkeydown="if(event.key==='Enter') doRequestCode()"/>
+        <label>Email Address</label>
+        <input type="email" id="reg-email" placeholder="e.g. juan@gmail.com"
+               onkeydown="if(event.key==='Enter') doRequestCode()"/>
+        <label>Password</label>
+        <input type="password" id="reg-password" placeholder="Min. 4 characters"
+               onkeydown="if(event.key==='Enter') doRequestCode()"/>
+        <div class="auth-error" id="reg-error"></div>
+        <button class="btn-primary btn-full" id="reg-btn" onclick="doRequestCode()">Send Verification Code</button>
+        <div class="auth-switch">Already have a profile? <a href="#" onclick="showView('landing')">Go back</a></div>
+        <div class="auth-switch" style="margin-top:4px;font-size:0.75rem">
+          By creating a profile you agree to our <a href="/privacy" target="_blank">Privacy Policy</a>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ══ ADMIN PANEL ══════════════════════════════════════════════════════════ -->
-<div id="adminPanel">
-
-  <header class="admin-header">
-    <div class="admin-header-inner">
-      <div class="admin-logo">
-        📚 BoardPrep <span>PH</span>
-        <span class="admin-tag">Admin</span>
+<!-- 2b. REGISTER — Step 2: Enter verification code -->
+<div id="view-verify" class="view" style="display:none">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">📚 <span>BoardPrep PH</span></div>
+      <div class="verify-icon">📧</div>
+      <h2>Check your email</h2>
+      <p class="auth-sub" id="verify-sub">We sent a 6-digit code to your email</p>
+      <div class="auth-form">
+        <label>Verification Code</label>
+        <input type="text" id="verify-code" placeholder="Enter 6-digit code"
+               maxlength="6" inputmode="numeric"
+               oninput="this.value=this.value.replace(/\D/g,'')"
+               onkeydown="if(event.key==='Enter') doVerifyCode()"
+               class="verify-code-input"/>
+        <div class="auth-error" id="verify-error"></div>
+        <button class="btn-primary btn-full" id="verify-btn" onclick="doVerifyCode()">Verify & Create Profile</button>
+        <div class="auth-switch">
+          Didn't receive it? <a href="#" id="resend-link" onclick="doResendCode()">Resend code</a>
+          &nbsp;·&nbsp; <a href="#" onclick="showView('register')">Change details</a>
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <a href="/" style="font-size:0.82rem;color:var(--text3);text-decoration:none">View App</a>
-        <button class="logout-btn" onclick="doAdminLogout()">Log Out</button>
+    </div>
+  </div>
+</div>
+
+<!-- 3. LOGIN (password prompt for a specific profile) -->
+<div id="view-login" class="view" style="display:none">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="profile-login-avatar" id="loginAvatar"></div>
+      <h2 id="loginTitle">Enter Password</h2>
+      <p class="auth-sub" id="loginSub">This profile is password protected</p>
+      <div class="auth-form">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="Enter your password"
+               onkeydown="if(event.key==='Enter') doLogin()"/>
+        <div class="auth-error" id="login-error"></div>
+        <button class="btn-primary btn-full" onclick="doLogin()">Unlock Profile</button>
+        <div class="auth-switch">
+          <a href="#" onclick="showView('landing')">← Back to profiles</a>
+          &nbsp;·&nbsp;
+          <a href="#" onclick="openForgotPassword()">Forgot password?</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 4b. FORGOT PASSWORD — Step 1: Enter email -->
+<div id="view-forgot" class="view" style="display:none">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">📚 <span>BoardPrep PH</span></div>
+      <div class="verify-icon">🔑</div>
+      <h2>Forgot Password</h2>
+      <p class="auth-sub">Enter your email and we'll send you a reset code</p>
+      <div class="auth-form">
+        <label>Email Address</label>
+        <input type="email" id="forgot-email" placeholder="Your registered email"
+               onkeydown="if(event.key==='Enter') doForgotPassword()"/>
+        <div class="auth-error" id="forgot-error"></div>
+        <div class="auth-success" id="forgot-success" style="display:none"></div>
+        <button class="btn-primary btn-full" id="forgot-btn" onclick="doForgotPassword()">Send Reset Code</button>
+        <div class="auth-switch"><a href="#" onclick="showView('login')">← Back to login</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 4c. RESET PASSWORD — Step 2: Enter code + new password -->
+<div id="view-reset" class="view" style="display:none">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">📚 <span>BoardPrep PH</span></div>
+      <div class="verify-icon">🔒</div>
+      <h2>Reset Password</h2>
+      <p class="auth-sub" id="reset-sub">Enter the code we sent to your email</p>
+      <div class="auth-form">
+        <label>Verification Code</label>
+        <input type="text" id="reset-code" placeholder="6-digit code"
+               maxlength="6" inputmode="numeric"
+               oninput="this.value=this.value.replace(/\D/g,'')"
+               class="verify-code-input"
+               onkeydown="if(event.key==='Enter') doResetPassword()"/>
+        <label>New Password</label>
+        <input type="password" id="reset-new-pw" placeholder="Min. 4 characters"
+               onkeydown="if(event.key==='Enter') doResetPassword()"/>
+        <label>Confirm New Password</label>
+        <input type="password" id="reset-confirm-pw" placeholder="Repeat new password"
+               onkeydown="if(event.key==='Enter') doResetPassword()"/>
+        <div class="auth-error" id="reset-error"></div>
+        <button class="btn-primary btn-full" id="reset-btn" onclick="doResetPassword()">Set New Password</button>
+        <div class="auth-switch">
+          Didn't receive it? <a href="#" onclick="showView('forgot')">Request new code</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 4. TRACKER (main app) -->
+<div id="view-tracker" class="view" style="display:none">
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">📚</span>
+        <div>
+          <div class="logo-title">BoardPrep <span>PH</span></div>
+          <div class="logo-sub">Board Exam Learning Tracker</div>
+        </div>
+      </div>
+      <!-- Countdown chip -->
+      <div class="countdown-chip" id="countdownChip" style="display:none" onclick="openProfileModal()">
+        <span class="countdown-icon">🗓️</span>
+        <div class="countdown-info">
+          <div class="countdown-days" id="countdownDays">—</div>
+          <div class="countdown-label" id="countdownLabel">days to board exam</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-notes-toggle" onclick="toggleNotesSidebar()">
+          🗒️ Quick Notes <span class="notes-badge" id="notesBadge">0</span>
+        </button>
+        <button class="btn-primary" onclick="openAddSubjectModal()">+ Add Subject</button>
+        <!-- Profile pill -->
+        <div class="profile-pill" onclick="toggleProfileMenu()">
+          <div class="profile-pill-avatar" id="headerAvatar"></div>
+          <span id="headerName"></span>
+          <span class="profile-pill-arrow">▾</span>
+        </div>
+        <div class="profile-menu" id="profileMenu" style="display:none">
+          <div class="profile-menu-item" onclick="openProfileModal()">⚙️ Edit Profile</div>
+          <div class="profile-menu-item" onclick="doLogout()">🚪 Log Out</div>
+          <div class="profile-menu-divider"></div>
+          <div class="profile-menu-item profile-menu-danger" onclick="openDeleteAccountModal()">🗑️ Delete My Profile</div>
+        </div>
       </div>
     </div>
   </header>
 
-  <main class="admin-main">
-
-    <!-- Stats -->
-    <div class="stats-row" id="statsRow">
-      <div class="stat-card">
-        <div class="stat-label">Total Profiles</div>
-        <div class="stat-value" id="statUsers">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Subjects</div>
-        <div class="stat-value" id="statSubjects">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Avg. Progress</div>
-        <div class="stat-value" id="statAvgProgress">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Active Users</div>
-        <div class="stat-value" id="statActiveUsers">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Topics</div>
-        <div class="stat-value" id="statTopics">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Notes</div>
-        <div class="stat-value" id="statNotes">—</div>
+  <!-- Progress overview -->
+  <section class="progress-overview">
+    <div class="progress-overview-inner">
+      <div class="overview-label">Overall Progress</div>
+      <div class="overview-bar-wrap">
+        <div class="overview-bar"><div class="overview-fill" id="overallFill"></div></div>
+        <span class="overview-pct" id="overallPct">0%</span>
       </div>
     </div>
+    <div class="subject-progress-strip" id="subjectProgressStrip"></div>
+  </section>
 
-    <!-- Analytics: Funnel + Growth side by side -->
-    <div class="analytics-grid">
+  <!-- Two-column layout: AI motivation left, subjects right -->
+  <main class="main-content">
+    <div class="tracker-layout">
 
-      <!-- Drop-off Funnel -->
-      <div class="analytics-card">
-        <div class="analytics-card-title">📉 User Funnel / Drop-off</div>
-        <div id="funnelSection">
-          <div class="funnel-row">
-            <span class="funnel-label">Loading…</span>
+      <!-- ── LEFT: AI Motivation Sidebar ── -->
+      <aside class="motivation-panel" id="motivationPanel">
+        <div class="motivation-header">
+          <div class="motivation-title">
+            <span class="motivation-spark">✨</span>
+            Daily Motivation
+          </div>
+          <button class="motivation-refresh" id="motivationRefreshBtn"
+                  onclick="fetchMotivation(true)" title="Get new message">↻</button>
+        </div>
+
+        <!-- Message area -->
+        <div class="motivation-body" id="motivationBody">
+          <div class="motivation-loading" id="motivationLoading">
+            <div class="motivation-loading-dots">
+              <span></span><span></span><span></span>
+            </div>
+            <div style="font-size:0.8rem;color:var(--text3);margin-top:8px">Generating your message…</div>
+          </div>
+          <div class="motivation-message" id="motivationMessage" style="display:none"></div>
+        </div>
+
+        <!-- Date stamp -->
+        <div class="motivation-footer" id="motivationFooter" style="display:none">
+          <span class="motivation-date" id="motivationDate"></span>
+          <span class="motivation-powered">Powered by Gemini ✦</span>
+        </div>
+
+        <!-- Divider -->
+        <div class="motivation-divider"></div>
+
+        <!-- Study tip of the day -->
+        <div class="motivation-tip" id="motivationTip" style="display:none">
+          <div class="tip-label">💡 Study Tip</div>
+          <div class="tip-text" id="motivationTipText"></div>
+        </div>
+      </aside>
+
+      <!-- ── RIGHT: Subjects Grid ── -->
+      <div class="subjects-column">
+        <div class="subjects-grid" id="subjectsGrid">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon">🎓</div>
+            <h2>Start your review journey</h2>
+            <p>Add your first board exam subject to begin tracking your progress.</p>
+            <button class="btn-primary" onclick="openAddSubjectModal()">+ Add Your First Subject</button>
           </div>
         </div>
       </div>
 
-      <!-- New Users Last 7 Days -->
-      <div class="analytics-card">
-        <div class="analytics-card-title">📈 New Users — Last 7 Days</div>
-        <div id="growthSection">
-          <div class="funnel-row">
-            <span class="funnel-label">Loading…</span>
-          </div>
-        </div>
-      </div>
-
     </div>
-
-    <!-- Users table -->
-    <div class="section-title">
-      All Profiles
-      <span class="user-count-badge" id="userCountBadge">0 users</span>
-    </div>
-
-    <div class="table-wrap">
-      <table class="users-table">
-        <thead>
-          <tr>
-            <th>User</th>
-            <th>Email</th>
-            <th>Subjects</th>
-            <th>Progress</th>
-            <th>Joined</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="usersTableBody">
-          <tr><td colspan="5" class="empty-users">Loading…</td></tr>
-        </tbody>
-      </table>
-    </div>
-
   </main>
+
+  <!-- Notes sidebar -->
+  <aside class="notes-sidebar" id="notesSidebar">
+    <div class="notes-sidebar-header">
+      <h3>🗒️ Quick Notes</h3>
+      <button class="btn-close-sidebar" onclick="toggleNotesSidebar()">✕</button>
+    </div>
+    <button class="btn-add-note" onclick="openAddNoteModal()">+ New Note</button>
+    <!-- Tabs -->
+    <div class="notes-tabs">
+      <button class="notes-tab active" id="ntab-active" onclick="switchNotesTab('active')">
+        Active <span class="notes-tab-count" id="ntab-active-count">0</span>
+      </button>
+      <button class="notes-tab" id="ntab-done" onclick="switchNotesTab('done')">
+        ✅ Done <span class="notes-tab-count" id="ntab-done-count">0</span>
+      </button>
+    </div>
+    <div class="notes-list" id="notesList"></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleNotesSidebar()"></div>
+
+</div><!-- /view-tracker -->
+
+<!-- ══ MODALS ══════════════════════════════════════════════════════════════ -->
+
+<!-- Add/Edit Subject -->
+<div class="modal-backdrop" id="subjectModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="subjectModalTitle">Add Subject</h3>
+      <button class="modal-close" onclick="closeModal('subjectModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <label>Subject Name</label>
+      <input type="text" id="subjectNameInput" placeholder="e.g. Nursing Fundamentals"/>
+      <label>Color</label>
+      <div class="color-picker-row" id="subjectColorPicker"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('subjectModal')">Cancel</button>
+      <button class="btn-primary" onclick="saveSubject()">Save Subject</button>
+    </div>
+  </div>
 </div>
 
-<!-- ══ CONFIRM DELETE ═══════════════════════════════════════════════════════ -->
-<div class="confirm-overlay" id="confirmOverlay">
-  <div class="confirm-box">
-    <h3>🗑️ Delete Profile</h3>
-    <p id="confirmText">Are you sure you want to delete this profile? This will permanently remove all their subjects, topics, and notes.</p>
-    <div class="confirm-actions">
-      <button class="btn-ghost-sm" onclick="closeConfirm()">Cancel</button>
-      <button class="btn-danger-sm" id="confirmDeleteBtn">Yes, Delete</button>
+<!-- Add/Edit Note -->
+<div class="modal-backdrop" id="noteModal">
+  <div class="modal modal-note">
+    <div class="modal-header">
+      <h3 id="noteModalTitle">New Note</h3>
+      <button class="modal-close" onclick="closeModal('noteModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <label>Title</label>
+      <input type="text" id="noteTitleInput" placeholder="Note title…"/>
+      <label>Content</label>
+      <textarea id="noteContentInput" rows="6" placeholder="Write your notes here…"></textarea>
+      <label>Color</label>
+      <div class="color-picker-row" id="noteColorPicker"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('noteModal')">Cancel</button>
+      <button class="btn-primary" onclick="saveNote()">Save Note</button>
+    </div>
+  </div>
+</div>
+
+<!-- Profile Settings -->
+<div class="modal-backdrop" id="profileModal">
+  <div class="modal modal-profile">
+    <div class="modal-header">
+      <h3>Edit Profile</h3>
+      <button class="modal-close" onclick="closeModal('profileModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Avatar -->
+      <div class="avatar-upload-area">
+        <div class="avatar-preview" id="avatarPreview"></div>
+        <div>
+          <div style="font-weight:500;margin-bottom:4px">Profile Picture</div>
+          <div style="color:var(--text3);font-size:0.8rem;margin-bottom:8px">Max 2MB · JPG, PNG, GIF, WebP</div>
+          <label class="btn-ghost btn-sm" style="cursor:pointer">
+            📷 Choose Photo
+            <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="previewAvatar(event)"/>
+          </label>
+          <button class="btn-ghost btn-sm" id="avatarRemoveBtn" style="display:none" onclick="removeAvatarPreview()">✕ Remove</button>
+        </div>
+      </div>
+      <label>Username</label>
+      <div class="username-input-wrap">
+        <span class="username-at">@</span>
+        <input type="text" id="profileUsername" placeholder="username" maxlength="30"
+               oninput="this.value=this.value.replace(/[^a-zA-Z0-9_.]/g,'').toLowerCase()"/>
+      </div>
+      <label>Display Name</label>
+      <input type="text" id="profileDisplayName" placeholder="Your display name" maxlength="40"/>
+      <label>Board Exam Date <span class="opt">(for countdown timer)</span></label>
+      <input type="date" id="profileExamDate"/>
+      <div class="divider"></div>
+      <label>Change Password <span class="opt">(leave blank to keep current)</span></label>
+      <input type="password" id="profileCurrentPw" placeholder="Current password"/>
+      <input type="password" id="profileNewPw" placeholder="New password (min 4 chars)" style="margin-top:6px"/>
+      <div class="auth-error" id="profile-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('profileModal')">Cancel</button>
+      <button class="btn-primary" onclick="saveProfile()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Delete -->
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal modal-sm">
+    <div class="modal-header"><h3>Confirm Delete</h3></div>
+    <div class="modal-body"><p id="confirmMessage">Are you sure?</p></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('confirmModal')">Cancel</button>
+      <button class="btn-danger" id="confirmDeleteBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ POMODORO ══════════════════════════════════════════════════════════════ -->
+<div class="pomodoro-fab" id="pomodoroFab" onclick="togglePomodoro()" title="Pomodoro Timer" style="display:none">
+  🍅
+  <span class="pom-fab-ring" id="pomFabRing"></span>
+</div>
+
+<div class="pomodoro-widget" id="pomodoroWidget" style="display:none">
+  <div class="pom-header">
+    <div class="pom-title">🍅 Pomodoro Timer</div>
+    <button class="pom-close" onclick="togglePomodoro()">✕</button>
+  </div>
+  <div class="pom-mode-tabs">
+    <button class="pom-tab active" id="tab-focus" onclick="switchMode('focus')">Focus</button>
+    <button class="pom-tab" id="tab-short" onclick="switchMode('short')">Short Break</button>
+    <button class="pom-tab" id="tab-long" onclick="switchMode('long')">Long Break</button>
+  </div>
+  <div class="pom-timer-display">
+    <svg class="pom-ring-svg" viewBox="0 0 120 120">
+      <circle class="pom-ring-bg" cx="60" cy="60" r="52"/>
+      <circle class="pom-ring-progress" id="pomRingProgress" cx="60" cy="60" r="52"/>
+    </svg>
+    <div class="pom-time" id="pomTime">25:00</div>
+  </div>
+  <div class="pom-session-info">
+    Session <span id="pomSession">1</span> of 4
+    <span class="pom-session-dots" id="pomDots"></span>
+  </div>
+  <div class="pom-controls">
+    <button class="pom-btn-ctrl" onclick="resetPomodoro()" title="Reset">↺</button>
+    <button class="pom-btn-play" id="pomPlayBtn" onclick="togglePomodoro_timer()">▶</button>
+    <button class="pom-btn-ctrl" onclick="skipPomodoro()" title="Skip">⏭</button>
+  </div>
+  <div class="pom-footer">
+    <span id="pomModeLabel">Stay focused for 25 minutes!</span>
+  </div>
+</div>
+
+<!-- Delete Account Modal -->
+<div class="modal-backdrop" id="deleteAccountModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 style="color:var(--red)">⚠️ Delete Profile</h3>
+      <button class="modal-close" onclick="closeModal('deleteAccountModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text2);font-size:0.88rem;line-height:1.6;margin-bottom:4px">
+        This will <strong style="color:var(--red)">permanently delete</strong> your profile, all subjects, topics, and notes. This cannot be undone.
+      </p>
+      <label>Enter your password to confirm</label>
+      <input type="password" id="deleteAccountPw" placeholder="Your password"
+             onkeydown="if(event.key==='Enter') confirmDeleteAccount()"/>
+      <div class="auth-error" id="deleteAccountError"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('deleteAccountModal')">Cancel</button>
+      <button class="btn-danger" id="deleteAccountBtn" onclick="confirmDeleteAccount()">Yes, Delete My Profile</button>
     </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<script>
-let pendingDeleteId = null;
-let adminPassword = '';  // stored in memory after login
-
-// Helper — every admin API call includes the password as a header
-function adminFetch(url, options = {}) {
-  const headers = { ...(options.headers || {}), 'X-Admin-Password': adminPassword };
-  return fetch(url, { ...options, headers });
-}
-
-// ── Boot ────────────────────────────────────────────────────────────────────
-async function boot() {
-  // Can't auto-restore password from memory on page load — always show login
-  // (This is intentional: admin must re-enter password each visit for security)
-}
-
-// ── Login ────────────────────────────────────────────────────────────────────
-async function doAdminLogin() {
-  const pw    = document.getElementById('adminPwInput').value;
-  const errEl = document.getElementById('loginError');
-  const btn   = document.getElementById('loginBtn');
-  errEl.textContent = '';
-  if (!pw) { errEl.textContent = 'Please enter the admin password.'; return; }
-
-  btn.textContent = 'Checking…'; btn.disabled = true;
-  try {
-    const r = await fetch('/api/admin/login', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ password: pw })
-    });
-    const d = await r.json();
-    if (!r.ok) { errEl.textContent = d.error; return; }
-    adminPassword = pw;  // store in memory — sent with every request
-    showPanel();
-    loadUsers();
-  } catch(e) {
-    errEl.textContent = 'Connection error. Please try again.';
-  } finally {
-    btn.textContent = 'Enter Admin Panel'; btn.disabled = false;
-  }
-}
-
-async function doAdminLogout() {
-  await adminFetch('/api/admin/logout', { method: 'POST' });
-  adminPassword = '';  // clear from memory
-  document.getElementById('adminPanel').style.display = 'none';
-  document.getElementById('loginScreen').style.display = 'flex';
-  document.getElementById('adminPwInput').value = '';
-}
-
-function showPanel() {
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('adminPanel').style.display  = 'block';
-}
-
-// ── Load Users ───────────────────────────────────────────────────────────────
-async function loadUsers() {
-  const tbody = document.getElementById('usersTableBody');
-  try {
-    const r = await adminFetch('/api/admin/users');
-    if (!r.ok) { tbody.innerHTML = '<tr><td colspan="5" class="empty-users">Failed to load users.</td></tr>'; return; }
-    const users = await r.json();
-
-    // Stats (existing cards)
-    document.getElementById('statUsers').textContent    = users.length;
-    document.getElementById('statSubjects').textContent = users.reduce((a, u) => a + u.subject_count, 0);
-    const avgPct = users.length === 0 ? 0 : Math.round(users.reduce((a, u) => a + u.progress_pct, 0) / users.length);
-    document.getElementById('statAvgProgress').textContent = avgPct + '%';
-    document.getElementById('userCountBadge').textContent  = users.length + ' user' + (users.length !== 1 ? 's' : '');
-
-    // Load analytics (new cards + funnel + growth) in parallel
-    loadAnalytics();
-
-    if (users.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty-users">No profiles created yet.</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = users.map(u => {
-      const avatarHTML = u.avatar
-        ? `<img src="${u.avatar}" alt="">`
-        : `<span>${esc(u.display_name[0].toUpperCase())}</span>`;
-      return `
-      <tr id="row-${u.id}">
-        <td>
-          <div class="user-avatar-cell">
-            <div class="user-avatar-sm">${avatarHTML}</div>
-            <div>
-              <div class="user-display-name">${esc(u.display_name)}</div>
-              <div class="user-username">@${esc(u.username)}</div>
-            </div>
-          </div>
-        </td>
-        <td>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="color:var(--text2);font-size:0.8rem">${esc(u.email || '—')}</span>
-            ${u.email ? `<button onclick="copyEmail('${esc(u.email)}')" title="Copy email"
-              style="background:transparent;border:none;cursor:pointer;color:var(--text3);font-size:0.75rem;padding:2px 5px;border-radius:4px;transition:all 0.15s"
-              onmouseover="this.style.color='var(--text)';this.style.background='var(--border)'"
-              onmouseout="this.style.color='var(--text3)';this.style.background='transparent'">📋</button>` : ''}
-          </div>
-        </td>
-        <td>${u.subject_count}</td>
-        <td>
-          <div class="progress-inline">
-            <div class="bar-mini-wrap"><div class="bar-mini-fill" style="width:${u.progress_pct}%"></div></div>
-            <span class="pct-mini">${u.progress_pct}%</span>
-          </div>
-        </td>
-        <td style="color:var(--text3)">${formatDate(u.created_at)}</td>
-        <td>
-          <button class="btn-danger-sm" onclick="confirmDelete('${u.id}','${esc(u.display_name)}')">
-            🗑️ Delete
-          </button>
-        </td>
-      </tr>`;
-    }).join('');
-  } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-users">Error loading users.</td></tr>';
-  }
-}
-
-// ── Delete ────────────────────────────────────────────────────────────────────
-function confirmDelete(userId, displayName) {
-  pendingDeleteId = userId;
-  document.getElementById('confirmText').textContent =
-    `Are you sure you want to delete "${displayName}"? This will permanently remove all their subjects, topics, and notes. This cannot be undone.`;
-  document.getElementById('confirmOverlay').classList.add('open');
-  document.getElementById('confirmDeleteBtn').onclick = executeDelete;
-}
-
-function closeConfirm() {
-  document.getElementById('confirmOverlay').classList.remove('open');
-  pendingDeleteId = null;
-}
-
-async function executeDelete() {
-  if (!pendingDeleteId) return;
-
-  // Save id FIRST before closeConfirm() nulls it out
-  const id = pendingDeleteId;
-  closeConfirm();
-
-  const btn = document.querySelector(`#row-${id} .btn-danger-sm`);
-  if (btn) { btn.textContent = 'Deleting…'; btn.disabled = true; }
-
-  try {
-    const r = await adminFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      showToast(`❌ Failed (${r.status}): ${d.error || 'Try again.'}`);
-      if (btn) { btn.textContent = '🗑️ Delete'; btn.disabled = false; }
-      return;
-    }
-    document.getElementById(`row-${id}`)?.remove();
-    showToast('✅ Profile deleted successfully.');
-    loadUsers();
-  } catch(e) {
-    showToast('❌ Connection error: ' + e.message);
-    if (btn) { btn.textContent = '🗑️ Delete'; btn.disabled = false; }
-  }
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function copyEmail(email) {
-  navigator.clipboard.writeText(email).then(() => {
-    showToast('📋 Email copied: ' + email);
-  }).catch(() => {
-    // Fallback for older browsers
-    const el = document.createElement('textarea');
-    el.value = email;
-    document.body.appendChild(el);
-    el.select();
-    document.execCommand('copy');
-    document.body.removeChild(el);
-    showToast('📋 Email copied: ' + email);
-  });
-}
-
-function esc(str) {
-  if (!str) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function formatDate(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' });
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-// ── Analytics ────────────────────────────────────────────────────────────────
-async function loadAnalytics() {
-  try {
-    const r = await adminFetch('/api/admin/analytics');
-    if (!r.ok) return;
-    const d = await r.json();
-
-    // Fill new stat cards
-    document.getElementById('statActiveUsers').textContent = d.active_users;
-    document.getElementById('statTopics').textContent      = d.total_topics;
-    document.getElementById('statNotes').textContent       = d.total_notes;
-
-    // Funnel section
-    const funnel = d.funnel;
-    const totalU = d.total_users;
-    document.getElementById('funnelSection').innerHTML = `
-      <div class="funnel-row">
-        <span class="funnel-label">✅ Signed up</span>
-        <span class="funnel-count ok">${totalU}</span>
-      </div>
-      <div class="funnel-row">
-        <span class="funnel-label">⚠️ No subjects added</span>
-        <span class="funnel-count ${funnel.no_subjects > 0 ? 'warn' : 'ok'}">${funnel.no_subjects}</span>
-      </div>
-      <div class="funnel-row">
-        <span class="funnel-label">⚠️ Has subjects, no sub-subjects</span>
-        <span class="funnel-count ${funnel.no_subsections > 0 ? 'warn' : 'ok'}">${funnel.no_subsections}</span>
-      </div>
-      <div class="funnel-row">
-        <span class="funnel-label">⚠️ Has sub-subjects, no topics</span>
-        <span class="funnel-count ${funnel.no_topics > 0 ? 'warn' : 'ok'}">${funnel.no_topics}</span>
-      </div>
-      <div class="funnel-row" style="margin-top:4px">
-        <span class="funnel-label" style="color:var(--text3);font-size:0.78rem">
-          Drop-off rate: ${totalU === 0 ? 0 : Math.round((funnel.no_subjects / totalU) * 100)}% never added a subject
-        </span>
-      </div>`;
-
-    // Growth section
-    const growth = d.growth;
-    if (!growth.length) {
-      document.getElementById('growthSection').innerHTML =
-        '<div class="growth-empty">No new users in the last 7 days.</div>';
-      return;
-    }
-    const maxCount = Math.max(...growth.map(g => g.count));
-    document.getElementById('growthSection').innerHTML = growth.map(g => {
-      const pct  = maxCount === 0 ? 0 : Math.round((g.count / maxCount) * 100);
-      const date = new Date(g.day + 'T00:00:00');
-      const label = date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', weekday: 'short' });
-      return `
-        <div class="growth-row">
-          <span class="growth-date">${label}</span>
-          <div class="growth-bar-wrap"><div class="growth-bar-fill" style="width:${pct}%"></div></div>
-          <span class="growth-num">+${g.count}</span>
-        </div>`;
-    }).join('');
-
-  } catch(e) { /* silent — analytics are non-critical */ }
-}
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeConfirm();
-});
-
-boot();
-</script>
+<script src="/static/app.min.js?v=3" defer></script>
 </body>
 </html>

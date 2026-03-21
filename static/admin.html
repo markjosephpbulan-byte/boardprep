@@ -209,6 +209,32 @@
   .growth-num { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--gold); min-width: 24px; text-align: right; }
   .growth-empty { color: var(--text3); font-size: 0.85rem; padding: 0.75rem 0; }
 
+  /* Paused badge */
+  .paused-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(245,101,101,0.12);
+    border: 1px solid rgba(245,101,101,0.3);
+    color: var(--red); border-radius: 99px;
+    padding: 2px 8px; font-size: 0.72rem; font-weight: 600;
+  }
+  .btn-pause {
+    background: rgba(249,115,22,0.12); color: #f97316;
+    border: 1px solid rgba(249,115,22,0.3); border-radius: 6px;
+    padding: 5px 10px; font-size: 0.8rem; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-weight: 500;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .btn-pause:hover { background: rgba(249,115,22,0.22); border-color: #f97316; }
+  .btn-unpause {
+    background: rgba(62,207,142,0.12); color: var(--green);
+    border: 1px solid rgba(62,207,142,0.3); border-radius: 6px;
+    padding: 5px 10px; font-size: 0.8rem; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-weight: 500;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .btn-unpause:hover { background: rgba(62,207,142,0.22); border-color: var(--green); }
+  .row-paused td { opacity: 0.6; }
+
   @media (max-width: 640px) {
     .admin-main { padding: 1rem; }
     .analytics-grid { grid-template-columns: 1fr; }
@@ -432,12 +458,15 @@ async function loadUsers() {
         ? `<img src="${u.avatar}" alt="">`
         : `<span>${esc(u.display_name[0].toUpperCase())}</span>`;
       return `
-      <tr id="row-${u.id}">
+      <tr id="row-${u.id}" class="${u.is_paused ? 'row-paused' : ''}">
         <td>
           <div class="user-avatar-cell">
             <div class="user-avatar-sm">${avatarHTML}</div>
             <div>
-              <div class="user-display-name">${esc(u.display_name)}</div>
+              <div class="user-display-name">
+                ${esc(u.display_name)}
+                ${u.is_paused ? '<span class="paused-badge">⏸ Paused</span>' : ''}
+              </div>
               <div class="user-username">@${esc(u.username)}</div>
             </div>
           </div>
@@ -460,9 +489,16 @@ async function loadUsers() {
         </td>
         <td style="color:var(--text3)">${formatDate(u.created_at)}</td>
         <td>
-          <button class="btn-danger-sm" onclick="confirmDelete('${u.id}','${esc(u.display_name)}')">
-            🗑️ Delete
-          </button>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="${u.is_paused ? 'btn-unpause' : 'btn-pause'}"
+                    id="pause-btn-${u.id}"
+                    onclick="togglePause('${u.id}','${esc(u.display_name)}',${u.is_paused})">
+              ${u.is_paused ? '▶ Unpause' : '⏸ Pause'}
+            </button>
+            <button class="btn-danger-sm" onclick="confirmDelete('${u.id}','${esc(u.display_name)}')">
+              🗑️ Delete
+            </button>
+          </div>
         </td>
       </tr>`;
     }).join('');
@@ -542,6 +578,53 @@ function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Pause / Unpause ──────────────────────────────────────────────────────────
+async function togglePause(userId, displayName, currentlyPaused) {
+  const action = currentlyPaused ? 'unpause' : 'pause';
+  const msg    = currentlyPaused
+    ? `Unpause "${displayName}"? They will regain full access.`
+    : `Pause "${displayName}"? They will be locked out until you unpause them.`;
+
+  if (!confirm(msg)) return;
+
+  const btn = document.getElementById(`pause-btn-${userId}`);
+  if (btn) { btn.textContent = 'Updating…'; btn.disabled = true; }
+
+  try {
+    const r = await adminFetch(`/api/admin/users/${userId}/pause`, { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) { showToast(`❌ Error: ${d.error}`); return; }
+
+    const isPaused = d.is_paused;
+    const row = document.getElementById(`row-${userId}`);
+    if (row) row.className = isPaused ? 'row-paused' : '';
+
+    // Update pause button
+    if (btn) {
+      btn.textContent  = isPaused ? '▶ Unpause' : '⏸ Pause';
+      btn.className    = isPaused ? 'btn-unpause' : 'btn-pause';
+      btn.disabled     = false;
+      btn.setAttribute('onclick', `togglePause('${userId}','${displayName}',${isPaused})`);
+    }
+
+    // Update paused badge in name cell
+    const nameCell = row?.querySelector('.user-display-name');
+    if (nameCell) {
+      const existing = nameCell.querySelector('.paused-badge');
+      if (isPaused && !existing) {
+        nameCell.insertAdjacentHTML('beforeend', '<span class="paused-badge">⏸ Paused</span>');
+      } else if (!isPaused && existing) {
+        existing.remove();
+      }
+    }
+
+    showToast(isPaused ? `⏸ ${displayName} has been paused.` : `▶ ${displayName} has been unpaused.`);
+  } catch(e) {
+    showToast('❌ Connection error. Please try again.');
+    if (btn) { btn.textContent = currentlyPaused ? '▶ Unpause' : '⏸ Pause'; btn.disabled = false; }
+  }
 }
 
 // ── Analytics ────────────────────────────────────────────────────────────────

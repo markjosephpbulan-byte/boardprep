@@ -125,6 +125,7 @@ def init_db():
             password_hash TEXT NOT NULL,
             avatar        TEXT,
             exam_date     TEXT,
+            is_paused     BOOLEAN DEFAULT FALSE,
             created_at    TIMESTAMPTZ DEFAULT NOW()
         )
     """)
@@ -241,6 +242,12 @@ try:
         try:
             db_execute(
                 "ALTER TABLE topics ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''"
+            )
+        except Exception:
+            pass
+        try:
+            db_execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_paused BOOLEAN DEFAULT FALSE"
             )
         except Exception:
             pass
@@ -695,6 +702,10 @@ def login():
     user = get_user_by_username(username)
     if not user or not check_password_hash(user["password_hash"], password):
         return jsonify({"error": "Invalid username or password"}), 401
+    if user.get("is_paused"):
+        return jsonify({
+            "error": "Your account has been paused. Please contact the admin."
+        }), 403
     session["user_id"] = user["id"]
     return jsonify(safe_user(user))
 
@@ -726,6 +737,11 @@ def me_full():
     if not user:
         session.clear()
         return jsonify({"error": "User not found"}), 404
+    if user.get("is_paused"):
+        session.clear()
+        return jsonify({
+            "error": "Your account has been paused. Please contact the admin."
+        }), 403
     subjects = get_subjects_for_user(uid)
     notes = (
         db_execute(
@@ -1415,6 +1431,7 @@ def admin_list_users():
             "subject_count": sc_map.get(uid, 0),
             "notes_count": nc_map.get(uid, 0),
             "progress_pct": pct,
+            "is_paused": bool(u.get("is_paused", False)),
             "created_at": str(u["created_at"]),
         })
     return jsonify(result)
@@ -1506,6 +1523,19 @@ def admin_analytics():
         },
         "growth": [{"day": str(r["day"]), "count": int(r["c"])} for r in growth],
     })
+
+
+@app.route("/api/admin/users/<user_id>/pause", methods=["POST"])
+@admin_required
+def admin_pause_user(user_id):
+    user = get_user_by_id(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    # Toggle pause state
+    new_state = not bool(user.get("is_paused", False))
+    db_execute("UPDATE users SET is_paused=%s WHERE id=%s", (new_state, user_id))
+    invalidate_user_cache(user_id)
+    return jsonify({"ok": True, "is_paused": new_state})
 
 
 @app.route("/api/admin/users/<user_id>", methods=["DELETE"])

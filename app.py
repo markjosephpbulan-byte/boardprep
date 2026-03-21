@@ -176,12 +176,13 @@ def init_db():
     """)
     db_execute("""
         CREATE TABLE IF NOT EXISTS flashcards (
-            id         TEXT PRIMARY KEY,
-            subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-            user_id    TEXT NOT NULL,
-            question   TEXT NOT NULL,
-            answer     TEXT NOT NULL DEFAULT '',
-            created_at TIMESTAMPTZ DEFAULT NOW()
+            id             TEXT PRIMARY KEY,
+            subject_id     TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            subsection_id  TEXT REFERENCES subsections(id) ON DELETE CASCADE,
+            user_id        TEXT NOT NULL,
+            question       TEXT NOT NULL,
+            answer         TEXT NOT NULL DEFAULT '',
+            created_at     TIMESTAMPTZ DEFAULT NOW()
         )
     """)
     # Indexes — make WHERE user_id=? and WHERE subject_id=? queries instant
@@ -254,14 +255,21 @@ try:
         try:
             db_execute("""
                 CREATE TABLE IF NOT EXISTS flashcards (
-                    id         TEXT PRIMARY KEY,
-                    subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-                    user_id    TEXT NOT NULL,
-                    question   TEXT NOT NULL,
-                    answer     TEXT NOT NULL DEFAULT '',
-                    created_at TIMESTAMPTZ DEFAULT NOW()
+                    id             TEXT PRIMARY KEY,
+                    subject_id     TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+                    subsection_id  TEXT REFERENCES subsections(id) ON DELETE CASCADE,
+                    user_id        TEXT NOT NULL,
+                    question       TEXT NOT NULL,
+                    answer         TEXT NOT NULL DEFAULT '',
+                    created_at     TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
+            try:
+                db_execute(
+                    "ALTER TABLE flashcards ADD COLUMN IF NOT EXISTS subsection_id TEXT REFERENCES subsections(id) ON DELETE CASCADE"
+                )
+            except Exception:
+                pass
             db_execute(
                 "CREATE INDEX IF NOT EXISTS idx_flashcards_subject ON flashcards(subject_id)"
             )
@@ -1558,7 +1566,17 @@ def admin_delete_user(user_id):
 @owner_required
 def get_flashcards(user_id):
     subject_id = request.args.get("subject_id")
-    if subject_id:
+    subsection_id = request.args.get("subsection_id")
+    if subsection_id:
+        cards = (
+            db_execute(
+                "SELECT * FROM flashcards WHERE user_id=%s AND subsection_id=%s ORDER BY created_at",
+                (user_id, subsection_id),
+                fetch="all",
+            )
+            or []
+        )
+    elif subject_id:
         cards = (
             db_execute(
                 "SELECT * FROM flashcards WHERE user_id=%s AND subject_id=%s ORDER BY created_at",
@@ -1578,6 +1596,7 @@ def get_flashcards(user_id):
         )
     for c in cards:
         c["created_at"] = str(c["created_at"])
+        c["subsection_id"] = c.get("subsection_id")
     return jsonify(cards)
 
 
@@ -1586,6 +1605,7 @@ def get_flashcards(user_id):
 def add_flashcard(user_id):
     body = request.json or {}
     subject_id = body.get("subject_id", "").strip()
+    subsection_id = body.get("subsection_id", "").strip() or None
     question = body.get("question", "").strip()
     answer = body.get("answer", "").strip()
     if not question:
@@ -1594,11 +1614,12 @@ def add_flashcard(user_id):
         return jsonify({"error": "Subject is required"}), 400
     fid = str(uuid.uuid4())
     db_execute(
-        "INSERT INTO flashcards (id, subject_id, user_id, question, answer) VALUES (%s,%s,%s,%s,%s)",
-        (fid, subject_id, user_id, question, answer),
+        "INSERT INTO flashcards (id, subject_id, subsection_id, user_id, question, answer) VALUES (%s,%s,%s,%s,%s,%s)",
+        (fid, subject_id, subsection_id, user_id, question, answer),
     )
     card = db_execute("SELECT * FROM flashcards WHERE id=%s", (fid,), fetch="one")
     card["created_at"] = str(card["created_at"])
+    card["subsection_id"] = card.get("subsection_id")
     return jsonify(card), 201
 
 

@@ -1736,3 +1736,15 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   .flashcard-sidebar { width: 100%; }
   .fc-subject-col    { width: 140px; }
 }
+
+/* ── Flashcard sidebar — sub-subject items ── */
+.fc-ss-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0.4rem 0.75rem 0.4rem 1.25rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer; transition: background 0.15s;
+  font-size: 0.78rem; color: var(--text3);
+}
+.fc-ss-item:hover { background: var(--surface2); color: var(--text2); }
+.fc-ss-item.active { background: var(--surface); color: var(--text); font-weight: 600; }
+.fc-ss-dash { color: var(--border2); font-size: 0.7rem; flex-shrink: 0; }

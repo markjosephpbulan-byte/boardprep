@@ -908,7 +908,7 @@ function buildSubjectCard(subject) {
     </div>
     <div class="card-body" id="card-body-${subject.id}">
       <div id="ss-list-${subject.id}">
-        ${subject.subsections.map(ss => buildSubsectionHTML(subject.id, ss)).join('')}
+        ${subject.subsections.map(ss => buildSubsectionHTML(subject.id, ss, subject.name, subject.color)).join('')}
       </div>
       <div class="add-subsection-row">
         <input class="inline-input" id="ss-input-${subject.id}" placeholder="Add sub-subject…"
@@ -919,7 +919,7 @@ function buildSubjectCard(subject) {
   return card;
 }
 
-function buildSubsectionHTML(subjectId, ss) {
+function buildSubsectionHTML(subjectId, ss, subjectName, subjectColor) {
   const topicTotal = ss.topics.length;
   const topicDone  = ss.topics.filter(t => t.done).length;
   const pct = topicTotal === 0 ? (ss.done ? 100 : 0) : Math.round((topicDone / topicTotal) * 100);
@@ -933,6 +933,8 @@ function buildSubsectionHTML(subjectId, ss) {
       <span class="subsection-name ${ss.done ? 'done-text':''}" id="ss-name-${ss.id}">${esc(ss.name)}</span>
       <span class="subsection-sub-pct" id="ss-pct-${ss.id}">${pct}%</span>
       <div class="sub-actions">
+        <button class="btn-icon" title="Quiz this sub-subject"
+                onclick="event.stopPropagation(); openFlashcardQuiz('${subjectId}','${subjectName}','${subjectColor}','${ss.id}','${esc(ss.name)}')">🎴</button>
         <button class="btn-icon" onclick="event.stopPropagation(); confirmDelete('subsection','${subjectId}','${ss.id}')">🗑️</button>
       </div>
       <span class="subsection-toggle" id="sst-${ss.id}">▼</span>
@@ -2235,9 +2237,11 @@ document.addEventListener('click', function reqNotif() {
 //  FLASHCARD SIDEBAR
 // ══════════════════════════════════════════════════════════════
 
-let flashcards         = {};  // { subjectId: [{ id, question, answer }] }
-let fcSidebarSubjectId = null;
+let flashcards           = {};  // { "subj_ID" or "ss_ID": [cards] }
+let fcSidebarSubjectId   = null;
 let fcSidebarSubjectName = '';
+let fcSidebarSsId        = null;  // currently selected subsection (null = subject level)
+let fcSidebarSsName      = '';
 
 function toggleFlashcardSidebar() {
   const sidebar  = document.getElementById('flashcardSidebar');
@@ -2260,8 +2264,20 @@ function renderFlashcardSubjectList() {
     list.innerHTML = '<div class="fc-empty">No subjects yet. Add a subject first!</div>';
     return;
   }
-  list.innerHTML = subjects.map(s => `
-    <div class="fc-subject-item ${fcSidebarSubjectId === s.id ? 'active' : ''}"
+  list.innerHTML = subjects.map(s => {
+    const ssHTML = s.subsections.length ? s.subsections.map(ss => `
+      <div class="fc-ss-item ${fcSidebarSsId === ss.id ? 'active' : ''}"
+           id="fc-ss-${ss.id}"
+           onclick="selectFlashcardSS('${s.id}','${esc(s.name)}','${s.color}','${ss.id}','${esc(ss.name)}')">
+        <span class="fc-ss-dash">—</span>
+        <span class="fc-subject-name">${esc(ss.name)}</span>
+        <span class="fc-subject-count" id="fc-count-ss-${ss.id}">
+          ${(flashcards['ss_' + ss.id] || []).length}
+        </span>
+      </div>`).join('') : '';
+
+    return `
+    <div class="fc-subject-item ${fcSidebarSubjectId === s.id && !fcSidebarSsId ? 'active' : ''}"
          id="fc-subj-${s.id}"
          onclick="selectFlashcardSubject('${s.id}','${esc(s.name)}','${s.color}')">
       <div class="fc-subject-dot" style="background:${s.color}"></div>
@@ -2269,25 +2285,51 @@ function renderFlashcardSubjectList() {
       <span class="fc-subject-count" id="fc-count-${s.id}">
         ${(flashcards[s.id] || []).length}
       </span>
-    </div>`).join('');
+    </div>
+    ${ssHTML}`;
+  }).join('');
 }
 
 async function selectFlashcardSubject(subjectId, subjectName, color) {
   fcSidebarSubjectId   = subjectId;
   fcSidebarSubjectName = subjectName;
+  fcSidebarSsId        = null;
+  fcSidebarSsName      = '';
 
-  // Update active state in subject list
-  document.querySelectorAll('.fc-subject-item').forEach(el => el.classList.remove('active'));
+  // Update active states
+  document.querySelectorAll('.fc-subject-item, .fc-ss-item').forEach(el => el.classList.remove('active'));
   const item = document.getElementById(`fc-subj-${subjectId}`);
   if (item) item.classList.add('active');
 
-  // Show the card editor panel
+  // Show panel
   document.getElementById('fc-subject-panel').style.display = 'block';
   document.getElementById('fc-panel-title').textContent     = subjectName;
   document.getElementById('fc-panel-bar').style.background  = color;
+  document.getElementById('fc-new-question').value = '';
+  document.getElementById('fc-new-answer').value   = '';
 
-  // Load flashcards for this subject
   await loadFlashcardsForSubject(subjectId);
+}
+
+async function selectFlashcardSS(subjectId, subjectName, color, ssId, ssName) {
+  fcSidebarSubjectId   = subjectId;
+  fcSidebarSubjectName = subjectName;
+  fcSidebarSsId        = ssId;
+  fcSidebarSsName      = ssName;
+
+  // Update active states
+  document.querySelectorAll('.fc-subject-item, .fc-ss-item').forEach(el => el.classList.remove('active'));
+  const item = document.getElementById(`fc-ss-${ssId}`);
+  if (item) item.classList.add('active');
+
+  // Show panel with subsection title
+  document.getElementById('fc-subject-panel').style.display = 'block';
+  document.getElementById('fc-panel-title').textContent     = `${subjectName}  ›  ${ssName}`;
+  document.getElementById('fc-panel-bar').style.background  = color;
+  document.getElementById('fc-new-question').value = '';
+  document.getElementById('fc-new-answer').value   = '';
+
+  await loadFlashcardsForSS(ssId);
 }
 
 async function loadFlashcardsForSubject(subjectId) {
@@ -2296,14 +2338,29 @@ async function loadFlashcardsForSubject(subjectId) {
     if (!r.ok) return;
     const cards = await r.json();
     flashcards[subjectId] = cards;
-    renderFlashcardList(subjectId);
-    updateFlashcardCount(subjectId);
+    renderFlashcardList(subjectId, null);
+    const el = document.getElementById(`fc-count-${subjectId}`);
+    if (el) el.textContent = cards.length;
   } catch(e) {}
 }
 
-function renderFlashcardList(subjectId) {
+async function loadFlashcardsForSS(ssId) {
+  try {
+    const r = await fetch(`${apiBase()}/flashcards?subsection_id=${ssId}`);
+    if (!r.ok) return;
+    const cards = await r.json();
+    flashcards['ss_' + ssId] = cards;
+    renderFlashcardList(null, ssId);
+    const el = document.getElementById(`fc-count-ss-${ssId}`);
+    if (el) el.textContent = cards.length;
+  } catch(e) {}
+}
+
+function renderFlashcardList(subjectId, ssId) {
   const list  = document.getElementById('fc-cards-list');
-  const cards = flashcards[subjectId] || [];
+  const key   = ssId ? 'ss_' + ssId : subjectId;
+  const cards = flashcards[key] || [];
+  const delArg = ssId ? `null,'${ssId}'` : `'${subjectId}',null`;
   if (!cards.length) {
     list.innerHTML = '<div class="fc-empty">No flashcards yet. Add your first one below!</div>';
     return;
@@ -2315,7 +2372,7 @@ function renderFlashcardList(subjectId) {
         <div class="fc-card-q">${esc(c.question)}</div>
         <div class="fc-card-a">${esc(c.answer) || '<span style="color:var(--text3);font-style:italic">No answer yet</span>'}</div>
       </div>
-      <button class="btn-icon" onclick="deleteFlashcard('${subjectId}','${c.id}')">🗑️</button>
+      <button class="btn-icon" onclick="deleteFlashcard(${delArg},'${c.id}')">🗑️</button>
     </div>`).join('');
 }
 
@@ -2325,55 +2382,65 @@ function updateFlashcardCount(subjectId) {
 }
 
 async function addFlashcard(subjectId) {
-  const qInput = document.getElementById('fc-new-question');
-  const aInput = document.getElementById('fc-new-answer');
+  const qInput   = document.getElementById('fc-new-question');
+  const aInput   = document.getElementById('fc-new-answer');
   const question = qInput.value.trim();
   const answer   = aInput.value.trim();
   if (!question) { qInput.focus(); return; }
 
+  const ssId  = fcSidebarSsId;
+  const key   = ssId ? 'ss_' + ssId : subjectId;
+
   // Optimistic
   const tempId   = 'temp_' + Date.now();
-  const tempCard = { id: tempId, question, answer, subject_id: subjectId };
-  if (!flashcards[subjectId]) flashcards[subjectId] = [];
-  flashcards[subjectId].push(tempCard);
-  renderFlashcardList(subjectId);
-  updateFlashcardCount(subjectId);
-  qInput.value = '';
-  aInput.value = '';
-  qInput.focus();
+  const tempCard = { id: tempId, question, answer, subject_id: subjectId, subsection_id: ssId };
+  if (!flashcards[key]) flashcards[key] = [];
+  flashcards[key].push(tempCard);
+  renderFlashcardList(ssId ? null : subjectId, ssId);
+  qInput.value = ''; aInput.value = ''; qInput.focus();
   showToast('Flashcard added! ✅');
+
+  // Update count badge
+  const countEl = ssId
+    ? document.getElementById(`fc-count-ss-${ssId}`)
+    : document.getElementById(`fc-count-${subjectId}`);
+  if (countEl) countEl.textContent = flashcards[key].length;
 
   try {
     const r = await fetch(`${apiBase()}/flashcards`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subject_id: subjectId, question, answer })
+      body: JSON.stringify({ subject_id: subjectId, subsection_id: ssId || null, question, answer })
     });
     if (!r.ok) throw new Error();
     const real = await r.json();
-    const idx  = flashcards[subjectId].findIndex(c => c.id === tempId);
-    if (idx !== -1) flashcards[subjectId][idx] = real;
-    renderFlashcardList(subjectId);
+    const idx  = flashcards[key].findIndex(c => c.id === tempId);
+    if (idx !== -1) flashcards[key][idx] = real;
+    renderFlashcardList(ssId ? null : subjectId, ssId);
   } catch(e) {
-    flashcards[subjectId] = flashcards[subjectId].filter(c => c.id !== tempId);
-    renderFlashcardList(subjectId);
-    updateFlashcardCount(subjectId);
+    flashcards[key] = flashcards[key].filter(c => c.id !== tempId);
+    renderFlashcardList(ssId ? null : subjectId, ssId);
+    if (countEl) countEl.textContent = flashcards[key].length;
     showToast('❌ Failed to save flashcard. Please try again.');
   }
 }
 
-async function deleteFlashcard(subjectId, cardId) {
-  const prev    = [...(flashcards[subjectId] || [])];
-  flashcards[subjectId] = flashcards[subjectId].filter(c => c.id !== cardId);
-  renderFlashcardList(subjectId);
-  updateFlashcardCount(subjectId);
+async function deleteFlashcard(subjectId, ssId, cardId) {
+  const key  = ssId ? 'ss_' + ssId : subjectId;
+  const prev = [...(flashcards[key] || [])];
+  flashcards[key] = flashcards[key].filter(c => c.id !== cardId);
+  renderFlashcardList(ssId ? null : subjectId, ssId);
+  const countEl = ssId
+    ? document.getElementById(`fc-count-ss-${ssId}`)
+    : document.getElementById(`fc-count-${subjectId}`);
+  if (countEl) countEl.textContent = flashcards[key].length;
 
   try {
     const r = await fetch(`${apiBase()}/flashcards/${cardId}`, { method: 'DELETE' });
     if (!r.ok) throw new Error();
   } catch(e) {
-    flashcards[subjectId] = prev;
-    renderFlashcardList(subjectId);
-    updateFlashcardCount(subjectId);
+    flashcards[key] = prev;
+    renderFlashcardList(ssId ? null : subjectId, ssId);
+    if (countEl) countEl.textContent = prev.length;
     showToast('❌ Failed to delete. Please try again.');
   }
 }
@@ -2388,25 +2455,28 @@ let quizGot      = 0;
 let quizMissed   = 0;
 let quizRevealed = false;
 
-async function openFlashcardQuiz(subjectId, subjectName, color) {
+async function openFlashcardQuiz(subjectId, subjectName, color, ssId, ssName) {
+  const key   = ssId ? 'ss_' + ssId : subjectId;
+  const label = ssId ? `${subjectName}  ›  ${ssName}` : subjectName;
+
   // Load cards if not already loaded
-  if (!flashcards[subjectId]) {
-    await loadFlashcardsForSubject(subjectId);
+  if (!flashcards[key]) {
+    if (ssId) await loadFlashcardsForSS(ssId);
+    else      await loadFlashcardsForSubject(subjectId);
   }
-  const cards = flashcards[subjectId] || [];
+  const cards = flashcards[key] || [];
   if (!cards.length) {
-    showToast('🎴 No flashcards yet! Open the flashcard panel first to add some.');
+    showToast('🎴 No flashcards yet! Open the 🎴 panel to add some.');
     return;
   }
 
-  // Shuffle
   quizCards    = [...cards].sort(() => Math.random() - 0.5);
   quizIndex    = 0;
   quizGot      = 0;
   quizMissed   = 0;
   quizRevealed = false;
 
-  document.getElementById('quiz-subject-name').textContent    = subjectName;
+  document.getElementById('quiz-subject-name').textContent     = label;
   document.getElementById('quiz-subject-bar').style.background = color;
   openModal('quizModal');
   renderQuizCard();
@@ -2455,15 +2525,18 @@ function showQuizResult() {
   const emoji = pct >= 80 ? '🎉' : pct >= 50 ? '👍' : '💪';
   const msg   = pct >= 80 ? 'Excellent work!' : pct >= 50 ? 'Good progress!' : 'Keep reviewing!';
 
-  document.getElementById('quiz-progress-fill').style.width  = '100%';
-  document.getElementById('quiz-counter').textContent        = `${total} / ${total}`;
-  document.getElementById('quiz-card-area').style.display    = 'none';
-  document.getElementById('quiz-result-area').style.display  = 'block';
-  document.getElementById('quiz-result-emoji').textContent   = emoji;
-  document.getElementById('quiz-result-msg').textContent     = msg;
-  document.getElementById('quiz-result-score').textContent   = `${quizGot} / ${total} correct (${pct}%)`;
-  document.getElementById('quiz-got-final').textContent      = quizGot;
-  document.getElementById('quiz-missed-final').textContent   = quizMissed;
+  // Update header stats FIRST so last answer is reflected
+  document.getElementById('quiz-got-count').textContent    = quizGot;
+  document.getElementById('quiz-missed-count').textContent = quizMissed;
+  document.getElementById('quiz-progress-fill').style.width = '100%';
+  document.getElementById('quiz-counter').textContent       = `${total} / ${total}`;
+  document.getElementById('quiz-card-area').style.display   = 'none';
+  document.getElementById('quiz-result-area').style.display = 'block';
+  document.getElementById('quiz-result-emoji').textContent  = emoji;
+  document.getElementById('quiz-result-msg').textContent    = msg;
+  document.getElementById('quiz-result-score').textContent  = `${quizGot} / ${total} correct (${pct}%)`;
+  document.getElementById('quiz-got-final').textContent     = quizGot;
+  document.getElementById('quiz-missed-final').textContent  = quizMissed;
 }
 
 function retryQuiz() {

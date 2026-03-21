@@ -1755,23 +1755,21 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
 /* BoardPrep PH logo title */
 .logo-title {
-  font-family: 'Plus Jakarta Sans', 'Syne', sans-serif !important;
+  font-family: 'Syne', sans-serif !important;
   font-weight: 800;
-  font-size: 1.35rem !important;
-  letter-spacing: -1.5px;
+  font-size: 1.25rem !important;
+  letter-spacing: -0.5px;
 }
 
 /* Countdown days number */
 .countdown-days {
-  font-family: 'Plus Jakarta Sans', 'Syne', sans-serif !important;
+  font-family: 'Syne', sans-serif !important;
   font-weight: 800;
-  letter-spacing: -0.5px;
 }
 
 /* Countdown label text */
 .countdown-label {
-  font-family: 'Plus Jakarta Sans', sans-serif !important;
-  font-weight: 500;
+  font-family: 'DM Sans', sans-serif !important;
 }
 
 /* Quiz modal — question text */

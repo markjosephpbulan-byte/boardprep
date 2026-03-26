@@ -2243,7 +2243,7 @@ let fcSidebarSubjectName = '';
 let fcSidebarSsId        = null;  // currently selected subsection (null = subject level)
 let fcSidebarSsName      = '';
 
-function toggleFlashcardSidebar() {
+async function toggleFlashcardSidebar() {
   const sidebar  = document.getElementById('flashcardSidebar');
   const overlay  = document.getElementById('flashcardOverlay');
   const isOpen   = sidebar.classList.contains('open');
@@ -2251,10 +2251,46 @@ function toggleFlashcardSidebar() {
     sidebar.classList.remove('open');
     overlay.classList.remove('open');
   } else {
+    // Load ALL counts first, then render so badges show correct numbers immediately
+    await loadAllFlashcardCounts();
     sidebar.classList.add('open');
     overlay.classList.add('open');
     renderFlashcardSubjectList();
   }
+}
+
+async function loadAllFlashcardCounts() {
+  // Fetch all flashcards for this user in ONE request, then group by subject/subsection
+  try {
+    const r = await fetch(`${apiBase()}/flashcards`);
+    if (!r.ok) return;
+    const all = await r.json();
+
+    // Reset counts
+    subjects.forEach(s => {
+      if (!flashcards[s.id]) flashcards[s.id] = [];
+      s.subsections.forEach(ss => {
+        if (!flashcards['ss_' + ss.id]) flashcards['ss_' + ss.id] = [];
+      });
+    });
+
+    // Group by subject_id and subsection_id
+    all.forEach(card => {
+      if (card.subsection_id) {
+        const key = 'ss_' + card.subsection_id;
+        if (!flashcards[key]) flashcards[key] = [];
+        // Avoid duplicates
+        if (!flashcards[key].find(c => c.id === card.id)) {
+          flashcards[key].push(card);
+        }
+      } else if (card.subject_id) {
+        if (!flashcards[card.subject_id]) flashcards[card.subject_id] = [];
+        if (!flashcards[card.subject_id].find(c => c.id === card.id)) {
+          flashcards[card.subject_id].push(card);
+        }
+      }
+    });
+  } catch(e) {}
 }
 
 function renderFlashcardSubjectList() {
@@ -2283,7 +2319,7 @@ function renderFlashcardSubjectList() {
       <div class="fc-subject-dot" style="background:${s.color}"></div>
       <span class="fc-subject-name">${esc(s.name)}</span>
       <span class="fc-subject-count" id="fc-count-${s.id}">
-        ${(flashcards[s.id] || []).length}
+        ${(flashcards[s.id] || []).length + s.subsections.reduce((sum, ss) => sum + (flashcards['ss_' + ss.id] || []).length, 0)}
       </span>
     </div>
     ${ssHTML}`;
@@ -2360,7 +2396,9 @@ function renderFlashcardList(subjectId, ssId) {
   const list  = document.getElementById('fc-cards-list');
   const key   = ssId ? 'ss_' + ssId : subjectId;
   const cards = flashcards[key] || [];
-  const delArg = ssId ? `null,'${ssId}'` : `'${subjectId}',null`;
+  // Always pass real subjectId — use global sidebar state as fallback when null
+  const realSid = subjectId || fcSidebarSubjectId;
+  const delArg  = ssId ? `'${realSid}','${ssId}'` : `'${realSid}',null`;
   if (!cards.length) {
     list.innerHTML = '<div class="fc-empty">No flashcards yet. Add your first one below!</div>';
     return;
@@ -2378,34 +2416,73 @@ function renderFlashcardList(subjectId, ssId) {
 
 function updateFlashcardCount(subjectId) {
   const el = document.getElementById(`fc-count-${subjectId}`);
-  if (el) el.textContent = (flashcards[subjectId] || []).length;
+  if (!el) return;
+  const s = subjects.find(x => x.id === subjectId);
+  const ssTotal = s ? s.subsections.reduce((sum, ss) => sum + (flashcards['ss_' + ss.id] || []).length, 0) : 0;
+  el.textContent = (flashcards[subjectId] || []).length + ssTotal;
 }
 
-async function addFlashcard(subjectId) {
+async function addFlashcard() {
   const qInput   = document.getElementById('fc-new-question');
   const aInput   = document.getElementById('fc-new-answer');
   const question = qInput.value.trim();
   const answer   = aInput.value.trim();
   if (!question) { qInput.focus(); return; }
 
-  const ssId  = fcSidebarSsId;
-  const key   = ssId ? 'ss_' + ssId : subjectId;
+  // Always read from sidebar state — never rely on passed parameter
+  const subjectId = fcSidebarSubjectId;
+  const ssId      = fcSidebarSsId;
 
-  // Optimistic
+  if (!subjectId) {
+    showToast('❌ Please select a subject first.');
+    return;
+  }
+
+  const key = ssId ? 'ss_' + ssId : subjectId;
+
+  // ── 1. OPTIMISTIC: update state + DOM instantly ─────────────
   const tempId   = 'temp_' + Date.now();
   const tempCard = { id: tempId, question, answer, subject_id: subjectId, subsection_id: ssId };
   if (!flashcards[key]) flashcards[key] = [];
   flashcards[key].push(tempCard);
-  renderFlashcardList(ssId ? null : subjectId, ssId);
+
+  // Append card to list directly — no full re-render needed
+  const list = document.getElementById('fc-cards-list');
+  const emptyEl = list?.querySelector('.fc-empty');
+  if (emptyEl) emptyEl.remove();
+  if (list) {
+    const num     = flashcards[key].length;
+    const delArg  = ssId ? `'${subjectId}','${ssId}'` : `'${subjectId}',null`;
+    const newItem = document.createElement('div');
+    newItem.className = 'fc-card-item';
+    newItem.id        = `fcard-${tempId}`;
+    newItem.innerHTML = `
+      <div class="fc-card-num">${num}</div>
+      <div class="fc-card-content">
+        <div class="fc-card-q">${esc(question)}</div>
+        <div class="fc-card-a">${esc(answer) || '<span style="color:var(--text3);font-style:italic">No answer yet</span>'}</div>
+      </div>
+      <button class="btn-icon" onclick="deleteFlashcard(${delArg},'${tempId}')">🗑️</button>`;
+    list.appendChild(newItem);
+  }
+
+  // ── 2. Update count badges instantly ────────────────────────
+  // SS count badge
+  const ssCountEl = ssId ? document.getElementById(`fc-count-ss-${ssId}`) : null;
+  if (ssCountEl) ssCountEl.textContent = flashcards[key].length;
+  // Subject count badge — always update, even for SS cards
+  const subjKey     = subjectId;
+  const subjCountEl = document.getElementById(`fc-count-${subjectId}`);
+  // Always recompute subject total = subject-level cards + all SS cards
+  if (subjCountEl) {
+    const s = subjects.find(x => x.id === subjectId);
+    const ssSum = s ? s.subsections.reduce((sum, ss) => sum + (flashcards['ss_' + ss.id] || []).length, 0) : 0;
+    subjCountEl.textContent = (flashcards[subjectId] || []).length + ssSum;
+  }
+
   qInput.value = ''; aInput.value = ''; qInput.focus();
-  showToast('Flashcard added! ✅');
 
-  // Update count badge
-  const countEl = ssId
-    ? document.getElementById(`fc-count-ss-${ssId}`)
-    : document.getElementById(`fc-count-${subjectId}`);
-  if (countEl) countEl.textContent = flashcards[key].length;
-
+  // ── 3. Background API call ───────────────────────────────────
   try {
     const r = await fetch(`${apiBase()}/flashcards`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2413,13 +2490,42 @@ async function addFlashcard(subjectId) {
     });
     if (!r.ok) throw new Error();
     const real = await r.json();
-    const idx  = flashcards[key].findIndex(c => c.id === tempId);
+
+    // ── 4. Silently swap tempId → real ID ────────────────────
+    const idx = flashcards[key].findIndex(c => c.id === tempId);
     if (idx !== -1) flashcards[key][idx] = real;
-    renderFlashcardList(ssId ? null : subjectId, ssId);
+
+    // Also make sure subject-level cache has this card if it's a subject-level card
+    if (!ssId) {
+      if (!flashcards[subjectId]) flashcards[subjectId] = [];
+      const alreadyIn = flashcards[subjectId].find(c => c.id === real.id);
+      if (!alreadyIn) {
+        // Replace temp entry if present, otherwise push
+        const tidx = flashcards[subjectId].findIndex(c => c.id === tempId);
+        if (tidx !== -1) flashcards[subjectId][tidx] = real;
+        else flashcards[subjectId].push(real);
+      }
+    }
+
+    // Swap in DOM without re-rendering
+    const tempEl = document.getElementById(`fcard-${tempId}`);
+    if (tempEl) {
+      tempEl.id = `fcard-${real.id}`;
+      const delBtn = tempEl.querySelector('.btn-icon');
+      const delArg = ssId ? `'${subjectId}','${ssId}'` : `'${subjectId}',null`;
+      if (delBtn) delBtn.setAttribute('onclick', `deleteFlashcard(${delArg},'${real.id}')`);
+    }
+
   } catch(e) {
+    // ── 5. Rollback on failure ───────────────────────────────
     flashcards[key] = flashcards[key].filter(c => c.id !== tempId);
-    renderFlashcardList(ssId ? null : subjectId, ssId);
-    if (countEl) countEl.textContent = flashcards[key].length;
+    document.getElementById(`fcard-${tempId}`)?.remove();
+    if (flashcards[key].length === 0) {
+      const list2 = document.getElementById('fc-cards-list');
+      if (list2) list2.innerHTML = '<div class="fc-empty">No flashcards yet. Add your first one below!</div>';
+    }
+    if (ssCountEl) ssCountEl.textContent = flashcards[key].length;
+    if (subjCountEl) subjCountEl.textContent = Math.max(0, parseInt(subjCountEl.textContent || 0) - 1);
     showToast('❌ Failed to save flashcard. Please try again.');
   }
 }
@@ -2427,20 +2533,62 @@ async function addFlashcard(subjectId) {
 async function deleteFlashcard(subjectId, ssId, cardId) {
   const key  = ssId ? 'ss_' + ssId : subjectId;
   const prev = [...(flashcards[key] || [])];
-  flashcards[key] = flashcards[key].filter(c => c.id !== cardId);
-  renderFlashcardList(ssId ? null : subjectId, ssId);
-  const countEl = ssId
-    ? document.getElementById(`fc-count-ss-${ssId}`)
-    : document.getElementById(`fc-count-${subjectId}`);
-  if (countEl) countEl.textContent = flashcards[key].length;
 
+  // Find the card BEFORE removing — need its subsection_id if deleting from subject view
+  const card = flashcards[key].find(c => c.id === cardId);
+  const cardSsId = ssId || card?.subsection_id || null;
+
+  // 1. Remove from state instantly
+  flashcards[key] = flashcards[key].filter(c => c.id !== cardId);
+
+  // If deleting from subject view and card belongs to a subsection,
+  // also remove it from the SS cache so counts stay in sync
+  if (!ssId && cardSsId) {
+    const ssKey = 'ss_' + cardSsId;
+    if (flashcards[ssKey]) {
+      flashcards[ssKey] = flashcards[ssKey].filter(c => c.id !== cardId);
+      // Update SS badge immediately
+      const ssCountEl2 = document.getElementById(`fc-count-ss-${cardSsId}`);
+      if (ssCountEl2) ssCountEl2.textContent = flashcards[ssKey].length;
+    }
+  }
+
+  // 2. Remove card from DOM instantly
+  document.getElementById(`fcard-${cardId}`)?.remove();
+  if (flashcards[key].length === 0) {
+    const list = document.getElementById('fc-cards-list');
+    if (list) list.innerHTML = '<div class="fc-empty">No flashcards yet. Add your first one below!</div>';
+  }
+
+  // 3. Update SS count badge (when deleting from SS view)
+  const ssCountEl = ssId ? document.getElementById(`fc-count-ss-${ssId}`) : null;
+  if (ssCountEl) ssCountEl.textContent = flashcards[key].length;
+
+  // 4. Update parent subject count badge
+  const subjCountEl = document.getElementById(`fc-count-${subjectId}`);
+  if (subjCountEl) {
+    const current = parseInt(subjCountEl.textContent || '0');
+    subjCountEl.textContent = Math.max(0, current - 1);
+  }
+
+  // 5. Background API call
   try {
     const r = await fetch(`${apiBase()}/flashcards/${cardId}`, { method: 'DELETE' });
     if (!r.ok) throw new Error();
   } catch(e) {
+    // Rollback everything
     flashcards[key] = prev;
+    if (!ssId && cardSsId) {
+      const ssKey = 'ss_' + cardSsId;
+      if (flashcards[ssKey] && !flashcards[ssKey].find(c => c.id === cardId)) {
+        flashcards[ssKey].push(card);
+      }
+      const ssCountEl2 = document.getElementById(`fc-count-ss-${cardSsId}`);
+      if (ssCountEl2) ssCountEl2.textContent = (flashcards['ss_' + cardSsId] || []).length;
+    }
     renderFlashcardList(ssId ? null : subjectId, ssId);
-    if (countEl) countEl.textContent = prev.length;
+    if (ssCountEl) ssCountEl.textContent = prev.length;
+    if (subjCountEl) subjCountEl.textContent = parseInt(subjCountEl.textContent || '0') + 1;
     showToast('❌ Failed to delete. Please try again.');
   }
 }
@@ -2460,11 +2608,35 @@ async function openFlashcardQuiz(subjectId, subjectName, color, ssId, ssName) {
   const label = ssId ? `${subjectName}  ›  ${ssName}` : subjectName;
 
   // Load cards if not already loaded
-  if (!flashcards[key]) {
-    if (ssId) await loadFlashcardsForSS(ssId);
-    else      await loadFlashcardsForSubject(subjectId);
+  if (ssId) {
+    // SS quiz — load just this subsection
+    if (!flashcards[key]) await loadFlashcardsForSS(ssId);
+  } else {
+    // Subject quiz — load subject-level AND all subsection cards
+    if (!flashcards[subjectId]) await loadFlashcardsForSubject(subjectId);
+    const s = subjects.find(x => x.id === subjectId);
+    if (s) {
+      for (const ss of s.subsections) {
+        if (!flashcards['ss_' + ss.id]) await loadFlashcardsForSS(ss.id);
+      }
+    }
   }
-  const cards = flashcards[key] || [];
+
+  // Collect all cards for this quiz
+  let cards = [];
+  if (ssId) {
+    cards = flashcards[key] || [];
+  } else {
+    // Subject quiz = subject-level cards + all subsection cards combined
+    const s = subjects.find(x => x.id === subjectId);
+    cards = [...(flashcards[subjectId] || [])];
+    if (s) {
+      s.subsections.forEach(ss => {
+        cards = cards.concat(flashcards['ss_' + ss.id] || []);
+      });
+    }
+  }
+
   if (!cards.length) {
     showToast('🎴 No flashcards yet! Open the 🎴 panel to add some.');
     return;
@@ -2547,5 +2719,323 @@ function retryQuiz() {
   quizRevealed = false;
   renderQuizCard();
 }
+
+// ══════════════════════════════════════════════════════════════
+//  PDF → FLASHCARD GENERATION
+// ══════════════════════════════════════════════════════════════
+
+let pdfGeneratedCards = [];  // cards returned from Gemini
+let pdfSelectedCards  = [];  // which ones the user checked
+let pdfFile           = null;
+
+function openPdfGenerateModal() {
+  if (!fcSidebarSubjectId) {
+    showToast('❌ Please select a subject first.');
+    return;
+  }
+
+  // Reset state safely
+  pdfFile = null;
+  pdfGeneratedCards = [];
+  pdfSelectedCards  = [];
+
+  const safeSet = (id, prop, val) => { const el = document.getElementById(id); if (el) el[prop] = val; };
+  const safeStyle = (id, prop, val) => { const el = document.getElementById(id); if (el) el.style[prop] = val; };
+
+  safeSet('pdfFileInput', 'value', '');
+  safeStyle('pdfFileChosen', 'display', 'none');
+  safeStyle('pdfDropZone',   'display', 'block');
+  safeSet('pdfCardCount',  'value', '10');
+  safeSet('pdfCountLabel', 'textContent', '10');
+  safeStyle('pdfError', 'display', 'none');
+  safeSet('pdfError', 'textContent', '');
+  safeSet('pdfGenerateBtn', 'disabled', false);
+  safeSet('pdfGenerateBtn', 'textContent', '✨ Generate Flashcards');
+
+  // Show subject name in subtitle
+  const label = fcSidebarSsId
+    ? `${fcSidebarSubjectName} › ${fcSidebarSsName}`
+    : fcSidebarSubjectName;
+  safeSet('pdfModalSubject', 'textContent', label);
+
+  showPdfStep(1);
+
+  // Open modal — must use high z-index so it appears above the sidebar
+  const modal = document.getElementById('pdfGenerateModal');
+  if (modal) {
+    modal.style.zIndex = '500';  // above sidebar (200) and existing modals (300)
+    modal.classList.add('open');
+    modal.style.display = 'flex';
+  }
+}
+
+function closePdfModal() {
+  const modal = document.getElementById('pdfGenerateModal');
+  if (modal) {
+    modal.classList.remove('open');
+    modal.style.display = 'none';
+  }
+  pdfFile = null;
+  pdfGeneratedCards = [];
+}
+
+function showPdfStep(step) {
+  [1, 2, 3].forEach(n => {
+    const el = document.getElementById(`pdfStep${n}`);
+    if (el) el.style.display = (n === step) ? 'block' : 'none';
+  });
+}
+
+function handlePdfDrop(event) {
+  event.preventDefault();
+  document.getElementById('pdfDropZone').classList.remove('drag-over');
+  const file = event.dataTransfer.files[0];
+  if (file) setPdfFile(file);
+}
+
+function handlePdfSelect(event) {
+  const file = event.target.files[0];
+  if (file) setPdfFile(file);
+}
+
+function setPdfFile(file) {
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    showPdfError('Please upload a PDF file.');
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    showPdfError('File is too large. Maximum size is 10MB.');
+    return;
+  }
+  pdfFile = file;
+  document.getElementById('pdfFileName').textContent    = file.name;
+  document.getElementById('pdfFileChosen').style.display = 'flex';
+  document.getElementById('pdfDropZone').style.display   = 'none';
+  document.getElementById('pdfError').style.display      = 'none';
+}
+
+function clearPdfFile() {
+  pdfFile = null;
+  document.getElementById('pdfFileInput').value          = '';
+  document.getElementById('pdfFileChosen').style.display = 'none';
+  document.getElementById('pdfDropZone').style.display   = 'block';
+}
+
+function showPdfError(msg) {
+  const el = document.getElementById('pdfError');
+  el.textContent    = msg;
+  el.style.display  = 'block';
+}
+
+async function startPdfGeneration() {
+  if (!pdfFile) {
+    showPdfError('Please upload a PDF file first.');
+    return;
+  }
+  if (!fcSidebarSubjectId) {
+    showPdfError('No subject selected. Please close and select a subject.');
+    return;
+  }
+
+  const maxCards     = parseInt(document.getElementById('pdfCardCount').value) || 10;
+  const subjectName  = fcSidebarSubjectName || 'this subject';
+
+  // ── Show loading step ───────────────────────────────────────
+  showPdfStep(2);
+  animatePdfLoading();
+
+  try {
+    const formData = new FormData();
+    formData.append('pdf',          pdfFile);
+    formData.append('max_cards',    maxCards);
+    formData.append('subject_name', subjectName);
+
+    const r = await fetch(`${apiBase()}/flashcards/generate-from-pdf`, {
+      method: 'POST',
+      body: formData   // NO Content-Type header — browser sets multipart boundary
+    });
+
+    const data = await r.json();
+
+    if (!r.ok) {
+      showPdfStep(1);
+      showPdfError(data.error || 'Generation failed. Please try again.');
+      return;
+    }
+
+    pdfGeneratedCards = data.flashcards || [];
+    pdfSelectedCards  = pdfGeneratedCards.map((_, i) => i);  // all selected by default
+
+    // ── Show preview step ─────────────────────────────────────
+    showPdfStep(3);
+    document.getElementById('pdfPreviewCount').textContent =
+      `${pdfGeneratedCards.length} flashcard${pdfGeneratedCards.length !== 1 ? 's' : ''} generated`;
+    renderPdfPreview();
+
+  } catch(e) {
+    showPdfStep(1);
+    showPdfError('Connection error. Please check your internet and try again.');
+  }
+}
+
+function animatePdfLoading() {
+  const messages = [
+    'Reading your PDF…',
+    'Extracting key concepts…',
+    'Generating questions…',
+    'Crafting answers…',
+    'Finalizing flashcards…'
+  ];
+  let i = 0;
+  const textEl = document.getElementById('pdfLoadingText');
+  const barEl  = document.getElementById('pdfLoadingBar');
+  if (textEl) textEl.textContent = messages[0];
+  if (barEl)  barEl.style.width  = '10%';
+
+  const interval = setInterval(() => {
+    i++;
+    if (i >= messages.length) { clearInterval(interval); return; }
+    const pct = Math.round(((i + 1) / messages.length) * 85);
+    if (textEl) textEl.textContent = messages[i];
+    if (barEl)  barEl.style.width  = pct + '%';
+  }, 2500);
+}
+
+function renderPdfPreview() {
+  const list = document.getElementById('pdfPreviewList');
+  if (!list) return;
+
+  list.innerHTML = pdfGeneratedCards.map((card, i) => {
+    const checked = pdfSelectedCards.includes(i);
+    return `
+    <div class="pdf-preview-card ${checked ? 'selected' : ''}" id="pdf-card-${i}"
+         onclick="togglePdfCard(${i})">
+      <div class="pdf-preview-check">
+        <div class="pdf-check-box ${checked ? 'checked' : ''}">
+          ${checked ? '✓' : ''}
+        </div>
+      </div>
+      <div class="pdf-preview-content">
+        <div class="pdf-preview-q">${esc(card.question)}</div>
+        <div class="pdf-preview-a">${esc(card.answer)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  updatePdfSelectedCount();
+}
+
+function togglePdfCard(index) {
+  const pos = pdfSelectedCards.indexOf(index);
+  if (pos !== -1) {
+    pdfSelectedCards.splice(pos, 1);
+  } else {
+    pdfSelectedCards.push(index);
+  }
+
+  // Update card UI
+  const card  = document.getElementById(`pdf-card-${index}`);
+  const check = card?.querySelector('.pdf-check-box');
+  const selected = pdfSelectedCards.includes(index);
+  if (card)  card.classList.toggle('selected', selected);
+  if (check) { check.classList.toggle('checked', selected); check.textContent = selected ? '✓' : ''; }
+
+  updatePdfSelectedCount();
+}
+
+function pdfSelectAll(select) {
+  pdfSelectedCards = select ? pdfGeneratedCards.map((_, i) => i) : [];
+  renderPdfPreview();
+}
+
+function updatePdfSelectedCount() {
+  const el = document.getElementById('pdfSelectedCount');
+  if (el) el.textContent = `${pdfSelectedCards.length} selected`;
+  const saveBtn = document.getElementById('pdfSaveBtn');
+  if (saveBtn) saveBtn.disabled = pdfSelectedCards.length === 0;
+}
+
+async function savePdfFlashcards() {
+  if (!pdfSelectedCards.length) {
+    showToast('Select at least one flashcard to save.');
+    return;
+  }
+
+  const saveBtn = document.getElementById('pdfSaveBtn');
+  if (saveBtn) { saveBtn.textContent = 'Saving…'; saveBtn.disabled = true; }
+
+  const cardsToSave = pdfSelectedCards
+    .sort((a, b) => a - b)
+    .map(i => pdfGeneratedCards[i]);
+
+  let saved = 0;
+  let failed = 0;
+
+  for (const card of cardsToSave) {
+    try {
+      // Optimistically add to local cache immediately
+      const subjectId = fcSidebarSubjectId;
+      const ssId      = fcSidebarSsId;
+      const key       = ssId ? 'ss_' + ssId : subjectId;
+      const tempId    = 'temp_pdf_' + Date.now() + '_' + saved;
+      const tempCard  = { id: tempId, question: card.question, answer: card.answer,
+                          subject_id: subjectId, subsection_id: ssId };
+      if (!flashcards[key]) flashcards[key] = [];
+      flashcards[key].push(tempCard);
+
+      // Save to server
+      const r = await fetch(`${apiBase()}/flashcards`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject_id:    subjectId,
+          subsection_id: ssId || null,
+          question:      card.question,
+          answer:        card.answer
+        })
+      });
+
+      if (r.ok) {
+        const real = await r.json();
+        const idx  = flashcards[key].findIndex(c => c.id === tempId);
+        if (idx !== -1) flashcards[key][idx] = real;
+        saved++;
+      } else {
+        // Remove temp on failure
+        flashcards[key] = flashcards[key].filter(c => c.id !== tempId);
+        failed++;
+      }
+    } catch(e) {
+      failed++;
+    }
+  }
+
+  closePdfModal();
+
+  // Refresh card list if this subject/ss is currently open
+  if (fcSidebarSubjectId) {
+    const key = fcSidebarSsId ? 'ss_' + fcSidebarSsId : fcSidebarSubjectId;
+    renderFlashcardList(fcSidebarSsId ? null : fcSidebarSubjectId, fcSidebarSsId);
+    updateFlashcardCount(fcSidebarSubjectId);
+    // Update subject count badge
+    const subjCountEl = document.getElementById(`fc-count-${fcSidebarSubjectId}`);
+    if (subjCountEl) {
+      const s = subjects.find(x => x.id === fcSidebarSubjectId);
+      const ssSum = s ? s.subsections.reduce((sum, ss) => sum + (flashcards['ss_' + ss.id] || []).length, 0) : 0;
+      subjCountEl.textContent = (flashcards[fcSidebarSubjectId] || []).length + ssSum;
+    }
+    // Update SS count badge if applicable
+    if (fcSidebarSsId) {
+      const ssCountEl = document.getElementById(`fc-count-ss-${fcSidebarSsId}`);
+      if (ssCountEl) ssCountEl.textContent = (flashcards['ss_' + fcSidebarSsId] || []).length;
+    }
+  }
+
+  if (failed === 0) {
+    showToast(`✅ ${saved} flashcard${saved !== 1 ? 's' : ''} saved successfully!`);
+  } else {
+    showToast(`✅ ${saved} saved, ❌ ${failed} failed. Please try again for the failed ones.`);
+  }
+}
+
 
 boot();

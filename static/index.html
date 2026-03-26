@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BoardPrep PH</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
+<link rel="icon" href="/static/favicon.png" type="image/png" sizes="32x32"/>
+<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png"/>
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png"/>
+<meta name="apple-mobile-web-app-title" content="BoardPrep PH"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#0d1117"/>
+<link rel="manifest" href="/static/manifest.json"/>
 <!-- Preconnect to external domains — starts TCP handshake early -->
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -558,11 +567,18 @@
           <textarea class="fc-textarea" id="fc-new-answer"
                     placeholder="Answer…"
                     rows="3"
-                    onkeydown="if(event.key==='Enter' && event.ctrlKey) addFlashcard(fcSidebarSubjectId)"></textarea>
+                    onkeydown="if(event.key==='Enter' && event.ctrlKey) addFlashcard()"></textarea>
           <button class="btn-primary btn-full"
-                  onclick="addFlashcard(fcSidebarSubjectId)">Save Flashcard</button>
+                  onclick="addFlashcard()">Save Flashcard</button>
           <div style="font-size:0.72rem;color:var(--text3);text-align:center;margin-top:4px">
             Ctrl + Enter to save quickly
+          </div>
+          <div class="fc-or-divider"><span>or</span></div>
+          <button class="btn-pdf-generate" onclick="openPdfGenerateModal()">
+            📄 Generate from PDF
+          </button>
+          <div style="font-size:0.72rem;color:var(--text3);text-align:center">
+            Upload a PDF — AI generates flashcards for you ✨
           </div>
         </div>
       </div>
@@ -627,6 +643,103 @@
       <div class="quiz-result-actions">
         <button class="btn-ghost"   onclick="closeModal('quizModal')">Done</button>
         <button class="btn-primary" onclick="retryQuiz()">🔄 Retry</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ PDF GENERATE MODAL ════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="pdfGenerateModal">
+  <div class="modal modal-pdf-gen">
+
+    <!-- Step 1: Upload -->
+    <div id="pdfStep1">
+      <div class="modal-header">
+        <div>
+          <h3>📄 Generate Flashcards from PDF</h3>
+          <div style="font-size:0.78rem;color:var(--text3);margin-top:2px" id="pdfModalSubject"></div>
+        </div>
+        <button class="modal-close" onclick="closePdfModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="pdf-upload-area" id="pdfDropZone"
+             ondragover="event.preventDefault(); this.classList.add('drag-over')"
+             ondragleave="this.classList.remove('drag-over')"
+             ondrop="handlePdfDrop(event)">
+          <div class="pdf-upload-icon">📄</div>
+          <div class="pdf-upload-text">Drop your PDF here</div>
+          <div class="pdf-upload-sub">or click to browse</div>
+          <input type="file" id="pdfFileInput" accept=".pdf" style="display:none"
+                 onchange="handlePdfSelect(event)"/>
+          <button class="btn-ghost btn-sm" style="margin-top:8px"
+                  onclick="document.getElementById('pdfFileInput').click()">Browse PDF</button>
+        </div>
+        <div class="pdf-file-chosen" id="pdfFileChosen" style="display:none">
+          <span class="pdf-file-icon">📄</span>
+          <span id="pdfFileName">file.pdf</span>
+          <button onclick="clearPdfFile()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:0.8rem;margin-left:auto">✕</button>
+        </div>
+
+        <label style="margin-top:4px">Number of flashcards to generate</label>
+        <div class="pdf-count-row">
+          <input type="range" id="pdfCardCount" min="3" max="20" value="10"
+                 oninput="document.getElementById('pdfCountLabel').textContent=this.value"/>
+          <span class="pdf-count-label" id="pdfCountLabel">10</span>
+        </div>
+
+        <div class="pdf-info-box">
+          💡 Works best with text-based PDFs (lecture notes, reviewers, textbook chapters).
+          Scanned images won't work. Max 10MB.
+        </div>
+
+        <div class="auth-error" id="pdfError" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closePdfModal()">Cancel</button>
+        <button class="btn-primary" id="pdfGenerateBtn" onclick="startPdfGeneration()">
+          ✨ Generate Flashcards
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: Loading -->
+    <div id="pdfStep2" style="display:none">
+      <div class="modal-header">
+        <h3>✨ Generating Flashcards…</h3>
+      </div>
+      <div class="pdf-loading-body">
+        <div class="pdf-spinner"></div>
+        <div class="pdf-loading-text" id="pdfLoadingText">Reading your PDF…</div>
+        <div class="pdf-loading-sub">This usually takes 5–15 seconds</div>
+        <div class="pdf-loading-bar-wrap">
+          <div class="pdf-loading-bar" id="pdfLoadingBar"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Preview & Select -->
+    <div id="pdfStep3" style="display:none">
+      <div class="modal-header">
+        <div>
+          <h3>✅ Flashcards Generated!</h3>
+          <div style="font-size:0.78rem;color:var(--text3);margin-top:2px" id="pdfPreviewCount"></div>
+        </div>
+        <button class="modal-close" onclick="closePdfModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding-top:0.75rem">
+        <div class="pdf-select-actions">
+          <button class="btn-ghost btn-sm" onclick="pdfSelectAll(true)">Select All</button>
+          <button class="btn-ghost btn-sm" onclick="pdfSelectAll(false)">Deselect All</button>
+          <span class="pdf-selected-count" id="pdfSelectedCount">10 selected</span>
+        </div>
+        <div class="pdf-preview-list" id="pdfPreviewList"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closePdfModal()">Cancel</button>
+        <button class="btn-primary" id="pdfSaveBtn" onclick="savePdfFlashcards()">
+          💾 Save Selected Flashcards
+        </button>
       </div>
     </div>
 

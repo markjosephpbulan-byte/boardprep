@@ -1604,10 +1604,13 @@ def get_flashcards(user_id):
 @owner_required
 def add_flashcard(user_id):
     body = request.json or {}
-    subject_id = body.get("subject_id", "").strip()
-    subsection_id = body.get("subsection_id", "").strip() or None
-    question = body.get("question", "").strip()
-    answer = body.get("answer", "").strip()
+    subject_id = (body.get("subject_id") or "").strip()
+    raw_ss = body.get("subsection_id")
+    subsection_id = (
+        raw_ss.strip() if isinstance(raw_ss, str) and raw_ss.strip() else None
+    )
+    question = (body.get("question") or "").strip()
+    answer = (body.get("answer") or "").strip()
     if not question:
         return jsonify({"error": "Question is required"}), 400
     if not subject_id:
@@ -1652,10 +1655,167 @@ def delete_flashcard(user_id, card_id):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CONFIG + FRONTEND
+#  PDF → FLASHCARD GENERATION
 # ══════════════════════════════════════════════════════════════════════════════
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+
+@app.route("/api/profiles/<user_id>/generate-pdf-flashcards", methods=["POST"])
+@rate_limit(5, 300, "pdf_generate")
+@owner_required
+def generate_flashcards_from_pdf(user_id):
+    """
+    Upload a PDF → extract text → call Gemini → return Q&A pairs.
+    PDF is processed entirely in memory and NEVER stored in the database.
+    """
+    import re as _re
+    import io as _io
+
+    if not GEMINI_API_KEY:
+        return jsonify({
+            "error": "AI generation is not configured on this server. Please set GEMINI_API_KEY."
+        }), 503
+
+    # ── 1. Validate file upload ───────────────────────────────────────────────
+    if "pdf" not in request.files:
+        return jsonify({"error": "No PDF file uploaded."}), 400
+
+    pdf_file = request.files["pdf"]
+    if not pdf_file.filename or not pdf_file.filename.lower().endswith(".pdf"):
+        return jsonify({"error": "Please upload a valid PDF file."}), 400
+
+    raw_bytes = pdf_file.read()
+    if len(raw_bytes) == 0:
+        return jsonify({"error": "The uploaded PDF is empty."}), 400
+    if len(raw_bytes) > 10 * 1024 * 1024:  # 10MB max
+        return jsonify({"error": "PDF is too large. Maximum size is 10MB."}), 400
+
+    # ── 2. Get request params ─────────────────────────────────────────────────
+    max_cards = min(int(request.form.get("max_cards", 10)), 20)  # cap at 20
+    subject_name = request.form.get("subject_name", "this subject")
+
+    # ── 3. Extract text from PDF using pdfminer (pure Python, no system deps) ─
+    try:
+        from pdfminer.high_level import extract_text as pdf_extract_text
+
+        pdf_text = pdf_extract_text(_io.BytesIO(raw_bytes))
+        pdf_text = pdf_text.strip()
+    except ImportError:
+        # Fallback: try pypdf
+        try:
+            import pypdf
+
+            reader = pypdf.PdfReader(_io.BytesIO(raw_bytes))
+            pdf_text = "\n".join(
+                page.extract_text() or "" for page in reader.pages
+            ).strip()
+        except Exception as e2:
+            return jsonify({
+                "error": f"Could not read PDF. Please ensure it contains selectable text (not a scanned image). Error: {str(e2)[:100]}"
+            }), 400
+    except Exception as e:
+        return jsonify({"error": f"Could not read PDF: {str(e)[:100]}"}), 400
+
+    if not pdf_text or len(pdf_text) < 50:
+        return jsonify({
+            "error": "Could not extract readable text from this PDF. Make sure it is not a scanned image."
+        }), 400
+
+    # Trim to 3000 chars (~750 tokens) to save quota
+    if len(pdf_text) > 3000:
+        pdf_text = pdf_text[:3000]
+
+    prompt = (
+        f"Generate {max_cards} board exam flashcard Q&A pairs from this study material "
+        f'about "{subject_name}". Filipino board exam style. '
+        f"Output ONLY a JSON object like this: "
+        f'{{"flashcards":[{{"question":"...","answer":"..."}}]}} '
+        f"Study material: {pdf_text}"
+    )
+
+    # ── Call Gemini ───────────────────────────────────────────────────────────
+    if not GEMINI_API_KEY:
+        return jsonify({
+            "error": "AI generation is not configured. Please set GEMINI_API_KEY."
+        }), 503
+
+    raw_text = None
+    try:
+        resp = http_requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}",
+            headers={"Content-Type": "application/json"},
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"maxOutputTokens": 1500, "temperature": 0.4},
+            },
+            timeout=45,
+        )
+        if resp.ok:
+            data = resp.json()
+            raw_text = (
+                data
+                .get("candidates", [{}])[0]
+                .get("content", {})
+                .get("parts", [{}])[0]
+                .get("text", "")
+            ).strip()
+        else:
+            try:
+                err_msg = (
+                    resp.json().get("error", {}).get("message", str(resp.status_code))
+                )
+            except Exception:
+                err_msg = str(resp.status_code)
+            return jsonify({"error": f"AI service error: {err_msg[:150]}"}), 502
+    except Exception as e:
+        return jsonify({
+            "error": f"AI service timeout. Please try again. ({str(e)[:80]})"
+        }), 503
+
+    if not raw_text:
+        return jsonify({
+            "error": "AI returned an empty response. Please try again."
+        }), 500
+
+    # ── 5. Parse response ─────────────────────────────────────────────────────
+    try:
+        raw_text = _re.sub(r"^```(?:json)?\s*", "", raw_text, flags=_re.MULTILINE)
+        raw_text = _re.sub(r"\s*```$", "", raw_text, flags=_re.MULTILINE)
+        raw_text = raw_text.strip()
+
+        # Find JSON object in response
+        json_match = _re.search(r"\{.*\}", raw_text, _re.DOTALL)
+        if json_match:
+            raw_text = json_match.group(0)
+
+        parsed = json.loads(raw_text)
+        cards = parsed.get("flashcards", [])
+
+        if not cards or not isinstance(cards, list):
+            raise ValueError("No flashcards in response")
+
+        result = []
+        for c in cards:
+            q = str(c.get("question", "")).strip()
+            a = str(c.get("answer", "")).strip()
+            if q and a:
+                result.append({"question": q, "answer": a})
+
+        if not result:
+            raise ValueError("All cards were empty")
+
+        return jsonify({"flashcards": result, "count": len(result)})
+
+    except (json.JSONDecodeError, ValueError, KeyError, IndexError) as e:
+        return jsonify({
+            "error": f"Could not parse AI response. Please try again. ({str(e)[:80]})"
+        }), 500
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  CONFIG + FRONTEND
+# ══════════════════════════════════════════════════════════════════════════════
 
 
 @app.route("/api/config", methods=["GET"])
@@ -1677,6 +1837,11 @@ def admin_page():
 @app.route("/privacy")
 def privacy_page():
     return send_from_directory("static", "privacy.html")
+
+
+@app.route("/static/manifest.json")
+def manifest():
+    return send_from_directory("static", "manifest.json")
 
 
 @app.route("/<path:path>")

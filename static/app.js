@@ -1946,7 +1946,7 @@ async function fetchMotivation() {
       const prompt = 'Write a short motivational message (3-4 sentences, under 70 words) for ' + name + ', a Filipino board exam reviewer. Subjects: ' + subNames + '. Progress: ' + pct + '% done. Use one natural Tagalog word. No bullet points. End with one short powerful sentence.';
 
       const resp = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + geminiKey,
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=' + geminiKey,
         { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 150, temperature: 0.9 } }) }
       );
@@ -2850,7 +2850,7 @@ async function startPdfGeneration() {
     formData.append('max_cards',    maxCards);
     formData.append('subject_name', subjectName);
 
-    const r = await fetch(`${apiBase()}/flashcards/generate-from-pdf`, {
+    const r = await fetch(`${apiBase()}/generate-pdf-flashcards`, {
       method: 'POST',
       body: formData   // NO Content-Type header — browser sets multipart boundary
     });

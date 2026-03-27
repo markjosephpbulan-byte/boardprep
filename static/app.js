@@ -2843,8 +2843,8 @@ function setPdfFile(file) {
     showPdfError('Please upload a PDF file.');
     return;
   }
-  if (file.size > 15 * 1024 * 1024) {
-    showPdfError('File is too large. Maximum size is 15MB.');
+  if (file.size > 20 * 1024 * 1024) {
+    showPdfError('File is too large. Maximum size is 20MB.');
     return;
   }
   pdfFile = file;

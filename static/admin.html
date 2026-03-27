@@ -261,6 +261,40 @@
   }
   .btn-set-basic:hover { background: rgba(150,150,150,0.15); border-color: var(--text3); }
   /* Plan buttons */
+  /* ── Toolbar ── */
+  .table-toolbar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .toolbar-search-wrap {
+    flex: 1; min-width: 200px;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg3); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); padding: 0.55rem 0.85rem;
+  }
+  .toolbar-search-icon { font-size: 0.85rem; color: var(--text3); flex-shrink: 0; }
+  .toolbar-search {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.88rem;
+  }
+  .toolbar-search::placeholder { color: var(--text3); }
+  .toolbar-filters { display: flex; gap: 5px; flex-wrap: wrap; }
+  .filter-btn {
+    padding: 5px 12px; font-size: 0.75rem; font-weight: 600;
+    border-radius: 99px; cursor: pointer; transition: all 0.15s;
+    background: transparent; border: 1px solid var(--border2);
+    color: var(--text2); font-family: 'DM Sans', sans-serif;
+  }
+  .filter-btn:hover { border-color: var(--text2); color: var(--text); }
+  .filter-btn.active { background: var(--gold); border-color: var(--gold); color: #0d1117; }
+  .toolbar-sort {
+    background: var(--bg3); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); padding: 0.5rem 0.75rem;
+    color: var(--text2); font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem; outline: none; cursor: pointer;
+  }
+  .toolbar-sort:focus { border-color: var(--gold); }
+
   .btn-plan-pro {
     padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
     border-radius: 6px; transition: all 0.15s;
@@ -396,6 +430,31 @@
       <span class="user-count-badge" id="userCountBadge">0 users</span>
     </div>
 
+    <!-- Search + Filter + Sort bar -->
+    <div class="table-toolbar">
+      <div class="toolbar-search-wrap">
+        <span class="toolbar-search-icon">🔍</span>
+        <input type="text" id="userSearchInput" class="toolbar-search"
+               placeholder="Search by name, username, or email…"
+               oninput="filterAndRenderUsers()"/>
+      </div>
+      <div class="toolbar-filters">
+        <button class="filter-btn active" data-filter="all"     onclick="setFilter('all',this)">All</button>
+        <button class="filter-btn"        data-filter="pro"     onclick="setFilter('pro',this)">⭐ Pro</button>
+        <button class="filter-btn"        data-filter="basic"   onclick="setFilter('basic',this)">📦 Basic</button>
+        <button class="filter-btn"        data-filter="trial"   onclick="setFilter('trial',this)">🎉 Trial</button>
+        <button class="filter-btn"        data-filter="paused"  onclick="setFilter('paused',this)">⏸ Paused</button>
+      </div>
+      <select class="toolbar-sort" onchange="setSortAndRender(this.value)">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="name">Name A–Z</option>
+        <option value="progress">Progress ↓</option>
+        <option value="subjects">Subjects ↓</option>
+        <option value="expiry">Expiry soonest</option>
+      </select>
+    </div>
+
     <div class="table-wrap">
       <table class="users-table">
         <thead>
@@ -417,14 +476,35 @@
   </main>
 </div>
 
-<!-- ══ CONFIRM DELETE ═══════════════════════════════════════════════════════ -->
+<!-- ══ CONFIRM DELETE — Step 1: Confirm ═══════════════════════════════════ -->
 <div class="confirm-overlay" id="confirmOverlay">
   <div class="confirm-box">
     <h3>🗑️ Delete Profile</h3>
-    <p id="confirmText">Are you sure you want to delete this profile? This will permanently remove all their subjects, topics, and notes.</p>
+    <p id="confirmText">Are you sure you want to delete this profile?</p>
     <div class="confirm-actions">
       <button class="btn-ghost-sm" onclick="closeConfirm()">Cancel</button>
-      <button class="btn-danger-sm" id="confirmDeleteBtn">Yes, Delete</button>
+      <button class="btn-danger-sm" id="confirmDeleteBtn">Yes, Send OTP</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ OTP VERIFY — Step 2: Enter OTP ═════════════════════════════════════ -->
+<div class="confirm-overlay" id="otpOverlay">
+  <div class="confirm-box">
+    <h3>🔐 Verify Deletion</h3>
+    <p style="font-size:0.85rem;color:var(--text2);margin-bottom:1rem">
+      An OTP was sent to <strong style="color:var(--text)">markjosephpbulan@gmail.com</strong>.<br/>
+      Enter it below to confirm deletion.
+    </p>
+    <input type="text" id="otpInput" maxlength="6" inputmode="numeric"
+           placeholder="Enter 6-digit OTP"
+           style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:0.7rem 0.9rem;color:var(--text);font-size:1.2rem;letter-spacing:0.3rem;text-align:center;outline:none;margin-bottom:8px;font-family:'DM Sans',sans-serif"
+           oninput="this.value=this.value.replace(/\D/g,'')"
+           onkeydown="if(event.key==='Enter') verifyOtpAndDelete()"/>
+    <div class="error-msg" id="otpError"></div>
+    <div class="confirm-actions">
+      <button class="btn-ghost-sm" onclick="closeOtp()">Cancel</button>
+      <button class="btn-danger-sm" id="otpVerifyBtn" onclick="verifyOtpAndDelete()">🗑️ Delete Now</button>
     </div>
   </div>
 </div>
@@ -433,7 +513,11 @@
 
 <script>
 let pendingDeleteId = null;
-let adminPassword = '';  // stored in memory after login
+let pendingDeleteName = null;
+let adminPassword = '';
+let allUsers = [];          // full user list cached
+let currentFilter = 'all';
+let currentSort = 'newest';
 
 // Helper — every admin API call includes the password as a header
 function adminFetch(url, options = {}) {
@@ -489,132 +573,226 @@ function showPanel() {
 // ── Load Users ───────────────────────────────────────────────────────────────
 async function loadUsers() {
   const tbody = document.getElementById('usersTableBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-users">Loading…</td></tr>';
   try {
     const r = await adminFetch('/api/admin/users');
-    if (!r.ok) { tbody.innerHTML = '<tr><td colspan="5" class="empty-users">Failed to load users.</td></tr>'; return; }
-    const users = await r.json();
+    if (!r.ok) { tbody.innerHTML = '<tr><td colspan="6" class="empty-users">Failed to load users.</td></tr>'; return; }
+    allUsers = await r.json();
 
-    // Stats (existing cards)
-    document.getElementById('statUsers').textContent    = users.length;
-    document.getElementById('statSubjects').textContent = users.reduce((a, u) => a + u.subject_count, 0);
-    const avgPct = users.length === 0 ? 0 : Math.round(users.reduce((a, u) => a + u.progress_pct, 0) / users.length);
+    // Update stat cards
+    document.getElementById('statUsers').textContent    = allUsers.length;
+    document.getElementById('statSubjects').textContent = allUsers.reduce((a, u) => a + u.subject_count, 0);
+    const avgPct = allUsers.length === 0 ? 0 : Math.round(allUsers.reduce((a, u) => a + u.progress_pct, 0) / allUsers.length);
     document.getElementById('statAvgProgress').textContent = avgPct + '%';
-    document.getElementById('userCountBadge').textContent  = users.length + ' user' + (users.length !== 1 ? 's' : '');
 
-    // Load analytics (new cards + funnel + growth) in parallel
     loadAnalytics();
-
-    if (users.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty-users">No profiles created yet.</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = users.map(u => {
-      const avatarHTML = u.avatar
-        ? `<img src="${u.avatar}" alt="">`
-        : `<span>${esc(u.display_name[0].toUpperCase())}</span>`;
-      return `
-      <tr id="row-${u.id}" class="${u.is_paused ? 'row-paused' : ''}">
-        <td>
-          <div class="user-avatar-cell">
-            <div class="user-avatar-sm">${avatarHTML}</div>
-            <div>
-              <div class="user-display-name">
-                ${esc(u.display_name)}
-                ${u.is_paused ? '<span class="paused-badge">⏸ Paused</span>' : ''}
-                ${u.is_pro ? '<span class="pro-badge-admin">⭐ Pro</span>' : '<span class="basic-badge-admin">Basic</span>'}
-                ${u.plan_expires ? '<span class="expiry-badge-admin" title="Plan expires">⏰ ' + formatDate(u.plan_expires) + '</span>' : ''}
-              </div>
-              <div class="user-username">@${esc(u.username)}</div>
-            </div>
-          </div>
-        </td>
-        <td>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="color:var(--text2);font-size:0.8rem">${esc(u.email || '—')}</span>
-            ${u.email ? `<button onclick="copyEmail('${esc(u.email)}')" title="Copy email"
-              style="background:transparent;border:none;cursor:pointer;color:var(--text3);font-size:0.75rem;padding:2px 5px;border-radius:4px;transition:all 0.15s"
-              onmouseover="this.style.color='var(--text)';this.style.background='var(--border)'"
-              onmouseout="this.style.color='var(--text3)';this.style.background='transparent'">📋</button>` : ''}
-          </div>
-        </td>
-        <td>${u.subject_count}</td>
-        <td>
-          <div class="progress-inline">
-            <div class="bar-mini-wrap"><div class="bar-mini-fill" style="width:${u.progress_pct}%"></div></div>
-            <span class="pct-mini">${u.progress_pct}%</span>
-          </div>
-        </td>
-        <td style="color:var(--text3)">${formatDate(u.created_at)}</td>
-        <td>
-          <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
-            <button class="btn-plan-pro" title="Pro for 4 months (₱100)"
-                    onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_4mo')">
-              ⭐ Pro 4mo
-            </button>
-            <button class="btn-plan-basic" title="Basic 1yr (₱70) + 1mo Pro bonus"
-                    onclick="setPlan('${u.id}','${esc(u.display_name)}','basic_1yr')">
-              📦 Basic 1yr
-            </button>
-            <button class="btn-plan-revoke" title="Set to Basic (no expiry)"
-                    onclick="setPlan('${u.id}','${esc(u.display_name)}','revoke')">
-              🔒 Set Basic
-            </button>
-            <button class="${u.is_paused ? 'btn-unpause' : 'btn-pause'}"
-                    id="pause-btn-${u.id}"
-                    onclick="togglePause('${u.id}','${esc(u.display_name)}',${u.is_paused})">
-              ${u.is_paused ? '▶ Unpause' : '⏸ Pause'}
-            </button>
-            <button class="btn-danger-sm" onclick="confirmDelete('${u.id}','${esc(u.display_name)}')">
-              🗑️ Delete
-            </button>
-          </div>
-        </td>
-      </tr>`;
-    }).join('');
+    filterAndRenderUsers();
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-users">Error loading users.</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-users">Error loading users.</td></tr>';
   }
 }
 
-// ── Delete ────────────────────────────────────────────────────────────────────
+function renderUsersTable(users) {
+  const tbody = document.getElementById('usersTableBody');
+  if (!tbody) return;
+  if (!users.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-users">No users found.</td></tr>'; return; }
+  tbody.innerHTML = users.map(u => {
+    const avatarHTML = u.avatar
+      ? `<img src="${u.avatar}" alt="">`
+      : `<span>${esc(u.display_name[0].toUpperCase())}</span>`;
+    return `
+    <tr id="row-${u.id}" class="${u.is_paused ? 'row-paused' : ''}">
+      <td>
+        <div class="user-avatar-cell">
+          <div class="user-avatar-sm">${avatarHTML}</div>
+          <div>
+            <div class="user-display-name">
+              ${esc(u.display_name)}
+              ${u.is_paused ? '<span class="paused-badge">⏸ Paused</span>' : ''}
+              ${u.is_pro ? '<span class="pro-badge-admin">⭐ Pro</span>' : '<span class="basic-badge-admin">Basic</span>'}
+              ${u.plan_expires ? '<span class="expiry-badge-admin" title="Plan expires">⏰ ' + formatDate(u.plan_expires) + '</span>' : ''}
+            </div>
+            <div class="user-username">@${esc(u.username)}</div>
+          </div>
+        </div>
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="color:var(--text2);font-size:0.8rem">${esc(u.email || '—')}</span>
+          ${u.email ? `<button onclick="copyEmail('${esc(u.email)}')" title="Copy email"
+            style="background:transparent;border:none;cursor:pointer;color:var(--text3);font-size:0.75rem;padding:2px 5px;border-radius:4px;transition:all 0.15s"
+            onmouseover="this.style.color='var(--text)';this.style.background='var(--border)'"
+            onmouseout="this.style.color='var(--text3)';this.style.background='transparent'">📋</button>` : ''}
+        </div>
+      </td>
+      <td>${u.subject_count}</td>
+      <td>
+        <div class="progress-inline">
+          <div class="bar-mini-wrap"><div class="bar-mini-fill" style="width:${u.progress_pct}%"></div></div>
+          <span class="pct-mini">${u.progress_pct}%</span>
+        </div>
+      </td>
+      <td style="color:var(--text3)">${formatDate(u.created_at)}</td>
+      <td>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+          <button class="btn-plan-pro" title="Pro 4 months (₱100)"
+                  onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_4mo')">
+            ⭐ Pro 4mo
+          </button>
+          <button class="btn-plan-basic" title="Basic 1yr (₱70) + 1mo Pro bonus"
+                  onclick="setPlan('${u.id}','${esc(u.display_name)}','basic_1yr')">
+            📦 Basic 1yr
+          </button>
+          <button class="btn-plan-revoke" title="Set to Basic (no expiry)"
+                  onclick="setPlan('${u.id}','${esc(u.display_name)}','revoke')">
+            🔒 Set Basic
+          </button>
+          <button class="${u.is_paused ? 'btn-unpause' : 'btn-pause'}"
+                  id="pause-btn-${u.id}"
+                  onclick="togglePause('${u.id}','${esc(u.display_name)}',${u.is_paused})">
+            ${u.is_paused ? '▶ Unpause' : '⏸ Pause'}
+          </button>
+          <button class="btn-danger-sm" onclick="confirmDelete('${u.id}','${esc(u.display_name)}')">
+            🗑️ Delete
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Search / Filter / Sort ────────────────────────────────────────────────────
+function setFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  filterAndRenderUsers();
+}
+
+function setSortAndRender(sort) {
+  currentSort = sort;
+  filterAndRenderUsers();
+}
+
+function filterAndRenderUsers() {
+  const q = (document.getElementById('userSearchInput')?.value || '').toLowerCase().trim();
+
+  let filtered = allUsers.filter(u => {
+    // Search
+    const matchSearch = !q ||
+      u.display_name.toLowerCase().includes(q) ||
+      u.username.toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q);
+
+    // Filter
+    let matchFilter = true;
+    if (currentFilter === 'pro')    matchFilter = u.is_pro && !u.is_paused;
+    if (currentFilter === 'basic')  matchFilter = !u.is_pro && !u.is_paused;
+    if (currentFilter === 'trial')  matchFilter = u.plan === 'trial' && !u.is_paused;
+    if (currentFilter === 'paused') matchFilter = u.is_paused;
+
+    return matchSearch && matchFilter;
+  });
+
+  // Sort
+  filtered.sort((a, b) => {
+    if (currentSort === 'newest')   return new Date(b.created_at) - new Date(a.created_at);
+    if (currentSort === 'oldest')   return new Date(a.created_at) - new Date(b.created_at);
+    if (currentSort === 'name')     return a.display_name.localeCompare(b.display_name);
+    if (currentSort === 'progress') return b.progress_pct - a.progress_pct;
+    if (currentSort === 'subjects') return b.subject_count - a.subject_count;
+    if (currentSort === 'expiry') {
+      const ae = a.plan_expires ? new Date(a.plan_expires) : new Date('9999');
+      const be = b.plan_expires ? new Date(b.plan_expires) : new Date('9999');
+      return ae - be;
+    }
+    return 0;
+  });
+
+  renderUsersTable(filtered);
+  document.getElementById('userCountBadge').textContent =
+    `${filtered.length} of ${allUsers.length} users`;
+}
+
+// ── Delete — Step 1: Confirm ──────────────────────────────────────────────────
 function confirmDelete(userId, displayName) {
-  pendingDeleteId = userId;
+  pendingDeleteId   = userId;
+  pendingDeleteName = displayName;
   document.getElementById('confirmText').textContent =
-    `Are you sure you want to delete "${displayName}"? This will permanently remove all their subjects, topics, and notes. This cannot be undone.`;
+    `Delete "${displayName}"? This permanently removes all their data. An OTP will be sent to your email to confirm.`;
   document.getElementById('confirmOverlay').classList.add('open');
-  document.getElementById('confirmDeleteBtn').onclick = executeDelete;
+  document.getElementById('confirmDeleteBtn').onclick = requestDeleteOtp;
 }
 
 function closeConfirm() {
   document.getElementById('confirmOverlay').classList.remove('open');
-  pendingDeleteId = null;
 }
 
-async function executeDelete() {
-  if (!pendingDeleteId) return;
-
-  // Save id FIRST before closeConfirm() nulls it out
-  const id = pendingDeleteId;
+// ── Delete — Step 2: Request OTP ─────────────────────────────────────────────
+async function requestDeleteOtp() {
   closeConfirm();
-
-  const btn = document.querySelector(`#row-${id} .btn-danger-sm`);
-  if (btn) { btn.textContent = 'Deleting…'; btn.disabled = true; }
+  document.getElementById('otpInput').value = '';
+  document.getElementById('otpError').textContent = '';
+  document.getElementById('otpVerifyBtn').textContent = 'Sending OTP…';
+  document.getElementById('otpVerifyBtn').disabled = true;
+  document.getElementById('otpOverlay').classList.add('open');
 
   try {
-    const r = await adminFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+    const r = await adminFetch('/api/admin/request-delete-otp', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) {
+      document.getElementById('otpError').textContent = d.error || 'Failed to send OTP.';
+    } else {
+      showToast('📧 OTP sent to your email!');
+    }
+  } catch(e) {
+    document.getElementById('otpError').textContent = 'Connection error. Try again.';
+  } finally {
+    document.getElementById('otpVerifyBtn').textContent = '🗑️ Delete Now';
+    document.getElementById('otpVerifyBtn').disabled = false;
+    document.getElementById('otpInput').focus();
+  }
+}
+
+function closeOtp() {
+  document.getElementById('otpOverlay').classList.remove('open');
+  pendingDeleteId   = null;
+  pendingDeleteName = null;
+}
+
+// ── Delete — Step 3: Verify OTP and delete ────────────────────────────────────
+async function verifyOtpAndDelete() {
+  const otp = document.getElementById('otpInput').value.trim();
+  const errEl = document.getElementById('otpError');
+  errEl.textContent = '';
+
+  if (!otp || otp.length < 6) { errEl.textContent = 'Please enter the 6-digit OTP.'; return; }
+  if (!pendingDeleteId) { closeOtp(); return; }
+
+  const btn = document.getElementById('otpVerifyBtn');
+  btn.textContent = 'Verifying…'; btn.disabled = true;
+
+  try {
+    const r = await adminFetch(`/api/admin/users/${pendingDeleteId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ otp })
+    });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) {
-      showToast(`❌ Failed (${r.status}): ${d.error || 'Try again.'}`);
-      if (btn) { btn.textContent = '🗑️ Delete'; btn.disabled = false; }
+      errEl.textContent = d.error || 'Incorrect OTP. Try again.';
+      btn.textContent = '🗑️ Delete Now'; btn.disabled = false;
       return;
     }
+    const id = pendingDeleteId;
+    closeOtp();
     document.getElementById(`row-${id}`)?.remove();
+    allUsers = allUsers.filter(u => u.id !== id);
+    filterAndRenderUsers();
     showToast('✅ Profile deleted successfully.');
-    loadUsers();
   } catch(e) {
-    showToast('❌ Connection error: ' + e.message);
-    if (btn) { btn.textContent = '🗑️ Delete'; btn.disabled = false; }
+    errEl.textContent = 'Connection error: ' + e.message;
+    btn.textContent = '🗑️ Delete Now'; btn.disabled = false;
   }
 }
 

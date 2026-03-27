@@ -665,6 +665,7 @@ async function enterTracker() {
   // Fetch subjects + notes then render (used after login/register)
   try { updateHeaderProfile(); } catch(e) {}
   try { updateCountdown(); }     catch(e) {}
+  try { updateProUI(); }         catch(e) {}
   showView('tracker');
   try { showPomodoroFab(); }     catch(e) {}
   try {
@@ -684,6 +685,7 @@ async function enterTracker() {
     try { await Promise.all([loadSubjects(), loadNotes()]); } catch(e2) {}
   }
   try { fetchMotivation(); } catch(e) {}
+  try { updateProUI(); }     catch(e) {}
 }
 
 function updateHeaderProfile() {

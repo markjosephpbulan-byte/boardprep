@@ -2149,7 +2149,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .trial-banner strong { color: var(--gold); }
 
 /* Free banner */
-.free-banner {
+.basic-banner {
   display: flex; align-items: center; justify-content: center;
   background: rgba(150,150,150,0.06);
   border-bottom: 1px solid var(--border);
@@ -2157,9 +2157,9 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   font-size: 0.82rem; padding: 8px 1rem;
   text-align: center; gap: 6px;
 }
-.free-banner strong { color: var(--text); }
-.free-banner a { color: var(--gold); font-weight: 700; text-decoration: none; }
-.free-banner a:hover { text-decoration: underline; }
+.basic-banner strong { color: var(--text); }
+.basic-banner a { color: var(--gold); font-weight: 700; text-decoration: none; }
+.basic-banner a:hover { text-decoration: underline; }
 
 /* PDF upgrade box (shown to free users in flashcard sidebar) */
 .pdf-upgrade-box {

@@ -240,12 +240,12 @@
     border: 1px solid rgba(245,200,66,0.3);
     border-radius: 99px; padding: 1px 7px; margin-left: 5px;
   }
-  .free-badge-admin {
+  .basic-badge-admin {
     display: inline-block; font-size: 0.65rem; font-weight: 700;
     background: rgba(150,150,150,0.1); color: var(--text3);
     border: 1px solid var(--border); border-radius: 99px; padding: 1px 7px; margin-left: 5px;
   }
-  /* Set Pro / Set Free buttons */
+  /* Set Pro / Set Basic buttons */
   .btn-grant-pro {
     padding: 5px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
     border-radius: 6px; transition: all 0.15s;
@@ -253,13 +253,42 @@
     border: 1px solid rgba(245,200,66,0.35);
   }
   .btn-grant-pro:hover { background: rgba(245,200,66,0.22); border-color: var(--gold); }
-  .btn-revoke-pro {
+  .btn-set-basic {
     padding: 5px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
     border-radius: 6px; transition: all 0.15s;
     background: rgba(150,150,150,0.08); color: var(--text2);
     border: 1px solid var(--border);
   }
-  .btn-revoke-pro:hover { background: rgba(150,150,150,0.15); border-color: var(--text3); }
+  .btn-set-basic:hover { background: rgba(150,150,150,0.15); border-color: var(--text3); }
+  /* Plan buttons */
+  .btn-plan-pro {
+    padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+    border-radius: 6px; transition: all 0.15s;
+    background: rgba(245,200,66,0.12); color: var(--gold);
+    border: 1px solid rgba(245,200,66,0.35);
+  }
+  .btn-plan-pro:hover { background: rgba(245,200,66,0.25); }
+  .btn-plan-basic {
+    padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+    border-radius: 6px; transition: all 0.15s;
+    background: rgba(62,207,142,0.1); color: var(--green);
+    border: 1px solid rgba(62,207,142,0.3);
+  }
+  .btn-plan-basic:hover { background: rgba(62,207,142,0.2); }
+  .btn-plan-revoke {
+    padding: 4px 9px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+    border-radius: 6px; transition: all 0.15s;
+    background: rgba(150,150,150,0.08); color: var(--text2);
+    border: 1px solid var(--border);
+  }
+  .btn-plan-revoke:hover { background: rgba(150,150,150,0.15); }
+  /* Expiry badge */
+  .expiry-badge-admin {
+    display: inline-block; font-size: 0.62rem; font-weight: 600;
+    background: rgba(249,115,22,0.1); color: #f97316;
+    border: 1px solid rgba(249,115,22,0.3);
+    border-radius: 99px; padding: 1px 7px; margin-left: 5px;
+  }
   .row-paused td { opacity: 0.6; }
 
   @media (max-width: 640px) {
@@ -493,7 +522,8 @@ async function loadUsers() {
               <div class="user-display-name">
                 ${esc(u.display_name)}
                 ${u.is_paused ? '<span class="paused-badge">⏸ Paused</span>' : ''}
-                ${u.is_pro ? '<span class="pro-badge-admin">⭐ Pro</span>' : '<span class="free-badge-admin">Free</span>'}
+                ${u.is_pro ? '<span class="pro-badge-admin">⭐ Pro</span>' : '<span class="basic-badge-admin">Basic</span>'}
+                ${u.plan_expires ? '<span class="expiry-badge-admin" title="Plan expires">⏰ ' + formatDate(u.plan_expires) + '</span>' : ''}
               </div>
               <div class="user-username">@${esc(u.username)}</div>
             </div>
@@ -517,11 +547,18 @@ async function loadUsers() {
         </td>
         <td style="color:var(--text3)">${formatDate(u.created_at)}</td>
         <td>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <button class="${u.is_pro ? 'btn-revoke-pro' : 'btn-grant-pro'}"
-                    id="pro-btn-${u.id}"
-                    onclick="togglePro('${u.id}','${esc(u.display_name)}',${u.is_pro})">
-              ${u.is_pro ? '🔒 Set Free' : '⭐ Set Pro'}
+          <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+            <button class="btn-plan-pro" title="Pro for 4 months (₱100)"
+                    onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_4mo')">
+              ⭐ Pro 4mo
+            </button>
+            <button class="btn-plan-basic" title="Basic 1yr (₱70) + 1mo Pro bonus"
+                    onclick="setPlan('${u.id}','${esc(u.display_name)}','basic_1yr')">
+              📦 Basic 1yr
+            </button>
+            <button class="btn-plan-revoke" title="Set to Basic (no expiry)"
+                    onclick="setPlan('${u.id}','${esc(u.display_name)}','revoke')">
+              🔒 Set Basic
             </button>
             <button class="${u.is_paused ? 'btn-unpause' : 'btn-pause'}"
                     id="pause-btn-${u.id}"
@@ -613,33 +650,50 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-// ── Toggle Pro ────────────────────────────────────────────────────────────────
-async function togglePro(userId, displayName, currentlyPro) {
-  const action = currentlyPro ? 'remove Pro from' : 'grant Pro to';
-  if (!confirm(`Are you sure you want to ${action} ${displayName}?`)) return;
+// ── Set Plan ──────────────────────────────────────────────────────────────────
+const PLAN_LABELS = {
+  'pro_4mo':   'Pro for 4 months (₱100)',
+  'basic_1yr': 'Basic 1 year (₱70) + 1 month Pro bonus',
+  'revoke':    'Basic plan (no expiry)',
+  'trial':     'Trial reset (7 days)',
+};
+
+async function setPlan(userId, displayName, plan) {
+  const label = PLAN_LABELS[plan] || plan;
+  if (!confirm(`Set "${displayName}" → ${label}?`)) return;
   try {
-    const r = await fetch(`/api/admin/users/${userId}/toggle-pro`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPassword }
+    const r = await fetch(`/api/admin/users/${userId}/set-plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPassword },
+      body: JSON.stringify({ plan })
     });
     const data = await r.json();
     if (!r.ok) { alert(data.error || 'Failed'); return; }
-    // Update button
-    const btn = document.getElementById(`pro-btn-${userId}`);
-    if (btn) {
-      btn.className   = data.is_pro ? 'btn-revoke-pro' : 'btn-grant-pro';
-      btn.textContent = data.is_pro ? '🔒 Set Free' : '⭐ Set Pro';
-      btn.onclick = () => togglePro(userId, displayName, data.is_pro);
-    }
-    // Update badge in name cell
+    // Update pro badge
     const row = document.getElementById(`row-${userId}`);
     if (row) {
-      const oldBadge = row.querySelector('.pro-badge-admin, .free-badge-admin');
-      if (oldBadge) {
-        oldBadge.className   = data.is_pro ? 'pro-badge-admin' : 'free-badge-admin';
-        oldBadge.textContent = data.is_pro ? '⭐ Pro' : 'Free';
+      const badge = row.querySelector('.pro-badge-admin, .basic-badge-admin');
+      if (badge) {
+        badge.className   = data.is_pro ? 'pro-badge-admin' : 'basic-badge-admin';
+        badge.textContent = data.is_pro ? '⭐ Pro' : 'Basic';
       }
+      // Update or add expiry badge
+      let exBadge = row.querySelector('.expiry-badge-admin');
+      if (data.plan_expires) {
+        const d = new Date(data.plan_expires).toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'numeric'});
+        if (exBadge) { exBadge.textContent = '⏰ ' + d; }
+        else {
+          const nameDiv = row.querySelector('.user-display-name');
+          if (nameDiv) {
+            const span = document.createElement('span');
+            span.className = 'expiry-badge-admin';
+            span.textContent = '⏰ ' + d;
+            nameDiv.appendChild(span);
+          }
+        }
+      } else if (exBadge) { exBadge.remove(); }
     }
-    showToast(data.is_pro ? `⭐ ${displayName} is now Pro!` : `${displayName} set to Free plan.`);
+    showToast(data.msg || '✅ Plan updated!');
   } catch(e) {
     alert('Connection error. Please try again.');
   }

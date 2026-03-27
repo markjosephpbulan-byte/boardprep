@@ -647,7 +647,7 @@ function updateProUI() {
 
   // Trial banner — show if pro AND account is less than 7 days old
   const trialBanner = document.getElementById('trialBanner');
-  const freeBanner  = document.getElementById('freeBanner');
+  const freeBanner  = document.getElementById('basicBanner');
   if (trialBanner && freeBanner) {
     const isNew = created && ((Date.now() - created.getTime()) < 7 * 24 * 60 * 60 * 1000);
     trialBanner.style.display = (pro && isNew) ? 'flex' : 'none';

@@ -127,6 +127,8 @@ def init_db():
             exam_date     TEXT,
             is_paused     BOOLEAN DEFAULT FALSE,
             is_pro        BOOLEAN DEFAULT TRUE,
+            plan          TEXT DEFAULT 'trial',
+            plan_expires  TIMESTAMPTZ,
             pro_since     TIMESTAMPTZ DEFAULT NOW(),
             created_at    TIMESTAMPTZ DEFAULT NOW()
         )
@@ -174,6 +176,21 @@ def init_db():
             done       BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    db_execute("""
+        CREATE TABLE IF NOT EXISTS banned_emails (
+            email         TEXT PRIMARY KEY,
+            banned_until  TIMESTAMPTZ NOT NULL,
+            reason        TEXT DEFAULT 'repeated account abuse',
+            created_at    TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    db_execute("""
+        CREATE TABLE IF NOT EXISTS deleted_accounts (
+            id         SERIAL PRIMARY KEY,
+            email      TEXT NOT NULL,
+            deleted_at TIMESTAMPTZ DEFAULT NOW()
         )
     """)
     db_execute("""
@@ -256,8 +273,32 @@ try:
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro BOOLEAN DEFAULT TRUE"
             )
             db_execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'trial'"
+            )
+            db_execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires TIMESTAMPTZ"
+            )
+            db_execute(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_since TIMESTAMPTZ DEFAULT NOW()"
             )
+        except Exception:
+            pass
+        try:
+            db_execute("""
+                CREATE TABLE IF NOT EXISTS banned_emails (
+                    email TEXT PRIMARY KEY,
+                    banned_until TIMESTAMPTZ NOT NULL,
+                    reason TEXT DEFAULT 'repeated account abuse',
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            db_execute("""
+                CREATE TABLE IF NOT EXISTS deleted_accounts (
+                    id SERIAL PRIMARY KEY,
+                    email TEXT NOT NULL,
+                    deleted_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
         except Exception:
             pass
         try:
@@ -292,6 +333,67 @@ except Exception as e:
     if DATABASE_URL:
         safe_url = DATABASE_URL.split("@")[1] if "@" in DATABASE_URL else "unknown"
         print(f"[DB] Tried connecting to: ...@{safe_url}")
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PLAN EXPIRY + EMAIL BAN SYSTEM
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def check_and_pause_expired_plans():
+    """Pause all users whose plan has expired. Called on every login."""
+    try:
+        db_execute("""
+            UPDATE users
+            SET is_paused = TRUE, is_pro = FALSE, plan = 'expired'
+            WHERE plan_expires IS NOT NULL
+              AND plan_expires < NOW()
+              AND is_paused = FALSE
+        """)
+    except Exception as e:
+        print(f"[AutoPause] Error: {e}")
+
+
+def is_email_banned(email):
+    """Return ban record if email is banned, else None."""
+    try:
+        return db_execute(
+            "SELECT banned_until FROM banned_emails WHERE LOWER(email)=LOWER(%s) AND banned_until > NOW()",
+            (email,),
+            fetch="one",
+        )
+    except Exception:
+        return None
+
+
+def record_account_deletion(email):
+    """Track deletions. Ban email for 2 months after 3 deletions in 60 days."""
+    try:
+        db_execute(
+            "INSERT INTO deleted_accounts (email, deleted_at) VALUES (LOWER(%s), NOW())",
+            (email,),
+        )
+        count = db_execute(
+            """
+            SELECT COUNT(*) as c FROM deleted_accounts
+            WHERE LOWER(email)=LOWER(%s)
+              AND deleted_at > NOW() - INTERVAL '60 days'
+        """,
+            (email,),
+            fetch="one",
+        )
+        if count and int(count.get("c", 0)) >= 3:
+            db_execute(
+                """
+                INSERT INTO banned_emails (email, banned_until, reason)
+                VALUES (LOWER(%s), NOW() + INTERVAL '2 months', '3+ account deletions in 60 days')
+                ON CONFLICT (email) DO UPDATE SET banned_until = NOW() + INTERVAL '2 months'
+            """,
+                (email,),
+            )
+            print(f"[Ban] {email} banned for 2 months")
+    except Exception as e:
+        print(f"[RecordDeletion] Error: {e}")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  RATE LIMITER
@@ -507,6 +609,10 @@ def safe_user(u):
         "avatar": u.get("avatar"),
         "exam_date": u.get("exam_date"),
         "is_pro": bool(u.get("is_pro", True)),
+        "plan": u.get("plan", "trial"),
+        "plan_expires": str(u.get("plan_expires", ""))
+        if u.get("plan_expires")
+        else None,
         "pro_since": str(u.get("pro_since", "")),
         "created_at": str(u.get("created_at", "")),
     }
@@ -695,7 +801,7 @@ def register():
 
     uid = str(uuid.uuid4())
     db_execute(
-        "INSERT INTO users (id, username, display_name, email, password_hash) VALUES (%s,%s,%s,%s,%s)",
+        "INSERT INTO users (id, username, display_name, email, password_hash, plan, plan_expires) VALUES (%s,%s,%s,%s,%s,'trial', NOW() + INTERVAL '7 days')",
         (
             uid,
             pending["username"],
@@ -714,6 +820,9 @@ def register():
 @app.route("/api/auth/login", methods=["POST"])
 @rate_limit(10, 300, "login")
 def login():
+    # Auto-pause expired plans on every login attempt
+    check_and_pause_expired_plans()
+
     body = request.json or {}
     identifier = (body.get("identifier") or body.get("username") or "").strip()
     password = (body.get("password") or "").strip()
@@ -1059,7 +1168,9 @@ def delete_own_account(user_id):
     password = body.get("password", "")
     if not check_password_hash(user["password_hash"], password):
         return jsonify({"error": "Incorrect password"}), 401
+    email = user.get("email", "")
     db_execute("DELETE FROM users WHERE id=%s", (user_id,))
+    record_account_deletion(email)
     invalidate_profiles_cache()
     session.clear()
     return jsonify({"ok": True})
@@ -1567,9 +1678,101 @@ def admin_pause_user(user_id):
     return jsonify({"ok": True, "is_paused": new_state})
 
 
+@app.route("/api/admin/users/<user_id>/set-plan", methods=["POST"])
+@admin_required
+def admin_set_plan(user_id):
+    """
+    Set a user's plan. Plans:
+      - 'pro_4mo'    → Pro for 4 months (₱100)
+      - 'basic_1yr'  → Basic for 1 year (₱70) + Pro bonus for 1 month
+      - 'basic'      → Basic (no expiry, manually managed)
+      - 'trial'      → Reset to trial (7 days from now)
+      - 'revoke'     → Remove Pro, set Basic immediately
+    """
+    user = get_user_by_id(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    body = request.json or {}
+    plan = body.get("plan", "")
+
+    if plan == "pro_4mo":
+        db_execute(
+            """
+            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
+            plan='pro', plan_expires=NOW() + INTERVAL '4 months'
+            WHERE id=%s
+        """,
+            (user_id,),
+        )
+        msg = "Pro plan set for 4 months ✅"
+
+    elif plan == "basic_1yr":
+        # Basic for 1 year, but Pro bonus for first month
+        db_execute(
+            """
+            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
+            plan='basic_pro_bonus', plan_expires=NOW() + INTERVAL '1 month'
+            WHERE id=%s
+        """,
+            (user_id,),
+        )
+        # Schedule basic after 1 month is handled by auto-pause + re-set
+        msg = "Basic (1yr) + 1 month Pro bonus set ✅"
+
+    elif plan == "basic":
+        db_execute(
+            """
+            UPDATE users SET is_pro=FALSE, is_paused=FALSE,
+            plan='basic', plan_expires=NOW() + INTERVAL '1 year'
+            WHERE id=%s
+        """,
+            (user_id,),
+        )
+        msg = "Basic plan set for 1 year ✅"
+
+    elif plan == "revoke":
+        db_execute(
+            """
+            UPDATE users SET is_pro=FALSE, is_paused=FALSE,
+            plan='basic', plan_expires=NULL
+            WHERE id=%s
+        """,
+            (user_id,),
+        )
+        msg = "Reverted to Basic (no expiry) ✅"
+
+    elif plan == "trial":
+        db_execute(
+            """
+            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
+            plan='trial', plan_expires=NOW() + INTERVAL '7 days'
+            WHERE id=%s
+        """,
+            (user_id,),
+        )
+        msg = "Trial reset for 7 days ✅"
+
+    else:
+        return jsonify({"error": "Invalid plan"}), 400
+
+    invalidate_user_cache(user_id)
+    user = get_user_by_id(user_id)
+    return jsonify({
+        "ok": True,
+        "msg": msg,
+        "is_pro": bool(user.get("is_pro")),
+        "plan": user.get("plan"),
+        "plan_expires": str(user.get("plan_expires", ""))
+        if user.get("plan_expires")
+        else None,
+    })
+
+
 @app.route("/api/admin/users/<user_id>/toggle-pro", methods=["POST"])
 @admin_required
 def admin_toggle_pro(user_id):
+    """Kept for backward compat — just toggles is_pro"""
     user = get_user_by_id(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -1577,6 +1780,29 @@ def admin_toggle_pro(user_id):
     db_execute("UPDATE users SET is_pro=%s WHERE id=%s", (new_state, user_id))
     invalidate_user_cache(user_id)
     return jsonify({"ok": True, "is_pro": new_state})
+
+
+@app.route("/api/admin/banned-emails", methods=["GET"])
+@admin_required
+def admin_banned_emails():
+    bans = (
+        db_execute(
+            "SELECT email, banned_until, reason, created_at FROM banned_emails WHERE banned_until > NOW() ORDER BY created_at DESC",
+            fetch="all",
+        )
+        or []
+    )
+    for b in bans:
+        b["banned_until"] = str(b["banned_until"])
+        b["created_at"] = str(b["created_at"])
+    return jsonify(bans)
+
+
+@app.route("/api/admin/banned-emails/<path:email>", methods=["DELETE"])
+@admin_required
+def admin_unban_email(email):
+    db_execute("DELETE FROM banned_emails WHERE LOWER(email)=LOWER(%s)", (email,))
+    return jsonify({"ok": True})
 
 
 @app.route("/api/admin/users/<user_id>", methods=["DELETE"])

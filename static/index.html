@@ -64,7 +64,7 @@
       </p>
       <div class="landing-cta-row">
         <button class="btn-primary btn-cta" onclick="showView('register')">
-          🚀 Start Free — 7 Days Trial
+          🚀 Start Pro Trial — 7 Days Free
         </button>
         <button class="btn-ghost btn-cta" onclick="showView('login-standalone')">
           Already have a profile? Log in
@@ -212,7 +212,8 @@
       <h2 style="color:var(--text)">Account Paused</h2>
       <p class="auth-sub" style="margin-bottom:1.5rem">
         Your account has been temporarily paused.<br/>
-        This may be because your Pro trial has ended or there's a pending payment.
+        This may be because your 7-day trial has ended or your subscription needs renewal.<br/>
+        <span style="font-size:0.82rem;color:var(--text3)">Basic plan: ₱70/year &nbsp;·&nbsp; Pro plan: ₱100 / 4 months</span>
       </p>
       <div class="paused-contact-box">
         <div class="paused-contact-label">To reactivate your account, contact us:</div>
@@ -377,12 +378,13 @@
 
   <!-- Trial banner -->
   <div class="trial-banner" id="trialBanner" style="display:none">
-    🎉 You're on <strong>Pro Trial</strong> — enjoy all Pro features free for 7 days!
+    🎉 You're on <strong>Pro Trial</strong> — enjoy all Pro features for 7 days! After trial: Basic ₱70/year or Pro ₱100 / 4 months.
+    <a href="https://www.facebook.com/boardpreph/" target="_blank" style="color:var(--gold);font-weight:700;margin-left:4px;text-decoration:none">Contact us →</a>
   </div>
-  <!-- Free user banner -->
-  <div class="free-banner" id="freeBanner" style="display:none">
-    🔒 You're on the <strong>Free plan</strong>. Some Pro features are locked.
-    <a href="https://www.facebook.com/boardpreph/" target="_blank">Upgrade to Pro →</a>
+  <!-- Basic plan banner -->
+  <div class="basic-banner" id="basicBanner" style="display:none">
+    📦 You're on the <strong>Basic plan</strong> (₱70/year). Upgrade to <strong>Pro</strong> (₱100 / 4 months) to unlock AI PDF flashcard generation.
+    <a href="https://www.facebook.com/boardpreph/" target="_blank" style="margin-left:4px">Upgrade →</a>
   </div>
 
   <!-- Progress overview -->

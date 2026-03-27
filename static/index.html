@@ -73,36 +73,224 @@
     </div>
 
     <!-- Features grid -->
+    <div class="landing-section-label">✨ Everything you need to pass</div>
     <div class="landing-features-grid">
       <div class="landing-feature-card">
         <div class="lf-icon">📊</div>
         <div class="lf-title">Progress Tracking</div>
         <div class="lf-desc">Track every subject, sub-subject, and topic. See your overall progress at a glance with visual progress bars.</div>
+        <div class="lf-plan lf-plan-both">✅ Basic &amp; Pro</div>
       </div>
       <div class="landing-feature-card">
         <div class="lf-icon">🎴</div>
         <div class="lf-title">Flashcard System</div>
-        <div class="lf-desc">Create flashcards per subject or sub-subject. Quiz yourself anytime with Got it / Missed it scoring.</div>
+        <div class="lf-desc">Manually create flashcards per subject or sub-subject. Quiz yourself anytime with Got it / Missed it scoring.</div>
+        <div class="lf-plan lf-plan-both">✅ Basic &amp; Pro</div>
       </div>
-      <div class="landing-feature-card">
+      <div class="landing-feature-card lf-pro-card">
+        <div class="lf-pro-tag">⭐ Pro Only</div>
         <div class="lf-icon">📄</div>
-        <div class="lf-title">PDF to Flashcards</div>
-        <div class="lf-desc">Upload any reviewer PDF and let AI automatically generate high-quality flashcards from the content.</div>
+        <div class="lf-title">PDF → AI Flashcards</div>
+        <div class="lf-desc">Upload any reviewer PDF and let AI automatically generate high-quality flashcards from the content. No typing needed!</div>
+        <div class="lf-plan lf-plan-pro">⭐ Pro only (₱100 / 4 months)</div>
       </div>
       <div class="landing-feature-card">
         <div class="lf-icon">🍅</div>
         <div class="lf-title">Pomodoro Timer</div>
         <div class="lf-desc">Built-in focus timer with 25-minute sessions and automatic breaks to keep you productive all day.</div>
+        <div class="lf-plan lf-plan-both">✅ Basic &amp; Pro</div>
       </div>
       <div class="landing-feature-card">
         <div class="lf-icon">✨</div>
         <div class="lf-title">AI Daily Motivation</div>
         <div class="lf-desc">Start every session with a personalized motivational message powered by Gemini AI, tailored to your profession.</div>
+        <div class="lf-plan lf-plan-both">✅ Basic &amp; Pro</div>
       </div>
       <div class="landing-feature-card">
         <div class="lf-icon">🗒️</div>
         <div class="lf-title">Quick Notes</div>
         <div class="lf-desc">Jot down important formulas, reminders, or key concepts with color-coded sticky notes always within reach.</div>
+        <div class="lf-plan lf-plan-both">✅ Basic &amp; Pro</div>
+      </div>
+    </div>
+
+    <!-- Plans & Pricing + How it works -->
+    <div class="landing-section-label">💳 Plans &amp; Pricing</div>
+
+    <!-- Plans grid -->
+    <div class="landing-plans-grid">
+
+      <!-- Trial -->
+      <div class="landing-plan-card plan-trial">
+        <div class="plan-header">
+          <div class="plan-name">🎉 Pro Trial</div>
+          <div class="plan-price">Free</div>
+          <div class="plan-duration">7 days only</div>
+        </div>
+        <ul class="plan-features">
+          <li><span class="pf-check yes">✓</span> Full Pro access for 7 days</li>
+          <li><span class="pf-check yes">✓</span> PDF → AI Flashcard generation</li>
+          <li><span class="pf-check yes">✓</span> All features unlocked</li>
+          <li><span class="pf-check no">—</span> Account pauses after 7 days</li>
+          <li><span class="pf-check no">—</span> Requires subscription to continue</li>
+        </ul>
+        <button class="btn-primary btn-full" onclick="showView('register')">Start Free Trial</button>
+      </div>
+
+      <!-- Basic -->
+      <div class="landing-plan-card plan-basic">
+        <div class="plan-header">
+          <div class="plan-name">📦 Basic</div>
+          <div class="plan-price">₱70</div>
+          <div class="plan-duration">per year</div>
+        </div>
+        <ul class="plan-features">
+          <li><span class="pf-check yes">✓</span> Progress tracking</li>
+          <li><span class="pf-check yes">✓</span> Manual flashcard system</li>
+          <li><span class="pf-check yes">✓</span> Pomodoro timer &amp; Quick notes</li>
+          <li><span class="pf-check yes">✓</span> AI daily motivation</li>
+          <li><span class="pf-check bonus">★</span> 1 month Pro bonus on signup</li>
+          <li><span class="pf-check no">—</span> PDF → AI Flashcards</li>
+        </ul>
+        <a href="https://www.facebook.com/boardpreph/" target="_blank" class="btn-ghost btn-full" style="text-decoration:none;text-align:center;display:block">
+          💬 Contact to Subscribe
+        </a>
+      </div>
+
+      <!-- Pro -->
+      <div class="landing-plan-card plan-pro">
+        <div class="plan-badge-top">Most Popular</div>
+        <div class="plan-header">
+          <div class="plan-name">⭐ Pro</div>
+          <div class="plan-price">₱100</div>
+          <div class="plan-duration">per 4 months</div>
+        </div>
+        <ul class="plan-features">
+          <li><span class="pf-check yes">✓</span> Everything in Basic</li>
+          <li><span class="pf-check yes">✓</span> PDF → AI Flashcard generation</li>
+          <li><span class="pf-check yes">✓</span> Upload up to 10MB PDFs</li>
+          <li><span class="pf-check yes">✓</span> Up to 30 flashcards per PDF</li>
+          <li><span class="pf-check yes">✓</span> English &amp; Filipino auto-detect</li>
+          <li><span class="pf-check yes">✓</span> Priority support</li>
+        </ul>
+        <a href="https://www.facebook.com/boardpreph/" target="_blank" class="btn-primary btn-full" style="text-decoration:none;text-align:center;display:block">
+          💬 Contact to Subscribe
+        </a>
+      </div>
+
+    </div>
+
+    <!-- Feature comparison table -->
+    <div class="landing-section-label">📊 What's included</div>
+    <div class="landing-compare-wrap">
+      <table class="landing-compare">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Trial</th>
+            <th>Basic</th>
+            <th>Pro</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="lc-feat">Progress tracking</td><td class="lc-yes">✓</td><td class="lc-yes">✓</td><td class="lc-yes">✓</td></tr>
+          <tr><td class="lc-feat">Manual flashcards + quiz</td><td class="lc-yes">✓</td><td class="lc-yes">✓</td><td class="lc-yes">✓</td></tr>
+          <tr><td class="lc-feat">Pomodoro timer</td><td class="lc-yes">✓</td><td class="lc-yes">✓</td><td class="lc-yes">✓</td></tr>
+          <tr><td class="lc-feat">Quick notes</td><td class="lc-yes">✓</td><td class="lc-yes">✓</td><td class="lc-yes">✓</td></tr>
+          <tr><td class="lc-feat">AI daily motivation</td><td class="lc-yes">✓</td><td class="lc-yes">✓</td><td class="lc-yes">✓</td></tr>
+          <tr><td class="lc-feat">PDF → AI flashcards</td><td class="lc-yes">✓</td><td class="lc-bonus">1 month</td><td class="lc-yes">✓</td></tr>
+          <tr><td class="lc-feat">Duration</td><td class="lc-no">7 days</td><td class="lc-no">1 year</td><td class="lc-no">4 months</td></tr>
+          <tr><td class="lc-feat">Price</td><td class="lc-no">Free</td><td class="lc-no">₱70</td><td class="lc-no">₱100</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- How it works -->
+    <div class="landing-section-label">📋 How Your Account Works</div>
+    <div class="landing-conditions">
+      <div class="condition-item">
+        <div class="condition-step green">1</div>
+        <div class="condition-body">
+          <div class="condition-title">Create an account — get 7 days Pro for free</div>
+          <div class="condition-desc">Sign up and immediately get full Pro access. No payment needed. Try everything including AI PDF flashcard generation.</div>
+        </div>
+        <div class="condition-tag">Free · 7 days</div>
+      </div>
+      <div class="condition-item">
+        <div class="condition-step red">2</div>
+        <div class="condition-body">
+          <div class="condition-title">Account auto-pauses after 7 days</div>
+          <div class="condition-desc">If no subscription is made, your account is automatically locked. Your data stays safe — contact us to reactivate.</div>
+        </div>
+        <div class="condition-tag danger">Auto-pause</div>
+      </div>
+      <div class="condition-item">
+        <div class="condition-step amber">3</div>
+        <div class="condition-body">
+          <div class="condition-title">Pay for Basic (₱70/yr) — get 1 month Pro bonus</div>
+          <div class="condition-desc">Subscribe to Basic and get a free 1-month Pro upgrade. Enjoy PDF AI flashcards for a full month before switching to Basic.</div>
+        </div>
+        <div class="condition-tag bonus">★ Bonus</div>
+      </div>
+      <div class="condition-item">
+        <div class="condition-step blue">4</div>
+        <div class="condition-body">
+          <div class="condition-title">Pay for Pro (₱100 / 4 months) — full AI access</div>
+          <div class="condition-desc">Uninterrupted access to all features. Account auto-pauses when plan expires if not renewed.</div>
+        </div>
+        <div class="condition-tag">₱100 · 4 months</div>
+      </div>
+      <div class="condition-item">
+        <div class="condition-step gray">!</div>
+        <div class="condition-body">
+          <div class="condition-title">Account abuse protection</div>
+          <div class="condition-desc">Emails that delete 3+ accounts within 60 days are banned for 2 months to keep the platform fair.</div>
+        </div>
+        <div class="condition-tag">Fair use</div>
+      </div>
+      <div class="condition-item">
+        <div class="condition-step green">₱</div>
+        <div class="condition-body">
+          <div class="condition-title">All payments via Facebook + GCash</div>
+          <div class="condition-desc">Message us on Facebook with your username and payment screenshot. Plan activated within 24 hours.</div>
+        </div>
+        <div class="condition-tag">Manual</div>
+      </div>
+    </div>
+
+    <!-- FAQ -->
+    <div class="landing-section-label">❓ Frequently Asked Questions</div>
+    <div class="landing-faq">
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleLandingFaq(this)">Will my data be deleted if my account is paused? <span class="faq-arr">▾</span></button>
+        <div class="faq-a">No. Your subjects, topics, flashcards, and notes are all preserved. Pausing only prevents login. Once you subscribe, everything will be exactly as you left it.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleLandingFaq(this)">What happens after my Pro plan expires? <span class="faq-arr">▾</span></button>
+        <div class="faq-a">Your account is automatically paused on the next login after the expiry date. You'll see a paused screen with a link to contact us to renew.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleLandingFaq(this)">What does the 1-month Pro bonus with Basic mean? <span class="faq-arr">▾</span></button>
+        <div class="faq-a">When you pay for Basic (₱70/year), we give you a free 1-month Pro upgrade first. This means you can use PDF → AI flashcard generation for one full month before your plan switches to Basic features.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleLandingFaq(this)">Can I upgrade from Basic to Pro later? <span class="faq-arr">▾</span></button>
+        <div class="faq-a">Yes! Just message us on Facebook and we'll upgrade your plan right away.</div>
+      </div>
+    </div>
+
+    <!-- Final CTA -->
+    <div class="landing-final-cta">
+      <div class="landing-final-title">Ready to start reviewing smarter?</div>
+      <div class="landing-final-sub">Join Filipino board exam reviewees already using BoardPrep PH.</div>
+      <div class="landing-cta-row" style="margin-top:1.25rem">
+        <button class="btn-primary btn-cta" onclick="showView('register')">
+          🚀 Start Free 7-Day Trial
+        </button>
+        <a href="https://www.facebook.com/boardpreph/" target="_blank"
+           class="btn-ghost btn-cta" style="text-decoration:none;text-align:center">
+          💬 Message us on Facebook
+        </a>
       </div>
     </div>
 

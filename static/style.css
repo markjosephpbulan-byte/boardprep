@@ -2208,3 +2208,283 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   transition: background 0.2s;
 }
 .btn-paused-contact:hover { background: #1464d8; }
+
+/* ══════════════════════════════════════════════════════════════
+   LANDING PAGE — PLANS, CONDITIONS, FEATURES
+   ══════════════════════════════════════════════════════════════ */
+
+/* Section label */
+.landing-section-label {
+  text-align: center;
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--text);
+  margin: 2.5rem 0 1.25rem;
+  letter-spacing: 0.3px;
+}
+
+/* Feature card enhancements */
+.lf-plan {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 99px;
+  padding: 3px 10px;
+  display: inline-block;
+}
+.lf-plan-both {
+  background: rgba(62,207,142,0.1);
+  color: var(--green);
+  border: 1px solid rgba(62,207,142,0.25);
+}
+.lf-plan-pro {
+  background: rgba(245,200,66,0.12);
+  color: var(--gold);
+  border: 1px solid rgba(245,200,66,0.3);
+}
+.lf-pro-card {
+  border-color: rgba(245,200,66,0.35) !important;
+  background: rgba(245,200,66,0.03);
+  position: relative;
+}
+.lf-pro-tag {
+  position: absolute;
+  top: -10px; right: 12px;
+  background: var(--gold);
+  color: #0d1117;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 10px;
+  border-radius: 99px;
+  letter-spacing: 0.3px;
+}
+
+/* Plans grid */
+.landing-plans-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+@media (max-width: 700px) {
+  .landing-plans-grid { grid-template-columns: 1fr; }
+}
+
+.landing-plan-card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.landing-plan-card:hover { transform: translateY(-3px); }
+
+.plan-trial  { border-color: var(--border2); }
+.plan-basic  { border-color: rgba(62,207,142,0.3); }
+.plan-pro    { border-color: var(--gold); background: rgba(245,200,66,0.03); }
+
+.plan-badge-top {
+  position: absolute;
+  top: -11px; left: 50%; transform: translateX(-50%);
+  background: var(--gold);
+  color: #0d1117;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 14px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.plan-header { text-align: center; margin-bottom: 1.25rem; }
+.plan-name {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1rem;
+  margin-bottom: 6px;
+}
+.plan-price {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 2rem;
+  color: var(--gold);
+  line-height: 1;
+}
+.plan-duration {
+  font-size: 0.78rem;
+  color: var(--text3);
+  margin-top: 2px;
+}
+
+.plan-features {
+  list-style: none;
+  padding: 0; margin: 0 0 1.25rem;
+  display: flex; flex-direction: column; gap: 7px;
+  flex: 1;
+}
+.plan-features li {
+  font-size: 0.82rem;
+  color: var(--text2);
+  line-height: 1.4;
+}
+
+/* Conditions / How it works */
+.landing-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 2.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.condition-item {
+  display: flex;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  transition: background 0.15s;
+}
+.condition-item:last-child { border-bottom: none; }
+.condition-item:hover { background: var(--surface2); }
+.condition-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  width: 36px;
+  text-align: center;
+  padding-top: 2px;
+}
+.condition-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text);
+  margin-bottom: 4px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.condition-desc {
+  font-size: 0.8rem;
+  color: var(--text2);
+  line-height: 1.6;
+}
+
+/* Final CTA block */
+.landing-final-cta {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 2.5rem;
+}
+.landing-final-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.4rem;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.landing-final-sub {
+  font-size: 0.88rem;
+  color: var(--text2);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LANDING PAGE RICH SECTIONS
+   ══════════════════════════════════════════════════════════════ */
+
+/* Plan feature list checkmarks */
+.pf-check { font-size: 0.75rem; font-weight: 700; flex-shrink: 0; margin-right: 6px; }
+.pf-check.yes   { color: var(--green); }
+.pf-check.no    { color: var(--text3); }
+.pf-check.bonus { color: #f0a500; }
+.plan-features li { display: flex; align-items: flex-start; font-size: 0.82rem; color: var(--text2); line-height: 1.5; margin-bottom: 5px; }
+
+/* Compare table */
+.landing-compare-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 2.5rem;
+}
+.landing-compare { width: 100%; border-collapse: collapse; }
+.landing-compare thead tr { background: var(--bg3); }
+.landing-compare th {
+  padding: 10px 14px;
+  font-size: 0.72rem; font-weight: 700;
+  color: var(--text3); text-align: left;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.landing-compare th:not(:first-child) { text-align: center; }
+.landing-compare td {
+  padding: 10px 14px;
+  font-size: 0.82rem; color: var(--text2);
+  border-bottom: 1px solid var(--border);
+}
+.landing-compare tr:last-child td { border-bottom: none; }
+.landing-compare td:not(:first-child) { text-align: center; }
+.landing-compare tr:hover td { background: var(--surface2); }
+.lc-feat  { color: var(--text) !important; font-weight: 600; }
+.lc-yes   { color: var(--green) !important; font-weight: 700; font-size: 1rem !important; }
+.lc-no    { color: var(--text3) !important; }
+.lc-bonus { color: #f0a500 !important; font-weight: 700; font-size: 0.78rem !important; }
+
+/* Conditions - enhanced */
+.condition-step {
+  width: 30px; height: 30px; flex-shrink: 0;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; font-weight: 800;
+  font-family: 'Syne', sans-serif;
+}
+.condition-step.green { background: rgba(62,207,142,0.15); color: var(--green); }
+.condition-step.blue  { background: rgba(96,165,250,0.15); color: #60a5fa; }
+.condition-step.amber { background: rgba(245,200,66,0.15);  color: var(--gold); }
+.condition-step.red   { background: rgba(239,68,68,0.15);   color: #ef4444; }
+.condition-step.gray  { background: var(--bg3); color: var(--text3); }
+
+.condition-tag {
+  align-self: center; flex-shrink: 0;
+  font-size: 0.7rem; font-weight: 600;
+  padding: 3px 10px; border-radius: 99px;
+  border: 1px solid var(--border);
+  color: var(--text3); white-space: nowrap;
+}
+.condition-tag.danger { background: rgba(239,68,68,0.1); color: #ef4444; border-color: rgba(239,68,68,0.25); }
+.condition-tag.bonus  { background: rgba(245,200,66,0.12); color: var(--gold); border-color: rgba(245,200,66,0.3); }
+
+/* FAQ */
+.landing-faq {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-bottom: 2.5rem;
+}
+.landing-faq .faq-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.landing-faq .faq-q {
+  width: 100%; padding: 0.9rem 1.1rem;
+  text-align: left; background: transparent; border: none;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.88rem; font-weight: 600; color: var(--text);
+  cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+}
+.landing-faq .faq-q:hover { background: var(--surface2); }
+.landing-faq .faq-arr {
+  font-size: 0.75rem; color: var(--text3);
+  transition: transform 0.2s; flex-shrink: 0;
+}
+.landing-faq .faq-a {
+  font-size: 0.82rem; color: var(--text2); line-height: 1.65;
+  padding: 0 1.1rem; max-height: 0; overflow: hidden;
+  transition: max-height 0.25s ease, padding 0.2s;
+}
+.landing-faq .faq-item.open .faq-a { max-height: 200px; padding: 0 1.1rem 0.9rem; }
+.landing-faq .faq-item.open .faq-arr { transform: rotate(180deg); }

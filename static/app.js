@@ -2841,8 +2841,8 @@ function setPdfFile(file) {
     showPdfError('Please upload a PDF file.');
     return;
   }
-  if (file.size > 10 * 1024 * 1024) {
-    showPdfError('File is too large. Maximum size is 10MB.');
+  if (file.size > 15 * 1024 * 1024) {
+    showPdfError('File is too large. Maximum size is 15MB.');
     return;
   }
   pdfFile = file;

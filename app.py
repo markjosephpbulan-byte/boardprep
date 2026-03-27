@@ -2011,8 +2011,8 @@ def generate_flashcards_from_pdf(user_id):
     raw_bytes = pdf_file.read()
     if len(raw_bytes) == 0:
         return jsonify({"error": "The uploaded PDF is empty."}), 400
-    if len(raw_bytes) > 10 * 1024 * 1024:  # 10MB max
-        return jsonify({"error": "PDF is too large. Maximum size is 10MB."}), 400
+    if len(raw_bytes) > 15 * 1024 * 1024:  # 15MB max
+        return jsonify({"error": "PDF is too large. Maximum size is 15MB."}), 400
 
     # ── 2. Get request params ─────────────────────────────────────────────────
     max_cards = min(int(request.form.get("max_cards", 10)), 30)  # cap at 30

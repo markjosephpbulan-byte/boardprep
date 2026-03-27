@@ -2015,7 +2015,7 @@ def generate_flashcards_from_pdf(user_id):
         return jsonify({"error": "PDF is too large. Maximum size is 20MB."}), 400
 
     # ── 2. Get request params ─────────────────────────────────────────────────
-    max_cards = min(int(request.form.get("max_cards", 10)), 30)  # cap at 30
+    max_cards = min(int(request.form.get("max_cards", 10)), 50)  # cap at 50
     subject_name = request.form.get("subject_name", "this subject")
 
     # ── 3. Extract text from PDF ──────────────────────────────────────────────

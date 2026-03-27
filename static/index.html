@@ -334,6 +334,7 @@
         <div class="profile-pill" onclick="toggleProfileMenu()">
           <div class="profile-pill-avatar" id="headerAvatar"></div>
           <span id="headerName"></span>
+          <span class="pro-badge" id="proBadge" style="display:none">⭐ PRO</span>
           <span class="profile-pill-arrow">▾</span>
         </div>
         <div class="profile-menu" id="profileMenu" style="display:none">
@@ -345,6 +346,16 @@
       </div>
     </div>
   </header>
+
+  <!-- Trial banner -->
+  <div class="trial-banner" id="trialBanner" style="display:none">
+    🎉 You're on <strong>Pro Trial</strong> — enjoy all Pro features free for 7 days!
+  </div>
+  <!-- Free user banner -->
+  <div class="free-banner" id="freeBanner" style="display:none">
+    🔒 You're on the <strong>Free plan</strong>. Some Pro features are locked.
+    <a href="https://www.facebook.com/boardpreph/" target="_blank">Upgrade to Pro →</a>
+  </div>
 
   <!-- Progress overview -->
   <section class="progress-overview">
@@ -639,11 +650,28 @@
           Ctrl + Enter to save quickly
         </div>
         <div class="fc-or-divider"><span>or</span></div>
-        <button class="btn-pdf-generate" onclick="openPdfGenerateModal()">
-          📄 Generate from PDF
-        </button>
-        <div style="font-size:0.72rem;color:var(--text3);text-align:center">
-          Upload a PDF — AI generates flashcards for you ✨
+        <!-- Pro users see the button -->
+        <div id="pdfProSection">
+          <button class="btn-pdf-generate" onclick="openPdfGenerateModal()">
+            📄 Generate from PDF
+          </button>
+          <div style="font-size:0.72rem;color:var(--text3);text-align:center;margin-top:2px">
+            Upload a PDF — AI generates flashcards for you ✨
+          </div>
+        </div>
+        <!-- Free users see upgrade prompt -->
+        <div id="pdfFreeSection" style="display:none">
+          <div class="pdf-upgrade-box">
+            <div style="font-size:1.4rem">🔒</div>
+            <div style="font-weight:700;font-size:0.85rem;color:var(--text)">Pro Feature</div>
+            <div style="font-size:0.75rem;color:var(--text2);line-height:1.5;text-align:center">
+              Generate flashcards from PDF using AI.<br/>Upgrade to Pro to unlock this.
+            </div>
+            <a href="https://www.facebook.com/boardpreph/" target="_blank"
+               style="display:block;text-align:center;margin-top:4px;font-size:0.78rem;color:var(--gold);font-weight:700;text-decoration:none">
+              Contact us to Upgrade →
+            </a>
+          </div>
         </div>
       </div>
     </div>

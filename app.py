@@ -126,6 +126,8 @@ def init_db():
             avatar        TEXT,
             exam_date     TEXT,
             is_paused     BOOLEAN DEFAULT FALSE,
+            is_pro        BOOLEAN DEFAULT TRUE,
+            pro_since     TIMESTAMPTZ DEFAULT NOW(),
             created_at    TIMESTAMPTZ DEFAULT NOW()
         )
     """)
@@ -249,6 +251,12 @@ try:
         try:
             db_execute(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_paused BOOLEAN DEFAULT FALSE"
+            )
+            db_execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro BOOLEAN DEFAULT TRUE"
+            )
+            db_execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_since TIMESTAMPTZ DEFAULT NOW()"
             )
         except Exception:
             pass
@@ -498,6 +506,8 @@ def safe_user(u):
         "email": u.get("email", ""),
         "avatar": u.get("avatar"),
         "exam_date": u.get("exam_date"),
+        "is_pro": bool(u.get("is_pro", True)),
+        "pro_since": str(u.get("pro_since", "")),
         "created_at": str(u.get("created_at", "")),
     }
 
@@ -1449,6 +1459,8 @@ def admin_list_users():
             "notes_count": nc_map.get(uid, 0),
             "progress_pct": pct,
             "is_paused": bool(u.get("is_paused", False)),
+            "is_pro": bool(u.get("is_pro", True)),
+            "pro_since": str(u.get("pro_since", "")),
             "created_at": str(u["created_at"]),
         })
     return jsonify(result)
@@ -1553,6 +1565,18 @@ def admin_pause_user(user_id):
     db_execute("UPDATE users SET is_paused=%s WHERE id=%s", (new_state, user_id))
     invalidate_user_cache(user_id)
     return jsonify({"ok": True, "is_paused": new_state})
+
+
+@app.route("/api/admin/users/<user_id>/toggle-pro", methods=["POST"])
+@admin_required
+def admin_toggle_pro(user_id):
+    user = get_user_by_id(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    new_state = not bool(user.get("is_pro", True))
+    db_execute("UPDATE users SET is_pro=%s WHERE id=%s", (new_state, user_id))
+    invalidate_user_cache(user_id)
+    return jsonify({"ok": True, "is_pro": new_state})
 
 
 @app.route("/api/admin/users/<user_id>", methods=["DELETE"])
@@ -1680,6 +1704,13 @@ def generate_flashcards_from_pdf(user_id):
     """
     import re as _re
     import io as _io
+
+    # Pro-only feature check
+    user = get_user_by_id(user_id)
+    if not user or not user.get("is_pro", True):
+        return jsonify({
+            "error": "This feature requires a Pro account. Please upgrade to continue."
+        }), 403
 
     if not GEMINI_API_KEY:
         return jsonify({

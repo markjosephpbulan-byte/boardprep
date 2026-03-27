@@ -628,7 +628,37 @@ async function enterTrackerWithData() {
   try { showPomodoroFab(); }     catch(e) {}
   try { renderSubjectsGrid(); renderProgressOverview(); } catch(e) {}
   try { renderNotes(); }         catch(e) {}
-  try { fetchMotivation(); } catch(e) {}
+  try { fetchMotivation(); }     catch(e) {}
+  try { updateProUI(); }         catch(e) {}
+}
+
+function isPro() {
+  return currentUser && currentUser.is_pro === true;
+}
+
+function updateProUI() {
+  const pro     = isPro();
+  const proSince = currentUser && currentUser.pro_since ? new Date(currentUser.pro_since) : null;
+  const created  = currentUser && currentUser.created_at ? new Date(currentUser.created_at) : null;
+
+  // Pro badge in header
+  const badge = document.getElementById('proBadge');
+  if (badge) badge.style.display = pro ? 'inline-flex' : 'none';
+
+  // Trial banner — show if pro AND account is less than 7 days old
+  const trialBanner = document.getElementById('trialBanner');
+  const freeBanner  = document.getElementById('freeBanner');
+  if (trialBanner && freeBanner) {
+    const isNew = created && ((Date.now() - created.getTime()) < 7 * 24 * 60 * 60 * 1000);
+    trialBanner.style.display = (pro && isNew) ? 'flex' : 'none';
+    freeBanner.style.display  = (!pro) ? 'flex' : 'none';
+  }
+
+  // PDF section
+  const pdfPro  = document.getElementById('pdfProSection');
+  const pdfFree = document.getElementById('pdfFreeSection');
+  if (pdfPro)  pdfPro.style.display  = pro ? 'block' : 'none';
+  if (pdfFree) pdfFree.style.display = pro ? 'none'  : 'block';
 }
 
 async function enterTracker() {
@@ -2733,6 +2763,10 @@ let pdfSelectedCards  = [];  // which ones the user checked
 let pdfFile           = null;
 
 function openPdfGenerateModal() {
+  if (!isPro()) {
+    showToast('⭐ This feature requires a Pro account.');
+    return;
+  }
   if (!fcSidebarSubjectId) {
     showToast('❌ Please select a subject first.');
     return;

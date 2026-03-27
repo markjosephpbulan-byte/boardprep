@@ -233,6 +233,33 @@
     transition: all 0.2s; white-space: nowrap;
   }
   .btn-unpause:hover { background: rgba(62,207,142,0.22); border-color: var(--green); }
+  /* Pro/Free badges */
+  .pro-badge-admin {
+    display: inline-block; font-size: 0.65rem; font-weight: 700;
+    background: rgba(245,200,66,0.15); color: var(--gold);
+    border: 1px solid rgba(245,200,66,0.3);
+    border-radius: 99px; padding: 1px 7px; margin-left: 5px;
+  }
+  .free-badge-admin {
+    display: inline-block; font-size: 0.65rem; font-weight: 700;
+    background: rgba(150,150,150,0.1); color: var(--text3);
+    border: 1px solid var(--border); border-radius: 99px; padding: 1px 7px; margin-left: 5px;
+  }
+  /* Set Pro / Set Free buttons */
+  .btn-grant-pro {
+    padding: 5px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
+    border-radius: 6px; transition: all 0.15s;
+    background: rgba(245,200,66,0.1); color: var(--gold);
+    border: 1px solid rgba(245,200,66,0.35);
+  }
+  .btn-grant-pro:hover { background: rgba(245,200,66,0.22); border-color: var(--gold); }
+  .btn-revoke-pro {
+    padding: 5px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
+    border-radius: 6px; transition: all 0.15s;
+    background: rgba(150,150,150,0.08); color: var(--text2);
+    border: 1px solid var(--border);
+  }
+  .btn-revoke-pro:hover { background: rgba(150,150,150,0.15); border-color: var(--text3); }
   .row-paused td { opacity: 0.6; }
 
   @media (max-width: 640px) {
@@ -466,6 +493,7 @@ async function loadUsers() {
               <div class="user-display-name">
                 ${esc(u.display_name)}
                 ${u.is_paused ? '<span class="paused-badge">⏸ Paused</span>' : ''}
+                ${u.is_pro ? '<span class="pro-badge-admin">⭐ Pro</span>' : '<span class="free-badge-admin">Free</span>'}
               </div>
               <div class="user-username">@${esc(u.username)}</div>
             </div>
@@ -489,7 +517,12 @@ async function loadUsers() {
         </td>
         <td style="color:var(--text3)">${formatDate(u.created_at)}</td>
         <td>
-          <div style="display:flex;gap:6px;align-items:center">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <button class="${u.is_pro ? 'btn-revoke-pro' : 'btn-grant-pro'}"
+                    id="pro-btn-${u.id}"
+                    onclick="togglePro('${u.id}','${esc(u.display_name)}',${u.is_pro})">
+              ${u.is_pro ? '🔒 Set Free' : '⭐ Set Pro'}
+            </button>
             <button class="${u.is_paused ? 'btn-unpause' : 'btn-pause'}"
                     id="pause-btn-${u.id}"
                     onclick="togglePause('${u.id}','${esc(u.display_name)}',${u.is_paused})">
@@ -578,6 +611,38 @@ function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Toggle Pro ────────────────────────────────────────────────────────────────
+async function togglePro(userId, displayName, currentlyPro) {
+  const action = currentlyPro ? 'remove Pro from' : 'grant Pro to';
+  if (!confirm(`Are you sure you want to ${action} ${displayName}?`)) return;
+  try {
+    const r = await fetch(`/api/admin/users/${userId}/toggle-pro`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPassword }
+    });
+    const data = await r.json();
+    if (!r.ok) { alert(data.error || 'Failed'); return; }
+    // Update button
+    const btn = document.getElementById(`pro-btn-${userId}`);
+    if (btn) {
+      btn.className   = data.is_pro ? 'btn-revoke-pro' : 'btn-grant-pro';
+      btn.textContent = data.is_pro ? '🔒 Set Free' : '⭐ Set Pro';
+      btn.onclick = () => togglePro(userId, displayName, data.is_pro);
+    }
+    // Update badge in name cell
+    const row = document.getElementById(`row-${userId}`);
+    if (row) {
+      const oldBadge = row.querySelector('.pro-badge-admin, .free-badge-admin');
+      if (oldBadge) {
+        oldBadge.className   = data.is_pro ? 'pro-badge-admin' : 'free-badge-admin';
+        oldBadge.textContent = data.is_pro ? '⭐ Pro' : 'Free';
+      }
+    }
+    showToast(data.is_pro ? `⭐ ${displayName} is now Pro!` : `${displayName} set to Free plan.`);
+  } catch(e) {
+    alert('Connection error. Please try again.');
+  }
 }
 
 // ── Pause / Unpause ──────────────────────────────────────────────────────────

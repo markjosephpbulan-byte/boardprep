@@ -2121,3 +2121,53 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   color: var(--text3); text-decoration: none; transition: color 0.2s;
 }
 .landing-footer a:hover { color: var(--gold); }
+
+/* ══════════════════════════════════════════════════════════════
+   PRO / FREE PLAN UI
+   ══════════════════════════════════════════════════════════════ */
+
+/* Pro badge in header */
+.pro-badge {
+  display: inline-flex; align-items: center;
+  background: linear-gradient(135deg, var(--gold), #f0a500);
+  color: #0d1117;
+  font-size: 0.62rem; font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 2px 8px; border-radius: 99px;
+  margin-right: 4px;
+}
+
+/* Trial banner */
+.trial-banner {
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(90deg, rgba(245,200,66,0.12), rgba(245,200,66,0.06));
+  border-bottom: 1px solid rgba(245,200,66,0.2);
+  color: var(--text2);
+  font-size: 0.82rem; padding: 8px 1rem;
+  text-align: center; gap: 6px;
+}
+.trial-banner strong { color: var(--gold); }
+
+/* Free banner */
+.free-banner {
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(150,150,150,0.06);
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+  font-size: 0.82rem; padding: 8px 1rem;
+  text-align: center; gap: 6px;
+}
+.free-banner strong { color: var(--text); }
+.free-banner a { color: var(--gold); font-weight: 700; text-decoration: none; }
+.free-banner a:hover { text-decoration: underline; }
+
+/* PDF upgrade box (shown to free users in flashcard sidebar) */
+.pdf-upgrade-box {
+  border: 1.5px dashed var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 0.75rem;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 6px;
+  background: var(--bg3);
+  text-align: center;
+}

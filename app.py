@@ -2020,10 +2020,12 @@ def generate_flashcards_from_pdf(user_id):
 
     # ── 3. Extract text from PDF ──────────────────────────────────────────────
     try:
-        from pdfminer.high_level import extract_text as pdf_extract_text
+        import pypdf
 
-        pdf_text = pdf_extract_text(_io.BytesIO(raw_bytes))
-        pdf_text = (pdf_text or "").strip()
+        reader = pypdf.PdfReader(_io.BytesIO(raw_bytes))
+        pdf_text = "\n".join(
+            (page.extract_text() or "") for page in reader.pages
+        ).strip()
     except Exception as e:
         return jsonify({
             "error": f"Could not read PDF. Make sure it contains selectable text (not a scanned image). ({str(e)[:80]})"

@@ -552,34 +552,34 @@
     <!-- Right column: card editor (shown when subject selected) -->
     <div class="fc-panel" id="fc-subject-panel" style="display:none">
       <div class="fc-panel-bar" id="fc-panel-bar"></div>
+
+      <!-- Scrollable cards area -->
       <div class="fc-panel-inner">
         <div class="fc-panel-title" id="fc-panel-title"></div>
-
-        <!-- Existing cards list -->
         <div class="fc-cards-list" id="fc-cards-list"></div>
+      </div>
 
-        <!-- Add new card form -->
-        <div class="fc-add-form">
-          <div class="fc-add-label">➕ New Flashcard</div>
-          <input  class="fc-input" id="fc-new-question"
-                  placeholder="Question…"
-                  onkeydown="if(event.key==='Enter') document.getElementById('fc-new-answer').focus()"/>
-          <textarea class="fc-textarea" id="fc-new-answer"
-                    placeholder="Answer…"
-                    rows="3"
-                    onkeydown="if(event.key==='Enter' && event.ctrlKey) addFlashcard()"></textarea>
-          <button class="btn-primary btn-full"
-                  onclick="addFlashcard()">Save Flashcard</button>
-          <div style="font-size:0.72rem;color:var(--text3);text-align:center;margin-top:4px">
-            Ctrl + Enter to save quickly
-          </div>
-          <div class="fc-or-divider"><span>or</span></div>
-          <button class="btn-pdf-generate" onclick="openPdfGenerateModal()">
-            📄 Generate from PDF
-          </button>
-          <div style="font-size:0.72rem;color:var(--text3);text-align:center">
-            Upload a PDF — AI generates flashcards for you ✨
-          </div>
+      <!-- Fixed add form at bottom -->
+      <div class="fc-add-form">
+        <div class="fc-add-label">➕ New Flashcard</div>
+        <input  class="fc-input" id="fc-new-question"
+                placeholder="Question…"
+                onkeydown="if(event.key==='Enter') document.getElementById('fc-new-answer').focus()"/>
+        <textarea class="fc-textarea" id="fc-new-answer"
+                  placeholder="Answer…"
+                  rows="3"
+                  onkeydown="if(event.key==='Enter' && event.ctrlKey) addFlashcard()"></textarea>
+        <button class="btn-primary btn-full"
+                onclick="addFlashcard()">Save Flashcard</button>
+        <div style="font-size:0.72rem;color:var(--text3);text-align:center;margin-top:4px">
+          Ctrl + Enter to save quickly
+        </div>
+        <div class="fc-or-divider"><span>or</span></div>
+        <button class="btn-pdf-generate" onclick="openPdfGenerateModal()">
+          📄 Generate from PDF
+        </button>
+        <div style="font-size:0.72rem;color:var(--text3);text-align:center">
+          Upload a PDF — AI generates flashcards for you ✨
         </div>
       </div>
     </div>

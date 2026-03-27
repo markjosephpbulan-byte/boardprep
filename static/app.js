@@ -2338,7 +2338,7 @@ async function selectFlashcardSubject(subjectId, subjectName, color) {
   if (item) item.classList.add('active');
 
   // Show panel
-  document.getElementById('fc-subject-panel').style.display = 'block';
+  document.getElementById('fc-subject-panel').style.display = 'flex';
   document.getElementById('fc-panel-title').textContent     = subjectName;
   document.getElementById('fc-panel-bar').style.background  = color;
   document.getElementById('fc-new-question').value = '';
@@ -2359,7 +2359,7 @@ async function selectFlashcardSS(subjectId, subjectName, color, ssId, ssName) {
   if (item) item.classList.add('active');
 
   // Show panel with subsection title
-  document.getElementById('fc-subject-panel').style.display = 'block';
+  document.getElementById('fc-subject-panel').style.display = 'flex';
   document.getElementById('fc-panel-title').textContent     = `${subjectName}  ›  ${ssName}`;
   document.getElementById('fc-panel-bar').style.background  = color;
   document.getElementById('fc-new-question').value = '';

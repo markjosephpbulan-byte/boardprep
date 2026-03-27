@@ -1969,9 +1969,8 @@ async function fetchMotivation() {
 
   let message = null;
 
-  // Try Gemini — completely silent fallback on any failure
-  const geminiKey = window.__GEMINI_KEY__;
-  if (geminiKey && geminiKey !== 'REPLACE_WITH_YOUR_GEMINI_KEY') {
+  // Call backend motivation route — key stays secure on server
+  if (currentUser) {
     try {
       const subNames = subjects.map(function(s) { return s.name; }).slice(0, 5).join(', ') || 'board exam subjects';
       const pData = subjects.reduce(function(a, s) {
@@ -1979,18 +1978,15 @@ async function fetchMotivation() {
         return { t: a.t + p.total, d: a.d + p.done };
       }, { t: 0, d: 0 });
       const pct = pData.t === 0 ? 0 : Math.round((pData.d / pData.t) * 100);
-      const prompt = 'Write a short motivational message (3-4 sentences, under 70 words) for ' + name + ', a Filipino board exam reviewer. Subjects: ' + subNames + '. Progress: ' + pct + '% done. Use one natural Tagalog word. No bullet points. End with one short powerful sentence.';
 
-      const resp = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + geminiKey,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 150, temperature: 0.9 } }) }
-      );
+      const resp = await fetch(`/api/profiles/${currentUser.id}/daily-motivation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, subjects: subNames, pct })
+      });
       if (resp.ok) {
         const data = await resp.json();
-        const candidate = data.candidates && data.candidates[0];
-        const part = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0];
-        if (part && part.text) message = part.text.trim();
+        if (data.message) message = data.message;
       }
     } catch(e) { /* silent — fall through to local pool */ }
   }

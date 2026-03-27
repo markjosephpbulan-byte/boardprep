@@ -2160,7 +2160,50 @@ def generate_flashcards_from_pdf(user_id):
 
 @app.route("/api/config", methods=["GET"])
 def get_config():
-    return jsonify({"gemini_key": GEMINI_API_KEY})
+    # No longer expose the key — return empty for backward compat
+    return jsonify({"gemini_key": ""})
+
+
+@app.route("/api/profiles/<user_id>/daily-motivation", methods=["POST"])
+@owner_required
+def daily_motivation(user_id):
+    """Generate daily motivation via Gemini on the backend — key never exposed."""
+    body = request.json or {}
+    name = (body.get("name") or "reviewer")[:50]
+    subjects = (body.get("subjects") or "")[:200]
+    pct = int(body.get("pct") or 0)
+
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "AI not configured"}), 503
+
+    prompt = (
+        f"Write a short motivational message (3-4 sentences, under 70 words) for "
+        f"{name}, a Filipino board exam reviewer. Subjects: {subjects}. "
+        f"Progress: {pct}% done. Use one natural Tagalog word. "
+        f"No bullet points. End with one short powerful sentence."
+    )
+
+    try:
+        resp = http_requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}",
+            headers={"Content-Type": "application/json"},
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"maxOutputTokens": 150, "temperature": 0.9},
+            },
+            timeout=15,
+        )
+        if resp.ok:
+            data = resp.json()
+            candidate = data.get("candidates", [{}])[0]
+            part = candidate.get("content", {}).get("parts", [{}])[0]
+            message = part.get("text", "").strip()
+            if message:
+                return jsonify({"message": message})
+    except Exception:
+        pass
+
+    return jsonify({"error": "fallback"}), 500
 
 
 @app.route("/")

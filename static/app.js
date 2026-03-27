@@ -1946,7 +1946,7 @@ async function fetchMotivation() {
       const prompt = 'Write a short motivational message (3-4 sentences, under 70 words) for ' + name + ', a Filipino board exam reviewer. Subjects: ' + subNames + '. Progress: ' + pct + '% done. Use one natural Tagalog word. No bullet points. End with one short powerful sentence.';
 
       const resp = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=' + geminiKey,
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + geminiKey,
         { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 150, temperature: 0.9 } }) }
       );
@@ -2803,8 +2803,8 @@ function setPdfFile(file) {
     showPdfError('Please upload a PDF file.');
     return;
   }
-  if (file.size > 10 * 1024 * 1024) {
-    showPdfError('File is too large. Maximum size is 10MB.');
+  if (file.size > 30 * 1024 * 1024) {
+    showPdfError('File is too large. Maximum size is 30MB.');
     return;
   }
   pdfFile = file;

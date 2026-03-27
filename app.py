@@ -705,11 +705,20 @@ def register():
 @rate_limit(10, 300, "login")
 def login():
     body = request.json or {}
-    username = (body.get("username") or "").strip()
+    identifier = (body.get("identifier") or body.get("username") or "").strip()
     password = (body.get("password") or "").strip()
-    user = get_user_by_username(username)
+    if not identifier or not password:
+        return jsonify({"error": "Please enter your username/email and password."}), 400
+    # Try username first, then email
+    user = get_user_by_username(identifier)
+    if not user:
+        user = db_execute(
+            "SELECT * FROM users WHERE LOWER(email)=LOWER(%s)",
+            (identifier,),
+            fetch="one",
+        )
     if not user or not check_password_hash(user["password_hash"], password):
-        return jsonify({"error": "Invalid username or password"}), 401
+        return jsonify({"error": "Incorrect username/email or password."}), 401
     if user.get("is_paused"):
         return jsonify({
             "error": "Your account has been paused. Please contact the admin."
@@ -1727,13 +1736,37 @@ def generate_flashcards_from_pdf(user_id):
         pdf_text = pdf_text[:3000]
 
     prompt = (
-        f"Generate {max_cards} board exam flashcard Q&A pairs from this study material "
-        f'about "{subject_name}". '
-        f"IMPORTANT: Detect the language of the study material and write ALL questions and answers in that same language. "
-        f"If the material is in English, respond in English. If in Filipino/Tagalog, respond in Filipino. "
-        f"Output ONLY a JSON object, nothing else: "
-        f'{{"flashcards":[{{"question":"...","answer":"..."}}]}} '
-        f"Study material: {pdf_text}"
+        f"You are an expert board exam question writer for Filipino professional licensure examinations. "
+        f'Your task is to generate {max_cards} high-quality flashcard Q&A pairs from the study material below about "{subject_name}". '
+        f"\n\n"
+        f"WHAT TO FOCUS ON (include these):\n"
+        f"- Key definitions, terms, and concepts\n"
+        f"- Laws, theorems, principles, and formulas\n"
+        f"- Classifications, types, and categories\n"
+        f"- Processes, procedures, and steps\n"
+        f"- Causes, effects, and relationships between concepts\n"
+        f"- Numerical values, standards, and thresholds that are commonly tested\n"
+        f"- Important facts that appear in board exams\n"
+        f"\n"
+        f"WHAT TO STRICTLY IGNORE (never make questions about these):\n"
+        f"- Author names, editors, or publishers\n"
+        f"- Book titles, edition numbers, or ISBN\n"
+        f"- Chapter objectives, learning outcomes, or course goals\n"
+        f"- Table of contents, preface, introduction, or acknowledgements\n"
+        f"- Page numbers, figure numbers, or table numbers\n"
+        f"- Bibliography, references, or citations\n"
+        f"- Copyright notices or legal disclaimers\n"
+        f"\n"
+        f"QUESTION QUALITY RULES:\n"
+        f"- Questions must test actual subject knowledge, not trivia about the book\n"
+        f"- Vary question types: What is, Define, What are the types of, What happens when, How many, Which law states\n"
+        f"- Answers must be direct and factual (1-2 sentences only)\n"
+        f"- LANGUAGE: If the study material is written in English, write ALL questions and answers in English. If in Filipino/Tagalog, write in Filipino. Do NOT translate or change the language.\n"
+        f"\n"
+        f"Output ONLY valid JSON with no extra text, no markdown, no explanation:\n"
+        f'{{"flashcards":[{{"question":"...","answer":"..."}}]}}\n'
+        f"\n"
+        f"Study material:\n{pdf_text}"
     )
 
     # ── Call Gemini ───────────────────────────────────────────────────────────

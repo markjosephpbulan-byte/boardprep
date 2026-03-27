@@ -32,7 +32,7 @@
 
 <!-- ══ VIEWS (only one shown at a time) ════════════════════════════════════ -->
 
-<!-- 1. LANDING — profile picker -->
+<!-- 1. LANDING — hero + features -->
 <div id="view-landing" class="view">
   <header class="site-header">
     <div class="header-inner">
@@ -43,42 +43,75 @@
           <div class="logo-sub">Board Exam Learning Tracker</div>
         </div>
       </div>
-      <button class="btn-primary" onclick="showView('register')">+ Create Profile</button>
-    </div>
-  </header>
-  <main class="landing-main">
-    <div class="landing-hero">
-      <h1>Choose your profile</h1>
-      <p>Select your profile to continue reviewing, or create a new one.</p>
-      <!-- Search bar -->
-      <div class="profile-search-wrap">
-        <div class="profile-search-box">
-          <span class="profile-search-icon">🔍</span>
-          <input
-            type="text"
-            id="profileSearch"
-            class="profile-search-input"
-            placeholder="Search by name or username…"
-            oninput="filterProfiles(this.value)"
-            autocomplete="off"
-            spellcheck="false"
-          />
-          <button class="profile-search-clear" id="searchClearBtn"
-                  onclick="clearProfileSearch()" style="display:none">✕</button>
-        </div>
-        <div class="profile-search-count" id="profileSearchCount"></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-ghost" onclick="showView('login-standalone')">Log In</button>
+        <button class="btn-primary" onclick="showView('register')">+ Create Profile</button>
       </div>
     </div>
-    <div class="profiles-grid" id="profilesGrid">
-      <div class="loading-state">Loading profiles…</div>
+  </header>
+  <main class="landing-main landing-hero-page">
+
+    <!-- Hero -->
+    <div class="landing-hero-block">
+      <div class="landing-badge">🇵🇭 Built for Filipino Reviewees</div>
+      <h1 class="landing-headline">
+        Study Smarter.<br/>Pass with Confidence.
+      </h1>
+      <p class="landing-tagline">
+        BoardPrep PH helps Filipino board exam reviewees stay organized and retain what they study.
+        Track your subjects, monitor your progress, and use built-in flashcards and AI tools
+        to improve memory and recall — all in one place.
+      </p>
+      <div class="landing-cta-row">
+        <button class="btn-primary btn-cta" onclick="showView('register')">
+          🚀 Start Free — 7 Days Trial
+        </button>
+        <button class="btn-ghost btn-cta" onclick="showView('login-standalone')">
+          Already have a profile? Log in
+        </button>
+      </div>
     </div>
-    <div style="text-align:center;padding:2rem 0 0.5rem;font-size:0.75rem;color:var(--text3)">
-      <a href="/privacy" target="_blank" style="color:var(--text3);text-decoration:none;transition:color 0.2s"
-         onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text3)'">
-        Privacy Policy
-      </a>
-      &nbsp;·&nbsp; © 2025 BoardPrep PH · Made for Filipino board exam reviewers 🇵🇭
+
+    <!-- Features grid -->
+    <div class="landing-features-grid">
+      <div class="landing-feature-card">
+        <div class="lf-icon">📊</div>
+        <div class="lf-title">Progress Tracking</div>
+        <div class="lf-desc">Track every subject, sub-subject, and topic. See your overall progress at a glance with visual progress bars.</div>
+      </div>
+      <div class="landing-feature-card">
+        <div class="lf-icon">🎴</div>
+        <div class="lf-title">Flashcard System</div>
+        <div class="lf-desc">Create flashcards per subject or sub-subject. Quiz yourself anytime with Got it / Missed it scoring.</div>
+      </div>
+      <div class="landing-feature-card">
+        <div class="lf-icon">📄</div>
+        <div class="lf-title">PDF to Flashcards</div>
+        <div class="lf-desc">Upload any reviewer PDF and let AI automatically generate high-quality flashcards from the content.</div>
+      </div>
+      <div class="landing-feature-card">
+        <div class="lf-icon">🍅</div>
+        <div class="lf-title">Pomodoro Timer</div>
+        <div class="lf-desc">Built-in focus timer with 25-minute sessions and automatic breaks to keep you productive all day.</div>
+      </div>
+      <div class="landing-feature-card">
+        <div class="lf-icon">✨</div>
+        <div class="lf-title">AI Daily Motivation</div>
+        <div class="lf-desc">Start every session with a personalized motivational message powered by Gemini AI, tailored to your profession.</div>
+      </div>
+      <div class="landing-feature-card">
+        <div class="lf-icon">🗒️</div>
+        <div class="lf-title">Quick Notes</div>
+        <div class="lf-desc">Jot down important formulas, reminders, or key concepts with color-coded sticky notes always within reach.</div>
+      </div>
     </div>
+
+    <!-- Footer -->
+    <div class="landing-footer">
+      <a href="/privacy" target="_blank">Privacy Policy</a>
+      &nbsp;·&nbsp; © 2026 BoardPrep PH · Made for Filipino board exam reviewers 🇵🇭
+    </div>
+
   </main>
 </div>
 
@@ -140,7 +173,38 @@
   </div>
 </div>
 
-<!-- 3. LOGIN (password prompt for a specific profile) -->
+<!-- 3. LOGIN — standalone form (new) -->
+<div id="view-login-standalone" class="view" style="display:none">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">📚 <span>BoardPrep PH</span></div>
+      <h2>Welcome back!</h2>
+      <p class="auth-sub">Log in to continue your review journey</p>
+      <div class="auth-form">
+        <label>Username or Email</label>
+        <input type="text" id="standalone-login-identifier" placeholder="Username or email address"
+               autocomplete="username"
+               onkeydown="if(event.key==='Enter') document.getElementById('standalone-login-password').focus()"/>
+        <label>Password</label>
+        <input type="password" id="standalone-login-password" placeholder="Your password"
+               autocomplete="current-password"
+               onkeydown="if(event.key==='Enter') doStandaloneLogin()"/>
+        <div class="auth-error" id="standalone-login-error"></div>
+        <button class="btn-primary btn-full" id="standalone-login-btn" onclick="doStandaloneLogin()">Log In</button>
+        <div class="auth-switch">
+          <a href="#" onclick="showView('landing')">← Back</a>
+          &nbsp;·&nbsp;
+          <a href="#" onclick="openForgotPasswordStandalone()">Forgot password?</a>
+        </div>
+        <div class="auth-switch" style="margin-top:4px">
+          No profile yet? <a href="#" onclick="showView('register')">Create one free</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 3b. LOGIN — avatar-based (kept for internal use) -->
 <div id="view-login" class="view" style="display:none">
   <div class="auth-wrap">
     <div class="auth-card">
@@ -154,7 +218,7 @@
         <div class="auth-error" id="login-error"></div>
         <button class="btn-primary btn-full" onclick="doLogin()">Unlock Profile</button>
         <div class="auth-switch">
-          <a href="#" onclick="showView('landing')">← Back to profiles</a>
+          <a href="#" onclick="showView('landing')">← Back</a>
           &nbsp;·&nbsp;
           <a href="#" onclick="openForgotPassword()">Forgot password?</a>
         </div>

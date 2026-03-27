@@ -2016,3 +2016,108 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   font-size: 0.78rem; color: var(--text2); line-height: 1.5;
   border-left: 2px solid var(--border2); padding-left: 8px;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   NEW LANDING PAGE
+   ══════════════════════════════════════════════════════════════ */
+
+.landing-hero-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 4rem;
+}
+
+.landing-hero-block {
+  text-align: center;
+  padding: 3rem 0 2.5rem;
+}
+
+.landing-badge {
+  display: inline-block;
+  background: rgba(245,200,66,0.12);
+  border: 1px solid rgba(245,200,66,0.3);
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 5px 14px;
+  border-radius: 99px;
+  margin-bottom: 1.25rem;
+}
+
+.landing-headline {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--text);
+  margin: 0 0 1.25rem;
+}
+
+.landing-tagline {
+  font-size: 1rem;
+  color: var(--text2);
+  line-height: 1.7;
+  max-width: 600px;
+  margin: 0 auto 2rem;
+}
+
+.landing-cta-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-cta {
+  padding: 0.75rem 1.75rem;
+  font-size: 0.95rem;
+  border-radius: var(--radius);
+}
+
+/* Features grid */
+.landing-features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin: 1rem 0 3rem;
+}
+
+@media (max-width: 700px) {
+  .landing-features-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .landing-features-grid { grid-template-columns: 1fr; }
+}
+
+.landing-feature-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.landing-feature-card:hover {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+}
+.lf-icon { font-size: 1.6rem; margin-bottom: 0.5rem; }
+.lf-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700; font-size: 0.9rem;
+  color: var(--text); margin-bottom: 0.4rem;
+}
+.lf-desc { font-size: 0.8rem; color: var(--text2); line-height: 1.6; }
+
+/* Landing footer */
+.landing-footer {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text3);
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.landing-footer a {
+  color: var(--text3); text-decoration: none; transition: color 0.2s;
+}
+.landing-footer a:hover { color: var(--gold); }

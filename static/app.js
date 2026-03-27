@@ -46,7 +46,6 @@ async function boot() {
   } catch(e) {}
 
   showView('landing');
-  loadProfiles();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3040,6 +3039,54 @@ async function savePdfFlashcards() {
   } else {
     showToast(`✅ ${saved} saved, ❌ ${failed} failed. Please try again for the failed ones.`);
   }
+}
+
+
+// ══════════════════════════════════════════════════════════════
+//  STANDALONE LOGIN (username or email)
+// ══════════════════════════════════════════════════════════════
+
+async function doStandaloneLogin() {
+  const identifier = document.getElementById('standalone-login-identifier').value.trim();
+  const password   = document.getElementById('standalone-login-password').value;
+  const errEl      = document.getElementById('standalone-login-error');
+  const btn        = document.getElementById('standalone-login-btn');
+  errEl.textContent = '';
+
+  if (!identifier) { errEl.textContent = 'Please enter your username or email.'; return; }
+  if (!password)   { errEl.textContent = 'Please enter your password.'; return; }
+
+  btn.textContent = 'Logging in…';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password })
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      errEl.textContent = data.error || 'Incorrect username/email or password.';
+      return;
+    }
+    currentUser = data;
+    await enterTracker();
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+  } finally {
+    btn.textContent = 'Log In';
+    btn.disabled = false;
+  }
+}
+
+function openForgotPasswordStandalone() {
+  const identifier = document.getElementById('standalone-login-identifier').value.trim();
+  document.getElementById('forgot-email').value = identifier.includes('@') ? identifier : '';
+  document.getElementById('forgot-error').textContent = '';
+  const succ = document.getElementById('forgot-success');
+  if (succ) { succ.style.display = 'none'; succ.textContent = ''; }
+  showView('forgot');
+  setTimeout(() => document.getElementById('forgot-email')?.focus(), 150);
 }
 
 

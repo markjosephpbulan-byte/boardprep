@@ -1,1795 +1,995 @@
-from flask import Flask, jsonify, request, send_from_directory, session
-from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
-import json, os, uuid, base64, random, string
-import psycopg2
-import psycopg2.extras
-from datetime import datetime, timedelta
-from functools import wraps
-from collections import defaultdict
-import threading
-import requests as http_requests
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BoardPrep PH — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --bg3: #1c2330;
+    --surface: #1e2736; --surface2: #242f42;
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+    --text: #e8edf5; --text2: #8b97a8; --text3: #5a6678;
+    --gold: #f5c842; --gold2: #e8b830;
+    --green: #3ecf8e; --red: #f56565;
+    --radius: 14px; --radius-sm: 8px;
+    --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
 
-from flask import make_response
-import gzip
-import io
+  /* ── Login Screen ── */
+  .login-wrap {
+    min-height: 100vh; display: flex; align-items: center;
+    justify-content: center; padding: 2rem;
+    background: radial-gradient(ellipse at 50% 0%, rgba(245,200,66,0.07) 0%, transparent 60%), var(--bg);
+  }
+  .login-card {
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: var(--radius); padding: 2.5rem;
+    width: 100%; max-width: 380px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    animation: fadeUp 0.3s ease;
+  }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  .login-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(245,200,66,0.1); border: 1px solid rgba(245,200,66,0.3);
+    border-radius: 99px; padding: 4px 12px;
+    font-size: 0.75rem; font-weight: 700; color: var(--gold);
+    font-family: 'Syne', sans-serif; letter-spacing: 1px;
+    text-transform: uppercase; margin-bottom: 1.25rem;
+  }
+  .login-card h1 { font-family: 'Syne', sans-serif; font-size: 1.6rem; font-weight: 800; margin-bottom: 6px; }
+  .login-card p { color: var(--text2); font-size: 0.88rem; margin-bottom: 1.5rem; }
+  label { display: block; font-size: 0.75rem; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 6px; }
+  input[type=password] {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); padding: 0.7rem 0.9rem;
+    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.9rem;
+    outline: none; transition: border-color 0.2s; margin-bottom: 10px;
+  }
+  input[type=password]:focus { border-color: var(--gold); }
+  input::placeholder { color: var(--text3); }
+  .error-msg { font-size: 0.82rem; color: var(--red); min-height: 18px; margin-bottom: 8px; }
 
-app = Flask(__name__, static_folder='static')
-app.secret_key = os.environ.get('SECRET_KEY', 'boardprep-dev-secret-change-in-prod')
+  /* ── Buttons ── */
+  .btn { border: none; border-radius: var(--radius-sm); cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; transition: all 0.2s; }
+  .btn-gold { background: var(--gold); color: #0d1117; padding: 0.65rem 1.25rem; font-size: 0.88rem; }
+  .btn-gold:hover { background: var(--gold2); transform: translateY(-1px); }
+  .btn-gold:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+  .btn-full { width: 100%; }
+  .btn-danger-sm {
+    background: rgba(245,101,101,0.12); color: var(--red);
+    border: 1px solid rgba(245,101,101,0.25); border-radius: 6px;
+    padding: 5px 12px; font-size: 0.8rem; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-weight: 500;
+    transition: all 0.2s;
+  }
+  .btn-danger-sm:hover { background: rgba(245,101,101,0.22); border-color: var(--red); }
+  .btn-ghost-sm {
+    background: transparent; color: var(--text2);
+    border: 1px solid var(--border2); border-radius: 6px;
+    padding: 5px 12px; font-size: 0.8rem; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; transition: all 0.2s;
+  }
+  .btn-ghost-sm:hover { border-color: var(--text2); color: var(--text); }
 
-# Tell browser to cache static files aggressively
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # 1 year for static files
+  /* ── Admin Panel ── */
+  #adminPanel { display: none; }
+  .admin-header {
+    background: rgba(13,17,23,0.92); backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .admin-header-inner {
+    max-width: 1100px; margin: 0 auto; padding: 0 2rem;
+    height: 64px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .admin-logo { font-family: 'Syne', sans-serif; font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+  .admin-logo span { color: var(--gold); }
+  .admin-tag {
+    background: rgba(245,200,66,0.1); border: 1px solid rgba(245,200,66,0.3);
+    border-radius: 99px; padding: 2px 10px;
+    font-size: 0.68rem; font-weight: 700; color: var(--gold);
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+  .logout-btn {
+    background: transparent; color: var(--text3); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); padding: 0.45rem 0.9rem;
+    font-size: 0.82rem; cursor: pointer; transition: all 0.2s;
+  }
+  .logout-btn:hover { color: var(--text); border-color: var(--text2); }
 
-@app.after_request
-def add_performance_headers(response):
-    """Add headers that make the browser and CDN cache responses efficiently."""
-    # Compress JSON responses
-    if (response.content_type.startswith('application/json') and
-        len(response.data) > 1024 and
-        'gzip' in request.headers.get('Accept-Encoding', '')):
-        compressed = gzip.compress(response.data, compresslevel=6)
-        if len(compressed) < len(response.data):
-            response.data = compressed
-            response.headers['Content-Encoding'] = 'gzip'
-            response.headers['Vary'] = 'Accept-Encoding'
+  .admin-main { max-width: 1100px; margin: 0 auto; padding: 2rem; }
 
-    # Cache static files for 1 year (they have unique names via versioning)
-    if request.path.startswith('/static/'):
-        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
-    # Cache profile list for 30s in browser too
-    elif request.path == '/api/profiles' and response.status_code == 200:
-        response.headers['Cache-Control'] = 'public, max-age=30'
-    # Never cache API responses that change per-user
-    elif request.path.startswith('/api/'):
-        response.headers['Cache-Control'] = 'no-store'
+  /* Stats row */
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
+  .stat-label { font-size: 0.75rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600; margin-bottom: 6px; }
+  .stat-value { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; color: var(--gold); }
 
-    # Security headers (good practice)
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options']        = 'SAMEORIGIN'
-    return response
+  /* Users table */
+  .section-title {
+    font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700;
+    margin-bottom: 1rem; display: flex; align-items: center; gap: 10px;
+  }
+  .user-count-badge {
+    background: var(--surface2); border-radius: 99px;
+    padding: 2px 10px; font-size: 0.75rem; color: var(--text2); font-family: 'DM Sans', sans-serif;
+  }
 
-DATABASE_URL = os.environ.get('DATABASE_URL', '')
+  .users-table { width: 100%; border-collapse: collapse; }
+  .users-table th {
+    text-align: left; font-size: 0.72rem; font-weight: 600;
+    color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px;
+    padding: 0.6rem 1rem; border-bottom: 1px solid var(--border);
+  }
+  .users-table td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 0.88rem; }
+  .users-table tr:hover td { background: var(--surface2); }
+  .users-table tr:last-child td { border-bottom: none; }
 
-UPLOAD_DIR = os.environ.get('UPLOAD_DIR', 'uploads')
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-ALLOWED_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+  .user-avatar-cell { display: flex; align-items: center; gap: 10px; }
+  .user-avatar-sm {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--surface2); overflow: hidden; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; border: 1px solid var(--border2);
+  }
+  .user-avatar-sm img { width: 100%; height: 100%; object-fit: cover; }
+  .user-display-name { font-weight: 500; }
+  .user-username { font-size: 0.78rem; color: var(--text3); }
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  DATABASE — Connection Pool (reuses connections, much faster)
-# ══════════════════════════════════════════════════════════════════════════════
+  .progress-inline { display: flex; align-items: center; gap: 8px; }
+  .bar-mini-wrap { width: 70px; height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
+  .bar-mini-fill { height: 100%; background: var(--gold); border-radius: 99px; }
+  .pct-mini { font-family: 'Syne', sans-serif; font-size: 0.75rem; font-weight: 700; color: var(--gold); min-width: 32px; }
 
-from psycopg2 import pool as pg_pool
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 
-_pool = None
+  /* Confirm overlay */
+  .confirm-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200; backdrop-filter: blur(4px);
+  }
+  .confirm-overlay.open { display: flex; }
+  .confirm-box {
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: var(--radius); padding: 2rem; max-width: 380px; width: 100%;
+    box-shadow: var(--shadow); animation: fadeUp 0.2s ease;
+  }
+  .confirm-box h3 { font-family: 'Syne', sans-serif; font-weight: 700; margin-bottom: 8px; }
+  .confirm-box p { color: var(--text2); font-size: 0.88rem; margin-bottom: 1.5rem; line-height: 1.5; }
+  .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
-def get_pool():
-    """Create the connection pool once, reuse forever."""
-    global _pool
-    if _pool is None:
-        if not DATABASE_URL:
-            raise RuntimeError("DATABASE_URL environment variable not set")
-        _pool = pg_pool.ThreadedConnectionPool(
-            minconn=1,   # keep 1 connection warm (Railway free tier friendly)
-            maxconn=5,   # max 5 simultaneous connections (free tier safe)
-            dsn=DATABASE_URL + ("" if "keepalives" in DATABASE_URL else
-                "?keepalives=1&keepalives_idle=30&keepalives_interval=10&keepalives_count=5"
-                if "?" not in DATABASE_URL else
-                "&keepalives=1&keepalives_idle=30&keepalives_interval=10&keepalives_count=5"),
-            cursor_factory=psycopg2.extras.RealDictCursor
-        )
-        print("[DB] Connection pool created ✅")
-    return _pool
+  /* Toast */
+  .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 0.65rem 1.25rem; font-size: 0.85rem; box-shadow: var(--shadow); z-index: 400; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-def db_execute(query, params=(), fetch='none'):
-    """Run a query using a pooled connection — fast."""
-    pool = get_pool()
-    conn = pool.getconn()
-    try:
-        conn.autocommit = False
-        cur = conn.cursor()
-        cur.execute(query, params)
-        result = None
-        if fetch == 'one':
-            row = cur.fetchone()
-            result = dict(row) if row else None
-        elif fetch == 'all':
-            rows = cur.fetchall()
-            result = [dict(r) for r in rows]
-        conn.commit()
-        cur.close()
-        return result
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        pool.putconn(conn)  # return connection to pool — NOT closed
+  .empty-users { text-align: center; padding: 3rem; color: var(--text3); }
 
-def init_db():
-    db_execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id            TEXT PRIMARY KEY,
-            username      TEXT UNIQUE NOT NULL,
-            display_name  TEXT NOT NULL,
-            email         TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            avatar        TEXT,
-            exam_date     TEXT,
-            is_paused     BOOLEAN DEFAULT FALSE,
-            is_pro        BOOLEAN DEFAULT TRUE,
-            plan          TEXT DEFAULT 'trial',
-            plan_expires  TIMESTAMPTZ,
-            pro_since     TIMESTAMPTZ DEFAULT NOW(),
-            created_at    TIMESTAMPTZ DEFAULT NOW()
-        )
-    """)
-    db_execute("""
-        CREATE TABLE IF NOT EXISTS subjects (
-            id         TEXT PRIMARY KEY,
-            user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            name       TEXT NOT NULL,
-            color      TEXT DEFAULT '#4f8ef7',
-            position   INTEGER DEFAULT 0,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-    """)
-    db_execute("""
-        CREATE TABLE IF NOT EXISTS subsections (
-            id         TEXT PRIMARY KEY,
-            subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-            user_id    TEXT NOT NULL,
-            name       TEXT NOT NULL,
-            done       BOOLEAN DEFAULT FALSE,
-            position   INTEGER DEFAULT 0,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-    """)
-    db_execute("""
-        CREATE TABLE IF NOT EXISTS topics (
-            id            TEXT PRIMARY KEY,
-            subsection_id TEXT NOT NULL REFERENCES subsections(id) ON DELETE CASCADE,
-            user_id       TEXT NOT NULL,
-            name          TEXT NOT NULL,
-            done          BOOLEAN DEFAULT FALSE,
-            note          TEXT DEFAULT '',
-            position      INTEGER DEFAULT 0,
-            created_at    TIMESTAMPTZ DEFAULT NOW()
-        )
-    """)
-    db_execute("""
-        CREATE TABLE IF NOT EXISTS notes (
-            id         TEXT PRIMARY KEY,
-            user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            title      TEXT DEFAULT 'Untitled',
-            content    TEXT DEFAULT '',
-            color      TEXT DEFAULT '#fef08a',
-            done       BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            updated_at TIMESTAMPTZ DEFAULT NOW()
-        )
-    """)
-    db_execute("""
-        CREATE TABLE IF NOT EXISTS banned_emails (
-            email         TEXT PRIMARY KEY,
-            banned_until  TIMESTAMPTZ NOT NULL,
-            reason        TEXT DEFAULT 'repeated account abuse',
-            created_at    TIMESTAMPTZ DEFAULT NOW()
-        )
-    """)
-    db_execute("""
-        CREATE TABLE IF NOT EXISTS deleted_accounts (
-            id         SERIAL PRIMARY KEY,
-            email      TEXT NOT NULL,
-            deleted_at TIMESTAMPTZ DEFAULT NOW()
-        )
-    """)
-    db_execute("""
-        CREATE TABLE IF NOT EXISTS flashcards (
-            id             TEXT PRIMARY KEY,
-            subject_id     TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-            subsection_id  TEXT REFERENCES subsections(id) ON DELETE CASCADE,
-            user_id        TEXT NOT NULL,
-            question       TEXT NOT NULL,
-            answer         TEXT NOT NULL DEFAULT '',
-            created_at     TIMESTAMPTZ DEFAULT NOW()
-        )
-    """)
-    # Indexes — make WHERE user_id=? and WHERE subject_id=? queries instant
-    db_execute("CREATE INDEX IF NOT EXISTS idx_subjects_user    ON subjects(user_id)")
-    db_execute("CREATE INDEX IF NOT EXISTS idx_subsections_subj ON subsections(subject_id)")
-    db_execute("CREATE INDEX IF NOT EXISTS idx_subsections_user ON subsections(user_id)")
-    db_execute("CREATE INDEX IF NOT EXISTS idx_topics_subsect   ON topics(subsection_id)")
-    db_execute("CREATE INDEX IF NOT EXISTS idx_topics_user      ON topics(user_id)")
-    db_execute("CREATE INDEX IF NOT EXISTS idx_notes_user       ON notes(user_id)")
-    db_execute("CREATE INDEX IF NOT EXISTS idx_flashcards_subject ON flashcards(subject_id)")
-    db_execute("CREATE INDEX IF NOT EXISTS idx_flashcards_user    ON flashcards(user_id)")
-    db_execute("CREATE INDEX IF NOT EXISTS idx_users_username   ON users(LOWER(username))")
-    db_execute("CREATE INDEX IF NOT EXISTS idx_users_email      ON users(LOWER(email))")
+  /* ── Analytics sections ── */
+  .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+  .analytics-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem;
+  }
+  .analytics-card-title {
+    font-family: 'Syne', sans-serif; font-size: 0.78rem; font-weight: 700;
+    color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px;
+    margin-bottom: 1rem;
+  }
 
-try:
-    get_pool()   # warm up the pool immediately on startup
-    # Check if tables exist — skip init if they do (saves 13 DB round trips on restart)
-    existing = db_execute("""
-        SELECT COUNT(*) as c FROM information_schema.tables
-        WHERE table_schema='public' AND table_name='users'
-    """, fetch='one')
-    if not existing or int(existing.get('c', 0)) == 0:
-        init_db()
-        print("[DB] Tables created ✅")
-    else:
-        # Still create indexes (idempotent) but skip table creation
-        db_execute("CREATE INDEX IF NOT EXISTS idx_subjects_user    ON subjects(user_id)")
-        db_execute("CREATE INDEX IF NOT EXISTS idx_subsections_subj ON subsections(subject_id)")
-        db_execute("CREATE INDEX IF NOT EXISTS idx_subsections_user ON subsections(user_id)")
-        db_execute("CREATE INDEX IF NOT EXISTS idx_topics_subsect   ON topics(subsection_id)")
-        db_execute("CREATE INDEX IF NOT EXISTS idx_topics_user      ON topics(user_id)")
-        db_execute("CREATE INDEX IF NOT EXISTS idx_notes_user       ON notes(user_id)")
-        # Safe migrations for existing DBs
-        try:
-            db_execute("ALTER TABLE topics ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''")
-        except Exception:
-            pass
-        try:
-            db_execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_paused BOOLEAN DEFAULT FALSE")
-            db_execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro BOOLEAN DEFAULT TRUE")
-            db_execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'trial'")
-            db_execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires TIMESTAMPTZ")
-            db_execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_since TIMESTAMPTZ DEFAULT NOW()")
-        except Exception:
-            pass
-        try:
-            db_execute("""
-                CREATE TABLE IF NOT EXISTS banned_emails (
-                    email TEXT PRIMARY KEY,
-                    banned_until TIMESTAMPTZ NOT NULL,
-                    reason TEXT DEFAULT 'repeated account abuse',
-                    created_at TIMESTAMPTZ DEFAULT NOW()
-                )
-            """)
-            db_execute("""
-                CREATE TABLE IF NOT EXISTS deleted_accounts (
-                    id SERIAL PRIMARY KEY,
-                    email TEXT NOT NULL,
-                    deleted_at TIMESTAMPTZ DEFAULT NOW()
-                )
-            """)
-        except Exception:
-            pass
-        try:
-            db_execute("""
-                CREATE TABLE IF NOT EXISTS flashcards (
-                    id             TEXT PRIMARY KEY,
-                    subject_id     TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-                    subsection_id  TEXT REFERENCES subsections(id) ON DELETE CASCADE,
-                    user_id        TEXT NOT NULL,
-                    question       TEXT NOT NULL,
-                    answer         TEXT NOT NULL DEFAULT '',
-                    created_at     TIMESTAMPTZ DEFAULT NOW()
-                )
-            """)
-            try:
-                db_execute("ALTER TABLE flashcards ADD COLUMN IF NOT EXISTS subsection_id TEXT REFERENCES subsections(id) ON DELETE CASCADE")
-            except Exception:
-                pass
-            db_execute("CREATE INDEX IF NOT EXISTS idx_flashcards_subject ON flashcards(subject_id)")
-            db_execute("CREATE INDEX IF NOT EXISTS idx_flashcards_user    ON flashcards(user_id)")
-        except Exception:
-            pass
-        print("[DB] Ready ✅ (tables already exist)")
-except Exception as e:
-    print(f"[DB] ❌ FAILED: {e}")
-    if DATABASE_URL:
-        safe_url = DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'unknown'
-        print(f"[DB] Tried connecting to: ...@{safe_url}")
+  /* Funnel */
+  .funnel-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+  }
+  .funnel-row:last-child { border-bottom: none; }
+  .funnel-label { font-size: 0.85rem; color: var(--text2); }
+  .funnel-count {
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem;
+  }
+  .funnel-count.warn { color: #f97316; }
+  .funnel-count.ok   { color: var(--green); }
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  PLAN EXPIRY + EMAIL BAN SYSTEM
-# ══════════════════════════════════════════════════════════════════════════════
+  /* Growth table */
+  .growth-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.5rem 0; border-bottom: 1px solid var(--border);
+  }
+  .growth-row:last-child { border-bottom: none; }
+  .growth-date { font-size: 0.83rem; color: var(--text2); }
+  .growth-bar-wrap { flex: 1; margin: 0 12px; height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
+  .growth-bar-fill { height: 100%; background: var(--gold); border-radius: 99px; transition: width 0.4s; }
+  .growth-num { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--gold); min-width: 24px; text-align: right; }
+  .growth-empty { color: var(--text3); font-size: 0.85rem; padding: 0.75rem 0; }
 
-def check_and_pause_expired_plans():
-    """Pause all users whose plan has expired. Called on every login."""
-    try:
-        db_execute("""
-            UPDATE users
-            SET is_paused = TRUE, is_pro = FALSE, plan = 'expired'
-            WHERE plan_expires IS NOT NULL
-              AND plan_expires < NOW()
-              AND is_paused = FALSE
-        """)
-    except Exception as e:
-        print(f"[AutoPause] Error: {e}")
+  /* Paused badge */
+  .paused-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(245,101,101,0.12);
+    border: 1px solid rgba(245,101,101,0.3);
+    color: var(--red); border-radius: 99px;
+    padding: 2px 8px; font-size: 0.72rem; font-weight: 600;
+  }
+  .btn-pause {
+    background: rgba(249,115,22,0.12); color: #f97316;
+    border: 1px solid rgba(249,115,22,0.3); border-radius: 6px;
+    padding: 5px 10px; font-size: 0.8rem; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-weight: 500;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .btn-pause:hover { background: rgba(249,115,22,0.22); border-color: #f97316; }
+  .btn-unpause {
+    background: rgba(62,207,142,0.12); color: var(--green);
+    border: 1px solid rgba(62,207,142,0.3); border-radius: 6px;
+    padding: 5px 10px; font-size: 0.8rem; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-weight: 500;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .btn-unpause:hover { background: rgba(62,207,142,0.22); border-color: var(--green); }
+  /* Pro/Free badges */
+  .pro-badge-admin {
+    display: inline-block; font-size: 0.65rem; font-weight: 700;
+    background: rgba(245,200,66,0.15); color: var(--gold);
+    border: 1px solid rgba(245,200,66,0.3);
+    border-radius: 99px; padding: 1px 7px; margin-left: 5px;
+  }
+  .basic-badge-admin {
+    display: inline-block; font-size: 0.65rem; font-weight: 700;
+    background: rgba(150,150,150,0.1); color: var(--text3);
+    border: 1px solid var(--border); border-radius: 99px; padding: 1px 7px; margin-left: 5px;
+  }
+  /* Set Pro / Set Basic buttons */
+  .btn-grant-pro {
+    padding: 5px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
+    border-radius: 6px; transition: all 0.15s;
+    background: rgba(245,200,66,0.1); color: var(--gold);
+    border: 1px solid rgba(245,200,66,0.35);
+  }
+  .btn-grant-pro:hover { background: rgba(245,200,66,0.22); border-color: var(--gold); }
+  .btn-set-basic {
+    padding: 5px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
+    border-radius: 6px; transition: all 0.15s;
+    background: rgba(150,150,150,0.08); color: var(--text2);
+    border: 1px solid var(--border);
+  }
+  .btn-set-basic:hover { background: rgba(150,150,150,0.15); border-color: var(--text3); }
+  /* Plan buttons */
+  /* ── Toolbar ── */
+  .table-toolbar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .toolbar-search-wrap {
+    flex: 1; min-width: 200px;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg3); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); padding: 0.55rem 0.85rem;
+  }
+  .toolbar-search-icon { font-size: 0.85rem; color: var(--text3); flex-shrink: 0; }
+  .toolbar-search {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.88rem;
+  }
+  .toolbar-search::placeholder { color: var(--text3); }
+  .toolbar-filters { display: flex; gap: 5px; flex-wrap: wrap; }
+  .filter-btn {
+    padding: 5px 12px; font-size: 0.75rem; font-weight: 600;
+    border-radius: 99px; cursor: pointer; transition: all 0.15s;
+    background: transparent; border: 1px solid var(--border2);
+    color: var(--text2); font-family: 'DM Sans', sans-serif;
+  }
+  .filter-btn:hover { border-color: var(--text2); color: var(--text); }
+  .filter-btn.active { background: var(--gold); border-color: var(--gold); color: #0d1117; }
+  .toolbar-sort {
+    background: var(--bg3); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); padding: 0.5rem 0.75rem;
+    color: var(--text2); font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem; outline: none; cursor: pointer;
+  }
+  .toolbar-sort:focus { border-color: var(--gold); }
 
-def is_email_banned(email):
-    """Return ban record if email is banned, else None."""
-    try:
-        return db_execute(
-            "SELECT banned_until FROM banned_emails WHERE LOWER(email)=LOWER(%s) AND banned_until > NOW()",
-            (email,), fetch='one'
-        )
-    except Exception:
-        return None
+  .btn-plan-pro {
+    padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+    border-radius: 6px; transition: all 0.15s;
+    background: rgba(245,200,66,0.12); color: var(--gold);
+    border: 1px solid rgba(245,200,66,0.35);
+  }
+  .btn-plan-pro:hover { background: rgba(245,200,66,0.25); }
+  .btn-plan-basic {
+    padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+    border-radius: 6px; transition: all 0.15s;
+    background: rgba(62,207,142,0.1); color: var(--green);
+    border: 1px solid rgba(62,207,142,0.3);
+  }
+  .btn-plan-basic:hover { background: rgba(62,207,142,0.2); }
+  .btn-plan-revoke {
+    padding: 4px 9px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+    border-radius: 6px; transition: all 0.15s;
+    background: rgba(150,150,150,0.08); color: var(--text2);
+    border: 1px solid var(--border);
+  }
+  .btn-plan-revoke:hover { background: rgba(150,150,150,0.15); }
+  /* Expiry badge */
+  .expiry-badge-admin {
+    display: inline-block; font-size: 0.62rem; font-weight: 600;
+    background: rgba(249,115,22,0.1); color: #f97316;
+    border: 1px solid rgba(249,115,22,0.3);
+    border-radius: 99px; padding: 1px 7px; margin-left: 5px;
+  }
+  .row-paused td { opacity: 0.6; }
 
-def record_account_deletion(email):
-    """Track deletions. Ban email for 2 months after 3 deletions in 60 days."""
-    try:
-        db_execute(
-            "INSERT INTO deleted_accounts (email, deleted_at) VALUES (LOWER(%s), NOW())",
-            (email,)
-        )
-        count = db_execute("""
-            SELECT COUNT(*) as c FROM deleted_accounts
-            WHERE LOWER(email)=LOWER(%s)
-              AND deleted_at > NOW() - INTERVAL '60 days'
-        """, (email,), fetch='one')
-        if count and int(count.get('c', 0)) >= 3:
-            db_execute("""
-                INSERT INTO banned_emails (email, banned_until, reason)
-                VALUES (LOWER(%s), NOW() + INTERVAL '2 months', '3+ account deletions in 60 days')
-                ON CONFLICT (email) DO UPDATE SET banned_until = NOW() + INTERVAL '2 months'
-            """, (email,))
-            print(f"[Ban] {email} banned for 2 months")
-    except Exception as e:
-        print(f"[RecordDeletion] Error: {e}")
+  @media (max-width: 640px) {
+    .admin-main { padding: 1rem; }
+    .analytics-grid { grid-template-columns: 1fr; }
+    .users-table th:nth-child(2), .users-table td:nth-child(2),
+    .users-table th:nth-child(4), .users-table td:nth-child(4),
+    .users-table th:nth-child(5), .users-table td:nth-child(5) { display: none; }
+  }
+</style>
+</head>
+<body>
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  RATE LIMITER
-# ══════════════════════════════════════════════════════════════════════════════
+<!-- ══ LOGIN ════════════════════════════════════════════════════════════════ -->
+<div id="loginScreen" class="login-wrap">
+  <div class="login-card">
+    <div class="login-badge">🔐 Admin Access</div>
+    <h1>BoardPrep PH</h1>
+    <p>Enter the admin password to manage all profiles.</p>
+    <label>Admin Password</label>
+    <input type="password" id="adminPwInput" placeholder="Enter admin password"
+           onkeydown="if(event.key==='Enter') doAdminLogin()"/>
+    <div class="error-msg" id="loginError"></div>
+    <button class="btn btn-gold btn-full" id="loginBtn" onclick="doAdminLogin()">Enter Admin Panel</button>
+    <div style="margin-top:1rem;text-align:center">
+      <a href="/" style="font-size:0.82rem;color:var(--text3);text-decoration:none">← Back to app</a>
+    </div>
+  </div>
+</div>
 
-class RateLimiter:
-    def __init__(self):
-        self._counts = defaultdict(list)
-        self._lock   = threading.Lock()
+<!-- ══ ADMIN PANEL ══════════════════════════════════════════════════════════ -->
+<div id="adminPanel">
 
-    def is_allowed(self, key, max_requests, window_seconds):
-        now    = datetime.now()
-        cutoff = now - timedelta(seconds=window_seconds)
-        with self._lock:
-            self._counts[key] = [t for t in self._counts[key] if t > cutoff]
-            if len(self._counts[key]) >= max_requests:
-                return False
-            self._counts[key].append(now)
-            return True
-
-limiter = RateLimiter()
-
-# ── Simple in-memory cache ────────────────────────────────────────────────────
-class SimpleCache:
-    """Cache values in memory with a TTL (time-to-live) in seconds."""
-    def __init__(self):
-        self._store = {}
-        self._lock  = threading.Lock()
-
-    def get(self, key):
-        with self._lock:
-            item = self._store.get(key)
-            if item and datetime.now() < item['expires']:
-                return item['value']
-            if item:
-                del self._store[key]
-            return None
-
-    def set(self, key, value, ttl_seconds=30):
-        with self._lock:
-            self._store[key] = {
-                'value':   value,
-                'expires': datetime.now() + timedelta(seconds=ttl_seconds)
-            }
-
-    def delete(self, key):
-        with self._lock:
-            self._store.pop(key, None)
-
-    def delete_prefix(self, prefix):
-        """Delete all keys starting with a prefix."""
-        with self._lock:
-            keys = [k for k in self._store if k.startswith(prefix)]
-            for k in keys:
-                del self._store[k]
-
-cache = SimpleCache()
-
-def get_client_ip():
-    return (request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
-            or request.remote_addr or '0.0.0.0')
-
-def rate_limit(max_requests, window_seconds, scope=''):
-    def decorator(f):
-        @wraps(f)
-        def wrapped(*args, **kwargs):
-            ip  = get_client_ip()
-            key = f"{scope or f.__name__}:{ip}"
-            if not limiter.is_allowed(key, max_requests, window_seconds):
-                return jsonify({
-                    "error": f"Too many requests. Please wait {window_seconds} seconds and try again."
-                }), 429
-            return f(*args, **kwargs)
-        return wrapped
-    return decorator
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  EMAIL (Brevo)
-# ══════════════════════════════════════════════════════════════════════════════
-
-BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '')
-EMAIL_FROM    = os.environ.get('EMAIL_FROM', 'BoardPrep PH')
-EMAIL_ADDRESS = os.environ.get('EMAIL_ADDRESS', 'noreply@boardprep.ph')
-EMAIL_ENABLED = bool(BREVO_API_KEY)
-
-pending_verifications = {}
-pending_resets        = {}
-
-def generate_code():
-    return ''.join(random.choices(string.digits, k=6))
-
-def _brevo_send(to_email, subject, html_body):
-    if not EMAIL_ENABLED:
-        print(f"[DEV EMAIL] To: {to_email} | Subject: {subject}")
-        return True, None
-    try:
-        resp = http_requests.post(
-            'https://api.brevo.com/v3/smtp/email',
-            headers={'api-key': BREVO_API_KEY, 'Content-Type': 'application/json'},
-            json={
-                'sender':      {'name': EMAIL_FROM, 'email': EMAIL_ADDRESS},
-                'to':          [{'email': to_email}],
-                'subject':     subject,
-                'htmlContent': html_body
-            },
-            timeout=10
-        )
-        if resp.status_code in (200, 201):
-            return True, None
-        try:
-            err = resp.json().get('message') or str(resp.status_code)
-        except Exception:
-            err = str(resp.status_code)
-        return False, f"({resp.status_code}) {err}"
-    except Exception as e:
-        return False, str(e)
-
-def _code_email_html(code, code_color, subtitle, footer):
-    return f"""
-    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;
-                background:#0d1117;color:#e8edf5;border-radius:12px;">
-      <div style="text-align:center;margin-bottom:24px;">
-        <div style="font-size:2rem">&#128218;</div>
-        <h1 style="color:#f5c842;font-size:1.4rem;margin:8px 0">BoardPrep PH</h1>
-        <p style="color:#8b97a8;font-size:0.9rem">Board Exam Learning Tracker</p>
+  <header class="admin-header">
+    <div class="admin-header-inner">
+      <div class="admin-logo">
+        📚 BoardPrep <span>PH</span>
+        <span class="admin-tag">Admin</span>
       </div>
-      <p style="color:#8b97a8;margin-bottom:24px">{subtitle}</p>
-      <div style="background:#1e2736;border:2px solid {code_color};border-radius:12px;
-                  padding:24px;text-align:center;margin-bottom:24px;">
-        <div style="font-size:2.5rem;font-weight:800;letter-spacing:12px;
-                    color:{code_color};font-family:monospace">{code}</div>
-        <div style="color:#8b97a8;font-size:0.8rem;margin-top:8px">
-          This code expires in 10 minutes</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <a href="/" style="font-size:0.82rem;color:var(--text3);text-decoration:none">View App</a>
+        <button class="logout-btn" onclick="doAdminLogout()">Log Out</button>
       </div>
-      <p style="color:#5a6678;font-size:0.8rem;text-align:center">{footer}</p>
-    </div>"""
-
-def send_verification_email(to_email, code, display_name):
-    html = _code_email_html(
-        code, '#f5c842',
-        f'Hi <strong>{display_name}</strong>, enter this code to complete your registration:',
-        'If you did not request this, you can safely ignore this email.'
-    )
-    return _brevo_send(to_email, 'Your BoardPrep PH Verification Code', html)
-
-def send_reset_email(to_email, code, display_name):
-    html = _code_email_html(
-        code, '#f56565',
-        f'Hi <strong>{display_name}</strong>, use this code to reset your password:',
-        'If you did not request this, your password has not been changed.'
-    )
-    return _brevo_send(to_email, 'BoardPrep PH — Password Reset Code', html)
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  DB HELPERS
-# ══════════════════════════════════════════════════════════════════════════════
-
-def get_user_by_id(user_id):
-    key    = f"user:{user_id}"
-    cached = cache.get(key)
-    if cached is not None:
-        return cached
-    user = db_execute("SELECT * FROM users WHERE id=%s", (user_id,), fetch='one')
-    if user:
-        cache.set(key, user, ttl_seconds=10)
-    return user
-
-def invalidate_user_cache(user_id):
-    cache.delete(f"user:{user_id}")
-
-def get_user_by_username(username):
-    return db_execute("SELECT * FROM users WHERE LOWER(username)=LOWER(%s)", (username,), fetch='one')
-
-def get_user_by_email(email):
-    return db_execute("SELECT * FROM users WHERE LOWER(email)=LOWER(%s)", (email,), fetch='one')
-
-def safe_user(u):
-    return {
-        "id":           u['id'],
-        "username":     u['username'],
-        "display_name": u['display_name'],
-        "email":        u.get('email', ''),
-        "avatar":       u.get('avatar'),
-        "exam_date":    u.get('exam_date'),
-        "is_pro":       bool(u.get('is_pro', True)),
-        "plan":         u.get('plan', 'trial'),
-        "plan_expires": str(u.get('plan_expires', '')) if u.get('plan_expires') else None,
-        "pro_since":    str(u.get('pro_since', '')),
-        "created_at":   str(u.get('created_at', ''))
-    }
-
-def get_subjects_for_user(user_id):
-    """
-    Load all subjects/subsections/topics in 3 queries total instead of
-    1 + N + N*M queries. Much faster for users with many subjects.
-    """
-    # Query 1 — all subjects
-    subjects = db_execute(
-        "SELECT * FROM subjects WHERE user_id=%s ORDER BY position, created_at",
-        (user_id,), fetch='all'
-    ) or []
-    if not subjects:
-        return []
-
-    subject_ids = [s['id'] for s in subjects]
-
-    # Query 2 — all subsections for these subjects in one go
-    placeholders = ','.join(['%s'] * len(subject_ids))
-    all_subsections = db_execute(
-        f"SELECT * FROM subsections WHERE subject_id IN ({placeholders}) ORDER BY position, created_at",
-        subject_ids, fetch='all'
-    ) or []
-
-    subsection_ids = [ss['id'] for ss in all_subsections]
-
-    # Query 3 — all topics for these subsections in one go
-    all_topics = []
-    if subsection_ids:
-        ph2 = ','.join(['%s'] * len(subsection_ids))
-        all_topics = db_execute(
-            f"SELECT * FROM topics WHERE subsection_id IN ({ph2}) ORDER BY position, created_at",
-            subsection_ids, fetch='all'
-        ) or []
-
-    # Group topics by subsection_id
-    topics_by_ss = {}
-    for t in all_topics:
-        t['done']       = bool(t['done'])
-        t['note']       = t.get('note') or ''
-        t['created_at'] = str(t['created_at'])
-        topics_by_ss.setdefault(t['subsection_id'], []).append(t)
-
-    # Group subsections by subject_id
-    ss_by_subject = {}
-    for ss in all_subsections:
-        ss['done']       = bool(ss['done'])
-        ss['created_at'] = str(ss['created_at'])
-        ss['topics']     = topics_by_ss.get(ss['id'], [])
-        ss_by_subject.setdefault(ss['subject_id'], []).append(ss)
-
-    # Assemble final structure
-    for s in subjects:
-        s['subsections'] = ss_by_subject.get(s['id'], [])
-        s['created_at']  = str(s['created_at'])
-
-    return subjects
-
-def calc_progress_db(user_id):
-    row = db_execute("""
-        SELECT COUNT(t.id) as total,
-               SUM(CASE WHEN t.done THEN 1 ELSE 0 END) as done
-        FROM topics t
-        JOIN subsections ss ON ss.id = t.subsection_id
-        JOIN subjects s ON s.id = ss.subject_id
-        WHERE s.user_id = %s
-    """, (user_id,), fetch='one')
-    total = int(row['total'] or 0)
-    done  = int(row['done']  or 0)
-    nt = db_execute("""
-        SELECT COUNT(ss.id) as cnt,
-               SUM(CASE WHEN ss.done THEN 1 ELSE 0 END) as done_cnt
-        FROM subsections ss
-        WHERE ss.user_id=%s
-          AND NOT EXISTS (SELECT 1 FROM topics t WHERE t.subsection_id=ss.id)
-    """, (user_id,), fetch='one')
-    total += int(nt['cnt']      or 0)
-    done  += int(nt['done_cnt'] or 0)
-    return total, done
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  AUTH DECORATORS
-# ══════════════════════════════════════════════════════════════════════════════
-
-def owner_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({"error": "Unauthorized"}), 401
-        if session['user_id'] != kwargs.get('user_id'):
-            return jsonify({"error": "Forbidden"}), 403
-        return f(*args, **kwargs)
-    return decorated
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  AUTH ROUTES
-# ══════════════════════════════════════════════════════════════════════════════
-
-@app.route('/api/auth/request-code', methods=['POST'])
-@rate_limit(5, 600, 'request_code')
-def request_code():
-    body         = request.json or {}
-    username     = (body.get('username') or '').strip()
-    password     = (body.get('password') or '').strip()
-    email        = (body.get('email') or '').strip().lower()
-    display_name = (body.get('display_name') or username).strip()
-
-    if not username:
-        return jsonify({"error": "Username is required"}), 400
-    if len(username) < 3:
-        return jsonify({"error": "Username must be at least 3 characters"}), 400
-    if not password or len(password) < 4:
-        return jsonify({"error": "Password must be at least 4 characters"}), 400
-    if not email or '@' not in email:
-        return jsonify({"error": "A valid email address is required"}), 400
-    if get_user_by_username(username):
-        return jsonify({"error": "Username already taken"}), 409
-    if get_user_by_email(email):
-        return jsonify({"error": "An account with this email already exists"}), 409
-
-    code = generate_code()
-    pending_verifications[email] = {
-        "code":          code,
-        "username":      username,
-        "display_name":  display_name,
-        "password_hash": generate_password_hash(password),
-        "expires_at":    (datetime.now() + timedelta(minutes=10)).isoformat()
-    }
-    ok, err = send_verification_email(email, code, display_name)
-    if not ok:
-        return jsonify({"error": f"Failed to send email: {err}"}), 500
-    return jsonify({"ok": True, "email": email, "dev_mode": not EMAIL_ENABLED})
-
-@app.route('/api/auth/register', methods=['POST'])
-@rate_limit(10, 600, 'register')
-def register():
-    body  = request.json or {}
-    email = (body.get('email') or '').strip().lower()
-    code  = (body.get('code') or '').strip()
-
-    pending = pending_verifications.get(email)
-    if not pending:
-        return jsonify({"error": "No pending verification. Please request a new code."}), 400
-    if datetime.now() > datetime.fromisoformat(pending['expires_at']):
-        del pending_verifications[email]
-        return jsonify({"error": "Code has expired. Please request a new one."}), 400
-    if pending['code'] != code:
-        return jsonify({"error": "Incorrect code. Please try again."}), 401
-    if get_user_by_username(pending['username']):
-        del pending_verifications[email]
-        return jsonify({"error": "Username was just taken. Please choose another."}), 409
-
-    uid = str(uuid.uuid4())
-    db_execute(
-        "INSERT INTO users (id, username, display_name, email, password_hash, plan, plan_expires) VALUES (%s,%s,%s,%s,%s,'trial', NOW() + INTERVAL '7 days')",
-        (uid, pending['username'], pending['display_name'], email, pending['password_hash'])
-    )
-    del pending_verifications[email]
-    invalidate_profiles_cache()
-    user = get_user_by_id(uid)
-    session['user_id'] = uid
-    return jsonify(safe_user(user)), 201
-
-@app.route('/api/auth/login', methods=['POST'])
-@rate_limit(10, 300, 'login')
-def login():
-    # Auto-pause expired plans on every login attempt
-    check_and_pause_expired_plans()
-
-    body       = request.json or {}
-    identifier = (body.get('identifier') or body.get('username') or '').strip()
-    password   = (body.get('password') or '').strip()
-    if not identifier or not password:
-        return jsonify({"error": "Please enter your username/email and password."}), 400
-    # Try username first, then email
-    user = get_user_by_username(identifier)
-    if not user:
-        user = db_execute("SELECT * FROM users WHERE LOWER(email)=LOWER(%s)", (identifier,), fetch='one')
-    if not user or not check_password_hash(user['password_hash'], password):
-        return jsonify({"error": "Incorrect username/email or password."}), 401
-    if user.get('is_paused'):
-        return jsonify({"error": "Your account has been paused. Please contact the admin."}), 403
-    session['user_id'] = user['id']
-    return jsonify(safe_user(user))
-
-@app.route('/api/auth/logout', methods=['POST'])
-def logout():
-    session.clear()
-    return jsonify({"ok": True})
-
-@app.route('/api/auth/me', methods=['GET'])
-def me():
-    if 'user_id' not in session:
-        return jsonify({"error": "Not logged in"}), 401
-    user = get_user_by_id(session['user_id'])
-    if not user:
-        session.clear()
-        return jsonify({"error": "User not found"}), 404
-    return jsonify(safe_user(user))
-
-@app.route('/api/auth/me-full', methods=['GET'])
-def me_full():
-    """Return user + subjects + notes in ONE request — eliminates 2 round trips."""
-    if 'user_id' not in session:
-        return jsonify({"error": "Not logged in"}), 401
-    uid  = session['user_id']
-    user = get_user_by_id(uid)
-    if not user:
-        session.clear()
-        return jsonify({"error": "User not found"}), 404
-    if user.get('is_paused'):
-        session.clear()
-        return jsonify({"error": "Your account has been paused. Please contact the admin."}), 403
-    subjects = get_subjects_for_user(uid)
-    notes    = db_execute(
-        "SELECT * FROM notes WHERE user_id=%s ORDER BY created_at DESC",
-        (uid,), fetch='all'
-    ) or []
-    for n in notes:
-        n['done']       = bool(n['done'])
-        n['created_at'] = str(n['created_at'])
-        n['updated_at'] = str(n['updated_at'])
-    return jsonify({
-        "user":     safe_user(user),
-        "subjects": subjects,
-        "notes":    notes
-    })
-
-@app.route('/api/auth/forgot-password', methods=['POST'])
-@rate_limit(5, 600, 'forgot_password')
-def forgot_password():
-    body  = request.json or {}
-    email = (body.get('email') or '').strip().lower()
-    if not email or '@' not in email:
-        return jsonify({"error": "Please enter a valid email address."}), 400
-    user = get_user_by_email(email)
-    if user:
-        code = generate_code()
-        pending_resets[email] = {
-            "code":       code,
-            "user_id":    user['id'],
-            "expires_at": (datetime.now() + timedelta(minutes=10)).isoformat()
-        }
-        ok, err = send_reset_email(email, code, user['display_name'])
-        if not ok:
-            return jsonify({"error": f"Failed to send email: {err}"}), 500
-    return jsonify({"ok": True, "dev_mode": not EMAIL_ENABLED})
-
-@app.route('/api/auth/reset-password', methods=['POST'])
-@rate_limit(10, 600, 'reset_password')
-def reset_password():
-    body         = request.json or {}
-    email        = (body.get('email') or '').strip().lower()
-    code         = (body.get('code') or '').strip()
-    new_password = (body.get('new_password') or '').strip()
-    if not email or not code or not new_password:
-        return jsonify({"error": "All fields are required."}), 400
-    if len(new_password) < 4:
-        return jsonify({"error": "Password must be at least 4 characters."}), 400
-    pending = pending_resets.get(email)
-    if not pending:
-        return jsonify({"error": "No reset request found. Please request a new code."}), 400
-    if datetime.now() > datetime.fromisoformat(pending['expires_at']):
-        del pending_resets[email]
-        return jsonify({"error": "Code has expired. Please request a new one."}), 400
-    if pending['code'] != code:
-        return jsonify({"error": "Incorrect code. Please try again."}), 401
-    user = get_user_by_id(pending['user_id'])
-    if not user:
-        del pending_resets[email]
-        return jsonify({"error": "Account not found."}), 404
-    db_execute("UPDATE users SET password_hash=%s WHERE id=%s",
-               (generate_password_hash(new_password), pending['user_id']))
-    invalidate_user_cache(pending['user_id'])
-    del pending_resets[email]
-    return jsonify({"ok": True})
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  PROFILES  (public)
-# ══════════════════════════════════════════════════════════════════════════════
-
-def invalidate_profiles_cache():
-    """Call this whenever any user's data changes."""
-    cache.delete('profiles_list')
-
-@app.route('/api/profiles', methods=['GET'])
-def list_profiles():
-    # Serve from cache if fresh — landing page doesn't need real-time data
-    cached = cache.get('profiles_list')
-    if cached is not None:
-        return jsonify(cached)
-    try:
-        # One query for all users
-        users = db_execute("SELECT * FROM users ORDER BY created_at", fetch='all') or []
-        if not users:
-            return jsonify([])
-
-        # One query for all subject counts
-        subject_counts = db_execute("""
-            SELECT user_id, COUNT(*) as c
-            FROM subjects GROUP BY user_id
-        """, fetch='all') or []
-        sc_map = {r['user_id']: int(r['c']) for r in subject_counts}
-
-        # One query for all topic progress
-        topic_progress = db_execute("""
-            SELECT s.user_id,
-                   COUNT(t.id) as total,
-                   SUM(CASE WHEN t.done THEN 1 ELSE 0 END) as done
-            FROM subjects s
-            LEFT JOIN subsections ss ON ss.subject_id = s.id
-            LEFT JOIN topics t ON t.subsection_id = ss.id
-            GROUP BY s.user_id
-        """, fetch='all') or []
-        tp_map = {r['user_id']: (int(r['total'] or 0), int(r['done'] or 0))
-                  for r in topic_progress}
-
-        # One query for subsection-only progress (no topics)
-        ss_progress = db_execute("""
-            SELECT ss.user_id,
-                   COUNT(ss.id) as cnt,
-                   SUM(CASE WHEN ss.done THEN 1 ELSE 0 END) as done_cnt
-            FROM subsections ss
-            WHERE NOT EXISTS (SELECT 1 FROM topics t WHERE t.subsection_id=ss.id)
-            GROUP BY ss.user_id
-        """, fetch='all') or []
-        ssp_map = {r['user_id']: (int(r['cnt'] or 0), int(r['done_cnt'] or 0))
-                   for r in ss_progress}
-
-        profiles = []
-        for u in users:
-            uid = u['id']
-            t_total, t_done = tp_map.get(uid, (0, 0))
-            s_cnt,   s_done = ssp_map.get(uid, (0, 0))
-            total = t_total + s_cnt
-            done  = t_done  + s_done
-            pct   = 0 if total == 0 else round((done / total) * 100)
-            profiles.append({
-                "id":            uid,
-                "username":      u['username'],
-                "display_name":  u['display_name'],
-                "avatar":        u.get('avatar'),
-                "subject_count": sc_map.get(uid, 0),
-                "progress_pct":  pct,
-                "created_at":    str(u['created_at'])
-            })
-        cache.set('profiles_list', profiles, ttl_seconds=30)
-        return jsonify(profiles)
-    except Exception as e:
-        print(f"[DB ERROR] list_profiles: {e}")
-        return jsonify({"error": "Could not load profiles. Please refresh the page."}), 500
-
-@app.route('/api/profiles/<user_id>', methods=['GET'])
-def get_profile(user_id):
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({"error": "Not found"}), 404
-    total, done = calc_progress_db(user_id)
-    pct = 0 if total == 0 else round((done / total) * 100)
-    sc  = db_execute("SELECT COUNT(*) as c FROM subjects WHERE user_id=%s",
-                     (user_id,), fetch='one')
-    return jsonify({**safe_user(user), "subject_count": int(sc['c'] or 0), "progress_pct": pct})
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  PROFILE SETTINGS  (owner only)
-# ══════════════════════════════════════════════════════════════════════════════
-
-@app.route('/api/profiles/<user_id>/settings', methods=['PUT'])
-@owner_required
-def update_profile(user_id):
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({"error": "Not found"}), 404
-    body = request.json or {}
-    fields = []
-    vals   = []
-
-    if 'username' in body:
-        new_username = (body['username'] or '').strip().lower()
-        if not new_username:
-            return jsonify({"error": "Username cannot be empty"}), 400
-        if len(new_username) < 3:
-            return jsonify({"error": "Username must be at least 3 characters"}), 400
-        if not new_username.replace('_','').replace('.','').isalnum():
-            return jsonify({"error": "Username can only contain letters, numbers, _ and ."}), 400
-        existing = get_user_by_username(new_username)
-        if existing and existing['id'] != user_id:
-            return jsonify({"error": "Username already taken"}), 409
-        fields.append("username=%s"); vals.append(new_username)
-
-    if 'display_name' in body:
-        dn = (body['display_name'] or '').strip()
-        if dn: fields.append("display_name=%s"); vals.append(dn)
-
-    if 'exam_date' in body:
-        fields.append("exam_date=%s"); vals.append(body['exam_date'])
-
-    if 'new_password' in body and body['new_password']:
-        if not body.get('current_password'):
-            return jsonify({"error": "Current password required"}), 400
-        if not check_password_hash(user['password_hash'], body['current_password']):
-            return jsonify({"error": "Current password is wrong"}), 401
-        fields.append("password_hash=%s")
-        vals.append(generate_password_hash(body['new_password']))
-
-    # ONE query instead of up to 4 separate ones
-    if fields:
-        vals.append(user_id)
-        db_execute(f"UPDATE users SET {', '.join(fields)} WHERE id=%s", vals)
-
-    invalidate_user_cache(user_id)
-    invalidate_profiles_cache()
-    return jsonify(safe_user(get_user_by_id(user_id)))
-
-@app.route('/api/profiles/<user_id>/avatar', methods=['POST'])
-@owner_required
-def upload_avatar(user_id):
-    if 'avatar' not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
-    f   = request.files['avatar']
-    ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
-    if ext not in ALLOWED_EXT:
-        return jsonify({"error": "Invalid file type"}), 400
-    raw = f.read()
-    if len(raw) > 2 * 1024 * 1024:
-        return jsonify({"error": "Image too large (max 2MB)"}), 400
-    mime   = 'image/jpeg' if ext in ('jpg','jpeg') else f'image/{ext}'
-    b64    = base64.b64encode(raw).decode()
-    avatar = f'data:{mime};base64,{b64}'
-    db_execute("UPDATE users SET avatar=%s WHERE id=%s", (avatar, user_id))
-    invalidate_user_cache(user_id)
-    invalidate_profiles_cache()
-    return jsonify(safe_user(get_user_by_id(user_id)))
-
-@app.route('/api/profiles/<user_id>/avatar', methods=['DELETE'])
-@owner_required
-def remove_avatar(user_id):
-    """Remove profile picture — set avatar to NULL."""
-    db_execute("UPDATE users SET avatar=NULL WHERE id=%s", (user_id,))
-    invalidate_user_cache(user_id)
-    invalidate_profiles_cache()
-    return jsonify(safe_user(get_user_by_id(user_id)))
-
-@app.route('/api/profiles/<user_id>/delete-account', methods=['POST'])
-@owner_required
-def delete_own_account(user_id):
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({"error": "Not found"}), 404
-    body     = request.json or {}
-    password = body.get('password', '')
-    if not check_password_hash(user['password_hash'], password):
-        return jsonify({"error": "Incorrect password"}), 401
-    email = user.get('email', '')
-    db_execute("DELETE FROM users WHERE id=%s", (user_id,))
-    record_account_deletion(email)
-    invalidate_profiles_cache()
-    session.clear()
-    return jsonify({"ok": True})
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  SUBJECTS
-# ══════════════════════════════════════════════════════════════════════════════
-
-@app.route('/api/profiles/<user_id>/subjects', methods=['GET'])
-@owner_required
-def get_subjects(user_id):
-    return jsonify(get_subjects_for_user(user_id))
-
-@app.route('/api/profiles/<user_id>/subjects', methods=['POST'])
-@owner_required
-def add_subject(user_id):
-    body  = request.json or {}
-    name  = body.get('name', '').strip()
-    color = body.get('color', '#4f8ef7')
-    if not name:
-        return jsonify({"error": "Name is required"}), 400
-    sid = str(uuid.uuid4())
-    db_execute(
-        "INSERT INTO subjects (id, user_id, name, color) VALUES (%s,%s,%s,%s)",
-        (sid, user_id, name, color)
-    )
-    s = db_execute("SELECT * FROM subjects WHERE id=%s", (sid,), fetch='one')
-    s['subsections'] = []
-    s['created_at']  = str(s['created_at'])
-    return jsonify(s), 201
-
-@app.route('/api/profiles/<user_id>/subjects/<subject_id>', methods=['PUT'])
-@owner_required
-def update_subject(user_id, subject_id):
-    body  = request.json or {}
-    name  = body.get('name', '').strip()
-    color = body.get('color', '#4f8ef7')
-    db_execute(
-        "UPDATE subjects SET name=%s, color=%s WHERE id=%s AND user_id=%s",
-        (name, color, subject_id, user_id)
-    )
-    s = db_execute("SELECT * FROM subjects WHERE id=%s", (subject_id,), fetch='one')
-    if not s:
-        return jsonify({"error": "Not found"}), 404
-    s['created_at'] = str(s['created_at'])
-    return jsonify(s)
-
-@app.route('/api/profiles/<user_id>/subjects/<subject_id>', methods=['DELETE'])
-@owner_required
-def delete_subject(user_id, subject_id):
-    db_execute("DELETE FROM subjects WHERE id=%s AND user_id=%s", (subject_id, user_id))
-    invalidate_profiles_cache()
-    return jsonify({"ok": True})
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  SUBSECTIONS
-# ══════════════════════════════════════════════════════════════════════════════
-
-@app.route('/api/profiles/<user_id>/subjects/<subject_id>/subsections', methods=['POST'])
-@owner_required
-def add_subsection(user_id, subject_id):
-    body = request.json or {}
-    name = body.get('name', '').strip()
-    if not name:
-        return jsonify({"error": "Name is required"}), 400
-    ssid = str(uuid.uuid4())
-    db_execute(
-        "INSERT INTO subsections (id, subject_id, user_id, name) VALUES (%s,%s,%s,%s)",
-        (ssid, subject_id, user_id, name)
-    )
-    ss = db_execute("SELECT * FROM subsections WHERE id=%s", (ssid,), fetch='one')
-    ss['done']       = bool(ss['done'])
-    ss['topics']     = []
-    ss['created_at'] = str(ss['created_at'])
-    return jsonify(ss), 201
-
-@app.route('/api/profiles/<user_id>/subjects/<subject_id>/subsections/<sub_id>', methods=['PUT'])
-@owner_required
-def update_subsection(user_id, subject_id, sub_id):
-    body = request.json or {}
-    if 'name' in body:
-        db_execute("UPDATE subsections SET name=%s WHERE id=%s AND user_id=%s",
-                   (body['name'], sub_id, user_id))
-    if 'done' in body:
-        db_execute("UPDATE subsections SET done=%s WHERE id=%s AND user_id=%s",
-                   (bool(body['done']), sub_id, user_id))
-    ss = db_execute("SELECT * FROM subsections WHERE id=%s", (sub_id,), fetch='one')
-    if not ss:
-        return jsonify({"error": "Not found"}), 404
-    ss['done']       = bool(ss['done'])
-    ss['created_at'] = str(ss['created_at'])
-    return jsonify(ss)
-
-@app.route('/api/profiles/<user_id>/subjects/<subject_id>/subsections/<sub_id>', methods=['DELETE'])
-@owner_required
-def delete_subsection(user_id, subject_id, sub_id):
-    db_execute("DELETE FROM subsections WHERE id=%s AND user_id=%s", (sub_id, user_id))
-    return jsonify({"ok": True})
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  TOPICS
-# ══════════════════════════════════════════════════════════════════════════════
-
-@app.route('/api/profiles/<user_id>/subjects/<subject_id>/subsections/<sub_id>/topics', methods=['POST'])
-@owner_required
-def add_topic(user_id, subject_id, sub_id):
-    body = request.json or {}
-    name = body.get('name', '').strip()
-    if not name:
-        return jsonify({"error": "Name is required"}), 400
-    tid = str(uuid.uuid4())
-    db_execute(
-        "INSERT INTO topics (id, subsection_id, user_id, name, note) VALUES (%s,%s,%s,%s,%s)",
-        (tid, sub_id, user_id, name, '')
-    )
-    t = db_execute("SELECT * FROM topics WHERE id=%s", (tid,), fetch='one')
-    t['done']       = bool(t['done'])
-    t['note']       = t.get('note') or ''
-    t['created_at'] = str(t['created_at'])
-    return jsonify(t), 201
-
-@app.route('/api/profiles/<user_id>/subjects/<subject_id>/subsections/<sub_id>/topics/<topic_id>', methods=['PUT'])
-@owner_required
-def update_topic(user_id, subject_id, sub_id, topic_id):
-    body = request.json or {}
-    if 'name' in body:
-        db_execute("UPDATE topics SET name=%s WHERE id=%s AND user_id=%s",
-                   (body['name'], topic_id, user_id))
-    if 'done' in body:
-        db_execute("UPDATE topics SET done=%s WHERE id=%s AND user_id=%s",
-                   (bool(body['done']), topic_id, user_id))
-    if 'note' in body:
-        db_execute("UPDATE topics SET note=%s WHERE id=%s AND user_id=%s",
-                   (body['note'], topic_id, user_id))
-    t = db_execute("SELECT * FROM topics WHERE id=%s", (topic_id,), fetch='one')
-    if not t:
-        return jsonify({"error": "Not found"}), 404
-    t['done']       = bool(t['done'])
-    t['note']       = t.get('note') or ''
-    t['created_at'] = str(t['created_at'])
-    return jsonify(t)
-
-@app.route('/api/profiles/<user_id>/subjects/<subject_id>/subsections/<sub_id>/topics/<topic_id>', methods=['DELETE'])
-@owner_required
-def delete_topic(user_id, subject_id, sub_id, topic_id):
-    db_execute("DELETE FROM topics WHERE id=%s AND user_id=%s", (topic_id, user_id))
-    return jsonify({"ok": True})
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  NOTES
-# ══════════════════════════════════════════════════════════════════════════════
-
-@app.route('/api/profiles/<user_id>/notes', methods=['GET'])
-@owner_required
-def get_notes(user_id):
-    notes = db_execute(
-        "SELECT * FROM notes WHERE user_id=%s ORDER BY created_at DESC",
-        (user_id,), fetch='all'
-    ) or []
-    for n in notes:
-        n['done']       = bool(n['done'])
-        n['created_at'] = str(n['created_at'])
-        n['updated_at'] = str(n['updated_at'])
-    return jsonify(notes)
-
-@app.route('/api/profiles/<user_id>/notes', methods=['POST'])
-@owner_required
-def add_note(user_id):
-    body    = request.json or {}
-    nid     = str(uuid.uuid4())
-    title   = body.get('title', 'Untitled')
-    content = body.get('content', '')
-    color   = body.get('color', '#fef08a')
-    db_execute(
-        "INSERT INTO notes (id, user_id, title, content, color) VALUES (%s,%s,%s,%s,%s)",
-        (nid, user_id, title, content, color)
-    )
-    n = db_execute("SELECT * FROM notes WHERE id=%s", (nid,), fetch='one')
-    n['done']       = bool(n['done'])
-    n['created_at'] = str(n['created_at'])
-    n['updated_at'] = str(n['updated_at'])
-    return jsonify(n), 201
-
-@app.route('/api/profiles/<user_id>/notes/<note_id>', methods=['PUT'])
-@owner_required
-def update_note(user_id, note_id):
-    body   = request.json or {}
-    fields = []
-    vals   = []
-    if 'title'   in body: fields.append("title=%s");   vals.append(body['title'])
-    if 'content' in body: fields.append("content=%s"); vals.append(body['content'])
-    if 'color'   in body: fields.append("color=%s");   vals.append(body['color'])
-    if 'done'    in body: fields.append("done=%s");    vals.append(bool(body['done']))
-    if fields:
-        fields.append("updated_at=NOW()")
-        vals.extend([note_id, user_id])
-        db_execute(f"UPDATE notes SET {', '.join(fields)} WHERE id=%s AND user_id=%s", vals)
-    n = db_execute("SELECT * FROM notes WHERE id=%s", (note_id,), fetch='one')
-    if not n:
-        return jsonify({"error": "Not found"}), 404
-    n['done']       = bool(n['done'])
-    n['created_at'] = str(n['created_at'])
-    n['updated_at'] = str(n['updated_at'])
-    return jsonify(n)
-
-@app.route('/api/profiles/<user_id>/notes/<note_id>', methods=['DELETE'])
-@owner_required
-def delete_note(user_id, note_id):
-    db_execute("DELETE FROM notes WHERE id=%s AND user_id=%s", (note_id, user_id))
-    return jsonify({"ok": True})
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  ADMIN
-# ══════════════════════════════════════════════════════════════════════════════
-
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin1234')
-
-def check_admin_auth():
-    header_pw = request.headers.get('X-Admin-Password', '')
-    if header_pw and header_pw == ADMIN_PASSWORD:
-        return True
-    return bool(session.get('is_admin'))
-
-def admin_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not check_admin_auth():
-            return jsonify({"error": "Admin access required"}), 403
-        return f(*args, **kwargs)
-    return decorated
-
-@app.route('/api/admin/login', methods=['POST'])
-@rate_limit(5, 600, 'admin_login')
-def admin_login():
-    body = request.json or {}
-    if body.get('password') != ADMIN_PASSWORD:
-        return jsonify({"error": "Wrong admin password"}), 401
-    session['is_admin'] = True
-    return jsonify({"ok": True})
-
-@app.route('/api/admin/logout', methods=['POST'])
-def admin_logout():
-    session.pop('is_admin', None)
-    return jsonify({"ok": True})
-
-@app.route('/api/admin/me', methods=['GET'])
-def admin_me():
-    if not check_admin_auth():
-        return jsonify({"error": "Not logged in"}), 401
-    return jsonify({"ok": True, "is_admin": True})
-
-@app.route('/api/admin/users', methods=['GET'])
-@admin_required
-def admin_list_users():
-    # All data in 5 queries total regardless of user count
-    users = db_execute("SELECT * FROM users ORDER BY created_at DESC", fetch='all') or []
-    if not users:
-        return jsonify([])
-
-    sc_rows = db_execute("SELECT user_id, COUNT(*) as c FROM subjects GROUP BY user_id",
-                         fetch='all') or []
-    sc_map  = {r['user_id']: int(r['c']) for r in sc_rows}
-
-    nc_rows = db_execute("SELECT user_id, COUNT(*) as c FROM notes GROUP BY user_id",
-                         fetch='all') or []
-    nc_map  = {r['user_id']: int(r['c']) for r in nc_rows}
-
-    tp_rows = db_execute("""
-        SELECT s.user_id,
-               COUNT(t.id) as total,
-               SUM(CASE WHEN t.done THEN 1 ELSE 0 END) as done
-        FROM subjects s
-        LEFT JOIN subsections ss ON ss.subject_id = s.id
-        LEFT JOIN topics t ON t.subsection_id = ss.id
-        GROUP BY s.user_id
-    """, fetch='all') or []
-    tp_map = {r['user_id']: (int(r['total'] or 0), int(r['done'] or 0))
-              for r in tp_rows}
-
-    ssp_rows = db_execute("""
-        SELECT ss.user_id,
-               COUNT(ss.id) as cnt,
-               SUM(CASE WHEN ss.done THEN 1 ELSE 0 END) as done_cnt
-        FROM subsections ss
-        WHERE NOT EXISTS (SELECT 1 FROM topics t WHERE t.subsection_id=ss.id)
-        GROUP BY ss.user_id
-    """, fetch='all') or []
-    ssp_map = {r['user_id']: (int(r['cnt'] or 0), int(r['done_cnt'] or 0))
-               for r in ssp_rows}
-
-    result = []
-    for u in users:
-        uid = u['id']
-        t_total, t_done = tp_map.get(uid, (0, 0))
-        s_cnt,   s_done = ssp_map.get(uid, (0, 0))
-        total = t_total + s_cnt
-        done  = t_done  + s_done
-        pct   = 0 if total == 0 else round((done / total) * 100)
-        result.append({
-            "id":            uid,
-            "username":      u['username'],
-            "display_name":  u['display_name'],
-            "email":         u.get('email', '—'),
-            "avatar":        u.get('avatar'),
-            "subject_count": sc_map.get(uid, 0),
-            "notes_count":   nc_map.get(uid, 0),
-            "progress_pct":  pct,
-            "is_paused":     bool(u.get('is_paused', False)),
-            "is_pro":        bool(u.get('is_pro', True)),
-            "pro_since":     str(u.get('pro_since', '')),
-            "created_at":    str(u['created_at'])
-        })
-    return jsonify(result)
-
-@app.route('/api/admin/analytics', methods=['GET'])
-@admin_required
-def admin_analytics():
-    # Total topics
-    total_topics = db_execute("SELECT COUNT(*) as c FROM topics", fetch='one') or {}
-
-    # Total notes
-    total_notes = db_execute("SELECT COUNT(*) as c FROM notes", fetch='one') or {}
-
-    # Active users (have at least 1 subject)
-    active_users = db_execute("""
-        SELECT COUNT(DISTINCT user_id) as c FROM subjects
-    """, fetch='one') or {}
-
-    # Drop-off funnel
-    total_users = db_execute("SELECT COUNT(*) as c FROM users", fetch='one') or {}
-
-    # Users with 0 subjects (signed up but did nothing)
-    no_subjects = db_execute("""
-        SELECT COUNT(*) as c FROM users u
-        WHERE NOT EXISTS (SELECT 1 FROM subjects s WHERE s.user_id = u.id)
-    """, fetch='one') or {}
-
-    # Users with subjects but no sub-subjects
-    no_subsections = db_execute("""
-        SELECT COUNT(DISTINCT s.user_id) as c FROM subjects s
-        WHERE NOT EXISTS (SELECT 1 FROM subsections ss WHERE ss.user_id = s.user_id)
-    """, fetch='one') or {}
-
-    # Users with sub-subjects but no topics
-    no_topics = db_execute("""
-        SELECT COUNT(DISTINCT ss.user_id) as c FROM subsections ss
-        WHERE NOT EXISTS (SELECT 1 FROM topics t WHERE t.user_id = ss.user_id)
-    """, fetch='one') or {}
-
-    # New users last 7 days grouped by date
-    growth = db_execute("""
-        SELECT DATE(created_at) as day, COUNT(*) as c
-        FROM users
-        WHERE created_at >= NOW() - INTERVAL '7 days'
-        GROUP BY DATE(created_at)
-        ORDER BY day ASC
-    """, fetch='all') or []
-
-    return jsonify({
-        "total_topics":    int(total_topics.get('c', 0)),
-        "total_notes":     int(total_notes.get('c', 0)),
-        "active_users":    int(active_users.get('c', 0)),
-        "total_users":     int(total_users.get('c', 0)),
-        "funnel": {
-            "no_subjects":    int(no_subjects.get('c', 0)),
-            "no_subsections": int(no_subsections.get('c', 0)),
-            "no_topics":      int(no_topics.get('c', 0)),
-        },
-        "growth": [{"day": str(r['day']), "count": int(r['c'])} for r in growth]
-    })
-
-@app.route('/api/admin/users/<user_id>/pause', methods=['POST'])
-@admin_required
-def admin_pause_user(user_id):
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    # Toggle pause state
-    new_state = not bool(user.get('is_paused', False))
-    db_execute("UPDATE users SET is_paused=%s WHERE id=%s", (new_state, user_id))
-    invalidate_user_cache(user_id)
-    return jsonify({"ok": True, "is_paused": new_state})
-
-@app.route('/api/admin/users/<user_id>/set-plan', methods=['POST'])
-@admin_required
-def admin_set_plan(user_id):
-    """
-    Set a user's plan. Plans:
-      - 'pro_4mo'    → Pro for 4 months (₱100)
-      - 'basic_1yr'  → Basic for 1 year (₱70) + Pro bonus for 1 month
-      - 'basic'      → Basic (no expiry, manually managed)
-      - 'trial'      → Reset to trial (7 days from now)
-      - 'revoke'     → Remove Pro, set Basic immediately
-    """
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-
-    body = request.json or {}
-    plan = body.get('plan', '')
-
-    if plan == 'pro_4mo':
-        db_execute("""
-            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
-            plan='pro', plan_expires=NOW() + INTERVAL '4 months'
-            WHERE id=%s
-        """, (user_id,))
-        msg = "Pro plan set for 4 months ✅"
-
-    elif plan == 'basic_1yr':
-        # Basic for 1 year, but Pro bonus for first month
-        db_execute("""
-            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
-            plan='basic_pro_bonus', plan_expires=NOW() + INTERVAL '1 month'
-            WHERE id=%s
-        """, (user_id,))
-        # Schedule basic after 1 month is handled by auto-pause + re-set
-        msg = "Basic (1yr) + 1 month Pro bonus set ✅"
-
-    elif plan == 'basic':
-        db_execute("""
-            UPDATE users SET is_pro=FALSE, is_paused=FALSE,
-            plan='basic', plan_expires=NOW() + INTERVAL '1 year'
-            WHERE id=%s
-        """, (user_id,))
-        msg = "Basic plan set for 1 year ✅"
-
-    elif plan == 'revoke':
-        db_execute("""
-            UPDATE users SET is_pro=FALSE, is_paused=FALSE,
-            plan='basic', plan_expires=NULL
-            WHERE id=%s
-        """, (user_id,))
-        msg = "Reverted to Basic (no expiry) ✅"
-
-    elif plan == 'trial':
-        db_execute("""
-            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
-            plan='trial', plan_expires=NOW() + INTERVAL '7 days'
-            WHERE id=%s
-        """, (user_id,))
-        msg = "Trial reset for 7 days ✅"
-
-    else:
-        return jsonify({"error": "Invalid plan"}), 400
-
-    invalidate_user_cache(user_id)
-    user = get_user_by_id(user_id)
-    return jsonify({
-        "ok": True, "msg": msg,
-        "is_pro": bool(user.get('is_pro')),
-        "plan": user.get('plan'),
-        "plan_expires": str(user.get('plan_expires', '')) if user.get('plan_expires') else None
-    })
-
-@app.route('/api/admin/users/<user_id>/toggle-pro', methods=['POST'])
-@admin_required
-def admin_toggle_pro(user_id):
-    """Kept for backward compat — just toggles is_pro"""
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    new_state = not bool(user.get('is_pro', True))
-    db_execute("UPDATE users SET is_pro=%s WHERE id=%s", (new_state, user_id))
-    invalidate_user_cache(user_id)
-    return jsonify({"ok": True, "is_pro": new_state})
-
-@app.route('/api/admin/banned-emails', methods=['GET'])
-@admin_required
-def admin_banned_emails():
-    bans = db_execute(
-        "SELECT email, banned_until, reason, created_at FROM banned_emails WHERE banned_until > NOW() ORDER BY created_at DESC",
-        fetch='all'
-    ) or []
-    for b in bans:
-        b['banned_until'] = str(b['banned_until'])
-        b['created_at']   = str(b['created_at'])
-    return jsonify(bans)
-
-@app.route('/api/admin/banned-emails/<path:email>', methods=['DELETE'])
-@admin_required
-def admin_unban_email(email):
-    db_execute("DELETE FROM banned_emails WHERE LOWER(email)=LOWER(%s)", (email,))
-    return jsonify({"ok": True})
-
-@app.route('/api/admin/users/<user_id>', methods=['DELETE'])
-@admin_required
-def admin_delete_user(user_id):
-    body = request.json or {}
-    otp  = str(body.get('otp', '')).strip()
-
-    # Verify OTP
-    with _delete_otp_lock:
-        exp = _delete_otp_store.get(otp)
-        if not exp:
-            return jsonify({"error": "Invalid OTP. Please request a new one."}), 401
-        if datetime.now() > exp:
-            _delete_otp_store.clear()
-            return jsonify({"error": "OTP has expired. Please request a new one."}), 401
-        _delete_otp_store.clear()   # consume OTP — one use only
-
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    email = user.get('email', '')
-    db_execute("DELETE FROM users WHERE id=%s", (user_id,))
-    record_account_deletion(email)
-    invalidate_profiles_cache()
-    return jsonify({"ok": True})
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  FLASHCARDS
-# ══════════════════════════════════════════════════════════════════════════════
-
-
-@app.route('/api/profiles/<user_id>/flashcards', methods=['GET'])
-@owner_required
-def get_flashcards(user_id):
-    subject_id    = request.args.get('subject_id')
-    subsection_id = request.args.get('subsection_id')
-    if subsection_id:
-        cards = db_execute(
-            "SELECT * FROM flashcards WHERE user_id=%s AND subsection_id=%s ORDER BY created_at",
-            (user_id, subsection_id), fetch='all'
-        ) or []
-    elif subject_id:
-        cards = db_execute(
-            "SELECT * FROM flashcards WHERE user_id=%s AND subject_id=%s ORDER BY created_at",
-            (user_id, subject_id), fetch='all'
-        ) or []
-    else:
-        cards = db_execute(
-            "SELECT * FROM flashcards WHERE user_id=%s ORDER BY created_at",
-            (user_id,), fetch='all'
-        ) or []
-    for c in cards:
-        c['created_at']    = str(c['created_at'])
-        c['subsection_id'] = c.get('subsection_id')
-    return jsonify(cards)
-
-@app.route('/api/profiles/<user_id>/flashcards', methods=['POST'])
-@owner_required
-def add_flashcard(user_id):
-    body          = request.json or {}
-    subject_id    = (body.get('subject_id') or '').strip()
-    raw_ss        = body.get('subsection_id')
-    subsection_id = raw_ss.strip() if isinstance(raw_ss, str) and raw_ss.strip() else None
-    question      = (body.get('question') or '').strip()
-    answer        = (body.get('answer') or '').strip()
-    if not question:
-        return jsonify({"error": "Question is required"}), 400
-    if not subject_id:
-        return jsonify({"error": "Subject is required"}), 400
-    fid = str(uuid.uuid4())
-    db_execute(
-        "INSERT INTO flashcards (id, subject_id, subsection_id, user_id, question, answer) VALUES (%s,%s,%s,%s,%s,%s)",
-        (fid, subject_id, subsection_id, user_id, question, answer)
-    )
-    card = db_execute("SELECT * FROM flashcards WHERE id=%s", (fid,), fetch='one')
-    card['created_at']    = str(card['created_at'])
-    card['subsection_id'] = card.get('subsection_id')
-    return jsonify(card), 201
-
-@app.route('/api/profiles/<user_id>/flashcards/<card_id>', methods=['PUT'])
-@owner_required
-def update_flashcard(user_id, card_id):
-    body = request.json or {}
-    if 'question' in body:
-        db_execute("UPDATE flashcards SET question=%s WHERE id=%s AND user_id=%s",
-                   (body['question'], card_id, user_id))
-    if 'answer' in body:
-        db_execute("UPDATE flashcards SET answer=%s WHERE id=%s AND user_id=%s",
-                   (body['answer'], card_id, user_id))
-    card = db_execute("SELECT * FROM flashcards WHERE id=%s", (card_id,), fetch='one')
-    if not card:
-        return jsonify({"error": "Not found"}), 404
-    card['created_at'] = str(card['created_at'])
-    return jsonify(card)
-
-@app.route('/api/profiles/<user_id>/flashcards/<card_id>', methods=['DELETE'])
-@owner_required
-def delete_flashcard(user_id, card_id):
-    db_execute("DELETE FROM flashcards WHERE id=%s AND user_id=%s", (card_id, user_id))
-    return jsonify({"ok": True})
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  ADMIN — OTP DELETE VERIFICATION
-# ══════════════════════════════════════════════════════════════════════════════
-
-ADMIN_EMAIL       = 'markjosephpbulan@gmail.com'
-_delete_otp_store = {}
-_delete_otp_lock  = threading.Lock()
-
-@app.route('/api/admin/request-delete-otp', methods=['POST'])
-@admin_required
-def request_delete_otp():
-    """Generate a 6-digit OTP and email it to the admin for delete verification."""
-    import random as _random
-    otp = ''.join([str(_random.randint(0, 9)) for _ in range(6)])
-    exp = datetime.now() + timedelta(minutes=10)
-
-    with _delete_otp_lock:
-        _delete_otp_store.clear()
-        _delete_otp_store[otp] = exp
-
-    html = f'''
-        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:2rem">
-            <h2 style="color:#f5c842;margin-bottom:8px">🗑️ Account Deletion OTP</h2>
-            <p style="color:#555;margin-bottom:1.5rem">You requested to delete an account on BoardPrep PH Admin.</p>
-            <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;padding:1.5rem;text-align:center;margin-bottom:1.5rem">
-                <div style="font-size:2.5rem;font-weight:800;letter-spacing:0.5rem;color:#f5c842">{otp}</div>
-                <div style="color:#888;font-size:0.82rem;margin-top:6px">Valid for 10 minutes · One use only</div>
-            </div>
-            <p style="color:#888;font-size:0.8rem">If you did not request this, ignore this email. No account has been deleted yet.</p>
+    </div>
+  </header>
+
+  <main class="admin-main">
+
+    <!-- Stats -->
+    <div class="stats-row" id="statsRow">
+      <div class="stat-card">
+        <div class="stat-label">Total Profiles</div>
+        <div class="stat-value" id="statUsers">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Subjects</div>
+        <div class="stat-value" id="statSubjects">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg. Progress</div>
+        <div class="stat-value" id="statAvgProgress">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Users</div>
+        <div class="stat-value" id="statActiveUsers">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Topics</div>
+        <div class="stat-value" id="statTopics">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Notes</div>
+        <div class="stat-value" id="statNotes">—</div>
+      </div>
+    </div>
+
+    <!-- Analytics: Funnel + Growth side by side -->
+    <div class="analytics-grid">
+
+      <!-- Drop-off Funnel -->
+      <div class="analytics-card">
+        <div class="analytics-card-title">📉 User Funnel / Drop-off</div>
+        <div id="funnelSection">
+          <div class="funnel-row">
+            <span class="funnel-label">Loading…</span>
+          </div>
         </div>
-    '''
+      </div>
 
-    ok, err = _brevo_send(ADMIN_EMAIL, f'BoardPrep PH Admin — Delete OTP: {otp}', html)
-    if not ok:
-        print(f"[Admin OTP] {otp} (email failed: {err})")
-        return jsonify({"error": f"Failed to send OTP email: {err}"}), 503
+      <!-- New Users Last 7 Days -->
+      <div class="analytics-card">
+        <div class="analytics-card-title">📈 New Users — Last 7 Days</div>
+        <div id="growthSection">
+          <div class="funnel-row">
+            <span class="funnel-label">Loading…</span>
+          </div>
+        </div>
+      </div>
 
-    return jsonify({"ok": True})
+    </div>
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  PDF → FLASHCARD GENERATION
-# ══════════════════════════════════════════════════════════════════════════════
+    <!-- Users table -->
+    <div class="section-title">
+      All Profiles
+      <span class="user-count-badge" id="userCountBadge">0 users</span>
+    </div>
 
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+    <!-- Search + Filter + Sort bar -->
+    <div class="table-toolbar">
+      <div class="toolbar-search-wrap">
+        <span class="toolbar-search-icon">🔍</span>
+        <input type="text" id="userSearchInput" class="toolbar-search"
+               placeholder="Search by name, username, or email…"
+               oninput="filterAndRenderUsers()"/>
+      </div>
+      <div class="toolbar-filters">
+        <button class="filter-btn active" data-filter="all"     onclick="setFilter('all',this)">All</button>
+        <button class="filter-btn"        data-filter="pro"     onclick="setFilter('pro',this)">⭐ Pro</button>
+        <button class="filter-btn"        data-filter="basic"   onclick="setFilter('basic',this)">📦 Basic</button>
+        <button class="filter-btn"        data-filter="trial"   onclick="setFilter('trial',this)">🎉 Trial</button>
+        <button class="filter-btn"        data-filter="paused"  onclick="setFilter('paused',this)">⏸ Paused</button>
+      </div>
+      <select class="toolbar-sort" onchange="setSortAndRender(this.value)">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="name">Name A–Z</option>
+        <option value="progress">Progress ↓</option>
+        <option value="subjects">Subjects ↓</option>
+        <option value="expiry">Expiry soonest</option>
+      </select>
+    </div>
 
-@app.route('/api/profiles/<user_id>/generate-pdf-flashcards', methods=['POST'])
-@rate_limit(5, 300, 'pdf_generate')
-@owner_required
-def generate_flashcards_from_pdf(user_id):
-    """
-    Upload a PDF → extract text → call Gemini → return Q&A pairs.
-    PDF is processed entirely in memory and NEVER stored in the database.
-    """
-    import re as _re
-    import io as _io
+    <div class="table-wrap">
+      <table class="users-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th>Subjects</th>
+            <th>Progress</th>
+            <th>Joined</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <tr><td colspan="5" class="empty-users">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
 
-    # Pro-only feature check
-    user = get_user_by_id(user_id)
-    if not user or not user.get('is_pro', True):
-        return jsonify({"error": "This feature requires a Pro account. Please upgrade to continue."}), 403
+  </main>
+</div>
 
-    if not GEMINI_API_KEY:
-        return jsonify({"error": "AI generation is not configured on this server. Please set GEMINI_API_KEY."}), 503
+<!-- ══ CONFIRM DELETE — Step 1: Confirm ═══════════════════════════════════ -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <h3>🗑️ Delete Profile</h3>
+    <p id="confirmText">Are you sure you want to delete this profile?</p>
+    <div class="confirm-actions">
+      <button class="btn-ghost-sm" onclick="closeConfirm()">Cancel</button>
+      <button class="btn-danger-sm" id="confirmDeleteBtn">Yes, Send OTP</button>
+    </div>
+  </div>
+</div>
 
-    # ── 1. Validate file upload ───────────────────────────────────────────────
-    if 'pdf' not in request.files:
-        return jsonify({"error": "No PDF file uploaded."}), 400
+<!-- ══ OTP VERIFY — Step 2: Enter OTP ═════════════════════════════════════ -->
+<div class="confirm-overlay" id="otpOverlay">
+  <div class="confirm-box">
+    <h3>🔐 Verify Deletion</h3>
+    <p style="font-size:0.85rem;color:var(--text2);margin-bottom:1rem">
+      An OTP was sent to <strong style="color:var(--text)">markjosephpbulan@gmail.com</strong>.<br/>
+      Enter it below to confirm deletion.
+    </p>
+    <input type="text" id="otpInput" maxlength="6" inputmode="numeric"
+           placeholder="Enter 6-digit OTP"
+           style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:0.7rem 0.9rem;color:var(--text);font-size:1.2rem;letter-spacing:0.3rem;text-align:center;outline:none;margin-bottom:8px;font-family:'DM Sans',sans-serif"
+           oninput="this.value=this.value.replace(/\D/g,'')"
+           onkeydown="if(event.key==='Enter') verifyOtpAndDelete()"/>
+    <div class="error-msg" id="otpError"></div>
+    <div class="confirm-actions">
+      <button class="btn-ghost-sm" onclick="closeOtp()">Cancel</button>
+      <button class="btn-danger-sm" id="otpVerifyBtn" onclick="verifyOtpAndDelete()">🗑️ Delete Now</button>
+    </div>
+  </div>
+</div>
 
-    pdf_file = request.files['pdf']
-    if not pdf_file.filename or not pdf_file.filename.lower().endswith('.pdf'):
-        return jsonify({"error": "Please upload a valid PDF file."}), 400
+<div class="toast" id="toast"></div>
 
-    raw_bytes = pdf_file.read()
-    if len(raw_bytes) == 0:
-        return jsonify({"error": "The uploaded PDF is empty."}), 400
-    if len(raw_bytes) > 10 * 1024 * 1024:  # 10MB max
-        return jsonify({"error": "PDF is too large. Maximum size is 10MB."}), 400
+<script>
+let pendingDeleteId = null;
+let pendingDeleteName = null;
+let adminPassword = '';
+let allUsers = [];          // full user list cached
+let currentFilter = 'all';
+let currentSort = 'newest';
 
-    # ── 2. Get request params ─────────────────────────────────────────────────
-    max_cards = min(int(request.form.get('max_cards', 10)), 30)  # cap at 30
-    subject_name = request.form.get('subject_name', 'this subject')
+// Helper — every admin API call includes the password as a header
+function adminFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}), 'X-Admin-Password': adminPassword };
+  return fetch(url, { ...options, headers });
+}
 
-    # ── 3. Extract text from PDF ──────────────────────────────────────────────
-    try:
-        from pdfminer.high_level import extract_text as pdf_extract_text
-        pdf_text = pdf_extract_text(_io.BytesIO(raw_bytes))
-        pdf_text = (pdf_text or '').strip()
-    except Exception as e:
-        return jsonify({"error": f"Could not read PDF. Make sure it contains selectable text (not a scanned image). ({str(e)[:80]})"}), 400
+// ── Boot ────────────────────────────────────────────────────────────────────
+async function boot() {
+  // Can't auto-restore password from memory on page load — always show login
+  // (This is intentional: admin must re-enter password each visit for security)
+}
 
-    if not pdf_text or len(pdf_text) < 50:
-        return jsonify({"error": "Could not extract readable text from this PDF. Make sure it is not a scanned image."}), 400
+// ── Login ────────────────────────────────────────────────────────────────────
+async function doAdminLogin() {
+  const pw    = document.getElementById('adminPwInput').value;
+  const errEl = document.getElementById('loginError');
+  const btn   = document.getElementById('loginBtn');
+  errEl.textContent = '';
+  if (!pw) { errEl.textContent = 'Please enter the admin password.'; return; }
 
-    # Trim to 3000 chars (~750 tokens) to save quota
-    if len(pdf_text) > 3000:
-        pdf_text = pdf_text[:3000]
+  btn.textContent = 'Checking…'; btn.disabled = true;
+  try {
+    const r = await fetch('/api/admin/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: pw })
+    });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.error; return; }
+    adminPassword = pw;  // store in memory — sent with every request
+    showPanel();
+    loadUsers();
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+  } finally {
+    btn.textContent = 'Enter Admin Panel'; btn.disabled = false;
+  }
+}
 
-    prompt = (
-        f'You are an expert board exam question writer for Filipino professional licensure examinations. '
-        f'Your task is to generate {max_cards} high-quality flashcard Q&A pairs from the study material below about "{subject_name}". '
-        f'\n\n'
-        f'WHAT TO FOCUS ON (include these):\n'
-        f'- Key definitions, terms, and concepts\n'
-        f'- Laws, theorems, principles, and formulas\n'
-        f'- Classifications, types, and categories\n'
-        f'- Processes, procedures, and steps\n'
-        f'- Causes, effects, and relationships between concepts\n'
-        f'- Numerical values, standards, and thresholds that are commonly tested\n'
-        f'- Important facts that appear in board exams\n'
-        f'\n'
-        f'WHAT TO STRICTLY IGNORE (never make questions about these):\n'
-        f'- Author names, editors, or publishers\n'
-        f'- Book titles, edition numbers, or ISBN\n'
-        f'- Chapter objectives, learning outcomes, or course goals\n'
-        f'- Table of contents, preface, introduction, or acknowledgements\n'
-        f'- Page numbers, figure numbers, or table numbers\n'
-        f'- Bibliography, references, or citations\n'
-        f'- Copyright notices or legal disclaimers\n'
-        f'\n'
-        f'QUESTION QUALITY RULES:\n'
-        f'- Questions must test actual subject knowledge, not trivia about the book\n'
-        f'- Vary question types: What is, Define, What are the types of, What happens when, How many, Which law states\n'
-        f'- Answers must be direct and factual (1-2 sentences only)\n'
-        f'- LANGUAGE: If the study material is written in English, write ALL questions and answers in English. If in Filipino/Tagalog, write in Filipino. Do NOT translate or change the language.\n'
-        f'\n'
-        f'Output ONLY valid JSON with no extra text, no markdown, no explanation:\n'
-        f'{{"flashcards":[{{"question":"...","answer":"..."}}]}}\n'
-        f'\n'
-        f'Study material:\n{pdf_text}'
-    )
+async function doAdminLogout() {
+  await adminFetch('/api/admin/logout', { method: 'POST' });
+  adminPassword = '';  // clear from memory
+  document.getElementById('adminPanel').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('adminPwInput').value = '';
+}
 
-    # ── Call Gemini ───────────────────────────────────────────────────────────
-    if not GEMINI_API_KEY:
-        return jsonify({"error": "AI generation is not configured. Please set GEMINI_API_KEY."}), 503
+function showPanel() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('adminPanel').style.display  = 'block';
+}
 
-    raw_text = None
-    try:
-        resp = http_requests.post(
-            f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}',
-            headers={'Content-Type': 'application/json'},
-            json={
-                'contents': [{'parts': [{'text': prompt}]}],
-                'generationConfig': {'maxOutputTokens': 8192, 'temperature': 0.4}
-            },
-            timeout=45
-        )
-        if resp.ok:
-            data = resp.json()
-            raw_text = (
-                data.get('candidates', [{}])[0]
-                .get('content', {})
-                .get('parts', [{}])[0]
-                .get('text', '')
-            ).strip()
-        else:
-            try:
-                err_msg = resp.json().get('error', {}).get('message', str(resp.status_code))
-            except Exception:
-                err_msg = str(resp.status_code)
-            return jsonify({"error": f"AI service error: {err_msg[:150]}"}), 502
-    except Exception as e:
-        return jsonify({"error": f"AI service timeout. Please try again. ({str(e)[:80]})"}), 503
+// ── Load Users ───────────────────────────────────────────────────────────────
+async function loadUsers() {
+  const tbody = document.getElementById('usersTableBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-users">Loading…</td></tr>';
+  try {
+    const r = await adminFetch('/api/admin/users');
+    if (!r.ok) { tbody.innerHTML = '<tr><td colspan="6" class="empty-users">Failed to load users.</td></tr>'; return; }
+    allUsers = await r.json();
 
-    if not raw_text:
-        return jsonify({"error": "AI returned an empty response. Please try again."}), 500
+    // Update stat cards
+    document.getElementById('statUsers').textContent    = allUsers.length;
+    document.getElementById('statSubjects').textContent = allUsers.reduce((a, u) => a + u.subject_count, 0);
+    const avgPct = allUsers.length === 0 ? 0 : Math.round(allUsers.reduce((a, u) => a + u.progress_pct, 0) / allUsers.length);
+    document.getElementById('statAvgProgress').textContent = avgPct + '%';
 
-    # ── 5. Parse response ─────────────────────────────────────────────────────
-    try:
-        raw_text = _re.sub(r'^```(?:json)?\s*', '', raw_text, flags=_re.MULTILINE)
-        raw_text = _re.sub(r'\s*```$', '', raw_text, flags=_re.MULTILINE)
-        raw_text = raw_text.strip()
+    loadAnalytics();
+    filterAndRenderUsers();
+  } catch(e) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-users">Error loading users.</td></tr>';
+  }
+}
 
-        # Find JSON object in response
-        json_match = _re.search(r'\{.*\}', raw_text, _re.DOTALL)
-        if json_match:
-            raw_text = json_match.group(0)
+function renderUsersTable(users) {
+  const tbody = document.getElementById('usersTableBody');
+  if (!tbody) return;
+  if (!users.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-users">No users found.</td></tr>'; return; }
+  tbody.innerHTML = users.map(u => {
+    const avatarHTML = u.avatar
+      ? `<img src="${u.avatar}" alt="">`
+      : `<span>${esc(u.display_name[0].toUpperCase())}</span>`;
+    return `
+    <tr id="row-${u.id}" class="${u.is_paused ? 'row-paused' : ''}">
+      <td>
+        <div class="user-avatar-cell">
+          <div class="user-avatar-sm">${avatarHTML}</div>
+          <div>
+            <div class="user-display-name">
+              ${esc(u.display_name)}
+              ${u.is_paused ? '<span class="paused-badge">⏸ Paused</span>' : ''}
+              ${u.is_pro ? '<span class="pro-badge-admin">⭐ Pro</span>' : '<span class="basic-badge-admin">Basic</span>'}
+              ${u.plan_expires ? '<span class="expiry-badge-admin" title="Plan expires">⏰ ' + formatDate(u.plan_expires) + '</span>' : ''}
+            </div>
+            <div class="user-username">@${esc(u.username)}</div>
+          </div>
+        </div>
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="color:var(--text2);font-size:0.8rem">${esc(u.email || '—')}</span>
+          ${u.email ? `<button onclick="copyEmail('${esc(u.email)}')" title="Copy email"
+            style="background:transparent;border:none;cursor:pointer;color:var(--text3);font-size:0.75rem;padding:2px 5px;border-radius:4px;transition:all 0.15s"
+            onmouseover="this.style.color='var(--text)';this.style.background='var(--border)'"
+            onmouseout="this.style.color='var(--text3)';this.style.background='transparent'">📋</button>` : ''}
+        </div>
+      </td>
+      <td>${u.subject_count}</td>
+      <td>
+        <div class="progress-inline">
+          <div class="bar-mini-wrap"><div class="bar-mini-fill" style="width:${u.progress_pct}%"></div></div>
+          <span class="pct-mini">${u.progress_pct}%</span>
+        </div>
+      </td>
+      <td style="color:var(--text3)">${formatDate(u.created_at)}</td>
+      <td>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+          <button class="btn-plan-pro" title="Pro 4 months (₱100)"
+                  onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_4mo')">
+            ⭐ Pro 4mo
+          </button>
+          <button class="btn-plan-basic" title="Basic 1yr (₱70) + 1mo Pro bonus"
+                  onclick="setPlan('${u.id}','${esc(u.display_name)}','basic_1yr')">
+            📦 Basic 1yr
+          </button>
+          <button class="btn-plan-revoke" title="Set to Basic (no expiry)"
+                  onclick="setPlan('${u.id}','${esc(u.display_name)}','revoke')">
+            🔒 Set Basic
+          </button>
+          <button class="${u.is_paused ? 'btn-unpause' : 'btn-pause'}"
+                  id="pause-btn-${u.id}"
+                  onclick="togglePause('${u.id}','${esc(u.display_name)}',${u.is_paused})">
+            ${u.is_paused ? '▶ Unpause' : '⏸ Pause'}
+          </button>
+          <button class="btn-danger-sm" onclick="confirmDelete('${u.id}','${esc(u.display_name)}')">
+            🗑️ Delete
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
 
-        parsed = json.loads(raw_text)
-        cards  = parsed.get('flashcards', [])
+// ── Search / Filter / Sort ────────────────────────────────────────────────────
+function setFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  filterAndRenderUsers();
+}
 
-        if not cards or not isinstance(cards, list):
-            raise ValueError("No flashcards in response")
+function setSortAndRender(sort) {
+  currentSort = sort;
+  filterAndRenderUsers();
+}
 
-        result = []
-        for c in cards:
-            q = str(c.get('question', '')).strip()
-            a = str(c.get('answer', '')).strip()
-            if q and a:
-                result.append({'question': q, 'answer': a})
+function filterAndRenderUsers() {
+  const q = (document.getElementById('userSearchInput')?.value || '').toLowerCase().trim();
 
-        if not result:
-            raise ValueError("All cards were empty")
+  let filtered = allUsers.filter(u => {
+    // Search
+    const matchSearch = !q ||
+      u.display_name.toLowerCase().includes(q) ||
+      u.username.toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q);
 
-        return jsonify({"flashcards": result, "count": len(result)})
+    // Filter
+    let matchFilter = true;
+    if (currentFilter === 'pro')    matchFilter = u.is_pro && !u.is_paused;
+    if (currentFilter === 'basic')  matchFilter = !u.is_pro && !u.is_paused;
+    if (currentFilter === 'trial')  matchFilter = u.plan === 'trial' && !u.is_paused;
+    if (currentFilter === 'paused') matchFilter = u.is_paused;
 
-    except (json.JSONDecodeError, ValueError, KeyError, IndexError) as e:
-        return jsonify({"error": f"Could not parse AI response. Please try again. ({str(e)[:80]})"}), 500
+    return matchSearch && matchFilter;
+  });
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  CONFIG + FRONTEND
-# ══════════════════════════════════════════════════════════════════════════════
+  // Sort
+  filtered.sort((a, b) => {
+    if (currentSort === 'newest')   return new Date(b.created_at) - new Date(a.created_at);
+    if (currentSort === 'oldest')   return new Date(a.created_at) - new Date(b.created_at);
+    if (currentSort === 'name')     return a.display_name.localeCompare(b.display_name);
+    if (currentSort === 'progress') return b.progress_pct - a.progress_pct;
+    if (currentSort === 'subjects') return b.subject_count - a.subject_count;
+    if (currentSort === 'expiry') {
+      const ae = a.plan_expires ? new Date(a.plan_expires) : new Date('9999');
+      const be = b.plan_expires ? new Date(b.plan_expires) : new Date('9999');
+      return ae - be;
+    }
+    return 0;
+  });
 
+  renderUsersTable(filtered);
+  document.getElementById('userCountBadge').textContent =
+    `${filtered.length} of ${allUsers.length} users`;
+}
 
-@app.route('/api/config', methods=['GET'])
-def get_config():
-    return jsonify({"gemini_key": GEMINI_API_KEY})
+// ── Delete — Step 1: Confirm ──────────────────────────────────────────────────
+function confirmDelete(userId, displayName) {
+  pendingDeleteId   = userId;
+  pendingDeleteName = displayName;
+  document.getElementById('confirmText').textContent =
+    `Delete "${displayName}"? This permanently removes all their data. An OTP will be sent to your email to confirm.`;
+  document.getElementById('confirmOverlay').classList.add('open');
+  document.getElementById('confirmDeleteBtn').onclick = requestDeleteOtp;
+}
 
-@app.route('/')
-def index():
-    return send_from_directory('static', 'index.html')
+function closeConfirm() {
+  document.getElementById('confirmOverlay').classList.remove('open');
+}
 
-@app.route('/admin')
-@app.route('/admin/')
-def admin_page():
-    return send_from_directory('static', 'admin.html')
+// ── Delete — Step 2: Request OTP ─────────────────────────────────────────────
+async function requestDeleteOtp() {
+  closeConfirm();
+  document.getElementById('otpInput').value = '';
+  document.getElementById('otpError').textContent = '';
+  document.getElementById('otpVerifyBtn').textContent = 'Sending OTP…';
+  document.getElementById('otpVerifyBtn').disabled = true;
+  document.getElementById('otpOverlay').classList.add('open');
 
-@app.route('/privacy')
-def privacy_page():
-    return send_from_directory('static', 'privacy.html')
+  try {
+    const r = await adminFetch('/api/admin/request-delete-otp', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) {
+      document.getElementById('otpError').textContent = d.error || 'Failed to send OTP.';
+    } else {
+      showToast('📧 OTP sent to your email!');
+    }
+  } catch(e) {
+    document.getElementById('otpError').textContent = 'Connection error. Try again.';
+  } finally {
+    document.getElementById('otpVerifyBtn').textContent = '🗑️ Delete Now';
+    document.getElementById('otpVerifyBtn').disabled = false;
+    document.getElementById('otpInput').focus();
+  }
+}
 
-@app.route('/static/manifest.json')
-def manifest():
-    return send_from_directory('static', 'manifest.json')
+function closeOtp() {
+  document.getElementById('otpOverlay').classList.remove('open');
+  pendingDeleteId   = null;
+  pendingDeleteName = null;
+}
 
-@app.route('/<path:path>')
-def catch_all(path):
-    # Never serve index.html for admin or api routes
-    if path.startswith('admin') or path.startswith('api/'):
-        from flask import abort
-        abort(404)
-    return send_from_directory('static', 'index.html')
+// ── Delete — Step 3: Verify OTP and delete ────────────────────────────────────
+async function verifyOtpAndDelete() {
+  const otp = document.getElementById('otpInput').value.trim();
+  const errEl = document.getElementById('otpError');
+  errEl.textContent = '';
 
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+  if (!otp || otp.length < 6) { errEl.textContent = 'Please enter the 6-digit OTP.'; return; }
+  if (!pendingDeleteId) { closeOtp(); return; }
+
+  const btn = document.getElementById('otpVerifyBtn');
+  btn.textContent = 'Verifying…'; btn.disabled = true;
+
+  try {
+    const r = await adminFetch(`/api/admin/users/${pendingDeleteId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ otp })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      errEl.textContent = d.error || 'Incorrect OTP. Try again.';
+      btn.textContent = '🗑️ Delete Now'; btn.disabled = false;
+      return;
+    }
+    const id = pendingDeleteId;
+    closeOtp();
+    document.getElementById(`row-${id}`)?.remove();
+    allUsers = allUsers.filter(u => u.id !== id);
+    filterAndRenderUsers();
+    showToast('✅ Profile deleted successfully.');
+  } catch(e) {
+    errEl.textContent = 'Connection error: ' + e.message;
+    btn.textContent = '🗑️ Delete Now'; btn.disabled = false;
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function copyEmail(email) {
+  navigator.clipboard.writeText(email).then(() => {
+    showToast('📋 Email copied: ' + email);
+  }).catch(() => {
+    // Fallback for older browsers
+    const el = document.createElement('textarea');
+    el.value = email;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    showToast('📋 Email copied: ' + email);
+  });
+}
+
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Set Plan ──────────────────────────────────────────────────────────────────
+const PLAN_LABELS = {
+  'pro_4mo':   'Pro for 4 months (₱100)',
+  'basic_1yr': 'Basic 1 year (₱70) + 1 month Pro bonus',
+  'revoke':    'Basic plan (no expiry)',
+  'trial':     'Trial reset (7 days)',
+};
+
+async function setPlan(userId, displayName, plan) {
+  const label = PLAN_LABELS[plan] || plan;
+  if (!confirm(`Set "${displayName}" → ${label}?`)) return;
+  try {
+    const r = await fetch(`/api/admin/users/${userId}/set-plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPassword },
+      body: JSON.stringify({ plan })
+    });
+    const data = await r.json();
+    if (!r.ok) { alert(data.error || 'Failed'); return; }
+    // Update pro badge
+    const row = document.getElementById(`row-${userId}`);
+    if (row) {
+      const badge = row.querySelector('.pro-badge-admin, .basic-badge-admin');
+      if (badge) {
+        badge.className   = data.is_pro ? 'pro-badge-admin' : 'basic-badge-admin';
+        badge.textContent = data.is_pro ? '⭐ Pro' : 'Basic';
+      }
+      // Update or add expiry badge
+      let exBadge = row.querySelector('.expiry-badge-admin');
+      if (data.plan_expires) {
+        const d = new Date(data.plan_expires).toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'numeric'});
+        if (exBadge) { exBadge.textContent = '⏰ ' + d; }
+        else {
+          const nameDiv = row.querySelector('.user-display-name');
+          if (nameDiv) {
+            const span = document.createElement('span');
+            span.className = 'expiry-badge-admin';
+            span.textContent = '⏰ ' + d;
+            nameDiv.appendChild(span);
+          }
+        }
+      } else if (exBadge) { exBadge.remove(); }
+    }
+    showToast(data.msg || '✅ Plan updated!');
+  } catch(e) {
+    alert('Connection error. Please try again.');
+  }
+}
+
+// ── Pause / Unpause ──────────────────────────────────────────────────────────
+async function togglePause(userId, displayName, currentlyPaused) {
+  const action = currentlyPaused ? 'unpause' : 'pause';
+  const msg    = currentlyPaused
+    ? `Unpause "${displayName}"? They will regain full access.`
+    : `Pause "${displayName}"? They will be locked out until you unpause them.`;
+
+  if (!confirm(msg)) return;
+
+  const btn = document.getElementById(`pause-btn-${userId}`);
+  if (btn) { btn.textContent = 'Updating…'; btn.disabled = true; }
+
+  try {
+    const r = await adminFetch(`/api/admin/users/${userId}/pause`, { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) { showToast(`❌ Error: ${d.error}`); return; }
+
+    const isPaused = d.is_paused;
+    const row = document.getElementById(`row-${userId}`);
+    if (row) row.className = isPaused ? 'row-paused' : '';
+
+    // Update pause button
+    if (btn) {
+      btn.textContent  = isPaused ? '▶ Unpause' : '⏸ Pause';
+      btn.className    = isPaused ? 'btn-unpause' : 'btn-pause';
+      btn.disabled     = false;
+      btn.setAttribute('onclick', `togglePause('${userId}','${displayName}',${isPaused})`);
+    }
+
+    // Update paused badge in name cell
+    const nameCell = row?.querySelector('.user-display-name');
+    if (nameCell) {
+      const existing = nameCell.querySelector('.paused-badge');
+      if (isPaused && !existing) {
+        nameCell.insertAdjacentHTML('beforeend', '<span class="paused-badge">⏸ Paused</span>');
+      } else if (!isPaused && existing) {
+        existing.remove();
+      }
+    }
+
+    showToast(isPaused ? `⏸ ${displayName} has been paused.` : `▶ ${displayName} has been unpaused.`);
+  } catch(e) {
+    showToast('❌ Connection error. Please try again.');
+    if (btn) { btn.textContent = currentlyPaused ? '▶ Unpause' : '⏸ Pause'; btn.disabled = false; }
+  }
+}
+
+// ── Analytics ────────────────────────────────────────────────────────────────
+async function loadAnalytics() {
+  try {
+    const r = await adminFetch('/api/admin/analytics');
+    if (!r.ok) return;
+    const d = await r.json();
+
+    // Fill new stat cards
+    document.getElementById('statActiveUsers').textContent = d.active_users;
+    document.getElementById('statTopics').textContent      = d.total_topics;
+    document.getElementById('statNotes').textContent       = d.total_notes;
+
+    // Funnel section
+    const funnel = d.funnel;
+    const totalU = d.total_users;
+    document.getElementById('funnelSection').innerHTML = `
+      <div class="funnel-row">
+        <span class="funnel-label">✅ Signed up</span>
+        <span class="funnel-count ok">${totalU}</span>
+      </div>
+      <div class="funnel-row">
+        <span class="funnel-label">⚠️ No subjects added</span>
+        <span class="funnel-count ${funnel.no_subjects > 0 ? 'warn' : 'ok'}">${funnel.no_subjects}</span>
+      </div>
+      <div class="funnel-row">
+        <span class="funnel-label">⚠️ Has subjects, no sub-subjects</span>
+        <span class="funnel-count ${funnel.no_subsections > 0 ? 'warn' : 'ok'}">${funnel.no_subsections}</span>
+      </div>
+      <div class="funnel-row">
+        <span class="funnel-label">⚠️ Has sub-subjects, no topics</span>
+        <span class="funnel-count ${funnel.no_topics > 0 ? 'warn' : 'ok'}">${funnel.no_topics}</span>
+      </div>
+      <div class="funnel-row" style="margin-top:4px">
+        <span class="funnel-label" style="color:var(--text3);font-size:0.78rem">
+          Drop-off rate: ${totalU === 0 ? 0 : Math.round((funnel.no_subjects / totalU) * 100)}% never added a subject
+        </span>
+      </div>`;
+
+    // Growth section
+    const growth = d.growth;
+    if (!growth.length) {
+      document.getElementById('growthSection').innerHTML =
+        '<div class="growth-empty">No new users in the last 7 days.</div>';
+      return;
+    }
+    const maxCount = Math.max(...growth.map(g => g.count));
+    document.getElementById('growthSection').innerHTML = growth.map(g => {
+      const pct  = maxCount === 0 ? 0 : Math.round((g.count / maxCount) * 100);
+      const date = new Date(g.day + 'T00:00:00');
+      const label = date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', weekday: 'short' });
+      return `
+        <div class="growth-row">
+          <span class="growth-date">${label}</span>
+          <div class="growth-bar-wrap"><div class="growth-bar-fill" style="width:${pct}%"></div></div>
+          <span class="growth-num">+${g.count}</span>
+        </div>`;
+    }).join('');
+
+  } catch(e) { /* silent — analytics are non-critical */ }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeConfirm();
+});
+
+boot();
+</script>
+</body>
+</html>

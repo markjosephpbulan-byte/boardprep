@@ -3100,6 +3100,11 @@ async function doStandaloneLogin() {
     });
     const data = await r.json();
     if (!r.ok) {
+      if (r.status === 403) {
+        // Account paused — show dedicated paused view
+        showView('paused');
+        return;
+      }
       errEl.textContent = data.error || 'Incorrect username/email or password.';
       return;
     }

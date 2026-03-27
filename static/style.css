@@ -2171,3 +2171,40 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   background: var(--bg3);
   text-align: center;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   PAUSED ACCOUNT VIEW
+   ══════════════════════════════════════════════════════════════ */
+.paused-card {
+  text-align: center;
+  max-width: 420px;
+}
+.paused-contact-box {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.paused-contact-label {
+  font-size: 0.82rem;
+  color: var(--text2);
+}
+.btn-paused-contact {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #1877f2;
+  color: #fff;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.65rem 1.5rem;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: background 0.2s;
+}
+.btn-paused-contact:hover { background: #1464d8; }

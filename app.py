@@ -1932,6 +1932,10 @@ def delete_flashcard(user_id, card_id):
 #  ADMIN — OTP DELETE VERIFICATION
 # ══════════════════════════════════════════════════════════════════════════════
 
+ADMIN_EMAIL = "markjosephpbulan@gmail.com"
+_delete_otp_store = {}
+_delete_otp_lock = threading.Lock()
+
 
 @app.route("/api/admin/request-delete-otp", methods=["POST"])
 @admin_required
@@ -1943,46 +1947,27 @@ def request_delete_otp():
     exp = datetime.now() + timedelta(minutes=10)
 
     with _delete_otp_lock:
-        _delete_otp_store.clear()  # only one OTP valid at a time
+        _delete_otp_store.clear()
         _delete_otp_store[otp] = exp
 
-    # Send email via Brevo
-    brevo_key = os.environ.get("BREVO_API_KEY", "")
-    if brevo_key:
-        try:
-            http_requests.post(
-                "https://api.brevo.com/v3/smtp/email",
-                headers={"api-key": brevo_key, "Content-Type": "application/json"},
-                json={
-                    "sender": {
-                        "name": "BoardPrep PH Admin",
-                        "email": os.environ.get(
-                            "EMAIL_FROM", "no-reply@boardpreph.com"
-                        ),
-                    },
-                    "to": [{"email": ADMIN_EMAIL}],
-                    "subject": f"BoardPrep PH — Delete OTP: {otp}",
-                    "htmlContent": f"""
-                        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:2rem;background:#0d1117;color:#e8edf5;border-radius:12px">
-                            <h2 style="color:#f5c842;margin-bottom:8px">🗑️ Account Deletion OTP</h2>
-                            <p style="color:#8b97a8;margin-bottom:1.5rem">You requested to delete an account on BoardPrep PH Admin.</p>
-                            <div style="background:#1c2330;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:1.5rem;text-align:center;margin-bottom:1.5rem">
-                                <div style="font-size:2.5rem;font-weight:800;letter-spacing:0.5rem;color:#f5c842">{otp}</div>
-                                <div style="color:#5a6678;font-size:0.82rem;margin-top:6px">Valid for 10 minutes</div>
-                            </div>
-                            <p style="color:#5a6678;font-size:0.8rem">If you did not request this, ignore this email. No account has been deleted yet.</p>
-                        </div>
-                    """,
-                },
-                timeout=10,
-            )
-        except Exception as e:
-            print(f"[OTP Email Error] {e}")
-            return jsonify({
-                "error": "Failed to send OTP email. Check Brevo config."
-            }), 503
+    html = f"""
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:2rem">
+            <h2 style="color:#f5c842;margin-bottom:8px">🗑️ Account Deletion OTP</h2>
+            <p style="color:#555;margin-bottom:1.5rem">You requested to delete an account on BoardPrep PH Admin.</p>
+            <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;padding:1.5rem;text-align:center;margin-bottom:1.5rem">
+                <div style="font-size:2.5rem;font-weight:800;letter-spacing:0.5rem;color:#f5c842">{otp}</div>
+                <div style="color:#888;font-size:0.82rem;margin-top:6px">Valid for 10 minutes · One use only</div>
+            </div>
+            <p style="color:#888;font-size:0.8rem">If you did not request this, ignore this email. No account has been deleted yet.</p>
+        </div>
+    """
 
-    return jsonify({"ok": True, "msg": "OTP sent to admin email."})
+    ok, err = _brevo_send(ADMIN_EMAIL, f"BoardPrep PH Admin — Delete OTP: {otp}", html)
+    if not ok:
+        print(f"[Admin OTP] {otp} (email failed: {err})")
+        return jsonify({"error": f"Failed to send OTP email: {err}"}), 503
+
+    return jsonify({"ok": True})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1990,11 +1975,6 @@ def request_delete_otp():
 # ══════════════════════════════════════════════════════════════════════════════
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-ADMIN_EMAIL = "markjosephpbulan@gmail.com"
-
-# In-memory OTP store: {otp_code: expires_timestamp}
-_delete_otp_store = {}
-_delete_otp_lock = threading.Lock()
 
 
 @app.route("/api/profiles/<user_id>/generate-pdf-flashcards", methods=["POST"])

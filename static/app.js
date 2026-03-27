@@ -605,7 +605,8 @@ async function confirmDeleteAccount() {
     } catch(e) {}
 
     // Clear motivation cache for this user
-    try { localStorage.removeItem(MOTIVATION_CACHE_KEY()); } catch(e) {}
+    // Clear motivation cache for this user on logout
+    try { const todayK = getTodayKey(); const uid = currentUser ? currentUser.id : 'anon'; localStorage.removeItem('bprep_motiv_' + uid + '_' + todayK); } catch(e) {}
 
     showView('landing');
     await loadProfiles();
@@ -1915,14 +1916,18 @@ async function fetchMotivation() {
   const todayKey = getTodayKey();
   const name     = currentUser ? currentUser.display_name : 'reviewer';
   const profKey  = detectProfession(subjects);
-  const cacheKey = 'boardprep_daily_' + (currentUser ? currentUser.id : 'anon') + '_' + todayKey;
+  const uid      = currentUser ? currentUser.id : 'anon';
+  const cacheKey  = 'bprep_motiv_' + uid + '_' + todayKey;
 
-  // Same day — serve from cache
+  // Same day — serve from cache (do NOT call Gemini again)
   try {
-    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
-    if (cached && cached.message) {
-      renderMotivation(cached.message, cached.tip, todayKey);
-      return;
+    const raw = localStorage.getItem(cacheKey);
+    if (raw) {
+      const cached = JSON.parse(raw);
+      if (cached && cached.message && cached.date === todayKey) {
+        renderMotivation(cached.message, cached.tip, todayKey);
+        return;  // ← locked in for the day, no API call
+      }
     }
   } catch(e) {}
 
@@ -1946,7 +1951,7 @@ async function fetchMotivation() {
       const prompt = 'Write a short motivational message (3-4 sentences, under 70 words) for ' + name + ', a Filipino board exam reviewer. Subjects: ' + subNames + '. Progress: ' + pct + '% done. Use one natural Tagalog word. No bullet points. End with one short powerful sentence.';
 
       const resp = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + geminiKey,
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + geminiKey,
         { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 150, temperature: 0.9 } }) }
       );
@@ -2803,8 +2808,8 @@ function setPdfFile(file) {
     showPdfError('Please upload a PDF file.');
     return;
   }
-  if (file.size > 30 * 1024 * 1024) {
-    showPdfError('File is too large. Maximum size is 30MB.');
+  if (file.size > 10 * 1024 * 1024) {
+    showPdfError('File is too large. Maximum size is 10MB.');
     return;
   }
   pdfFile = file;

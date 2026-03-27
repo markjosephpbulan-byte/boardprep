@@ -1688,11 +1688,11 @@ def generate_flashcards_from_pdf(user_id):
     raw_bytes = pdf_file.read()
     if len(raw_bytes) == 0:
         return jsonify({"error": "The uploaded PDF is empty."}), 400
-    if len(raw_bytes) > 30 * 1024 * 1024:  # 30MB max
-        return jsonify({"error": "PDF is too large. Maximum size is 30MB."}), 400
+    if len(raw_bytes) > 10 * 1024 * 1024:  # 10MB max
+        return jsonify({"error": "PDF is too large. Maximum size is 10MB."}), 400
 
     # ── 2. Get request params ─────────────────────────────────────────────────
-    max_cards = min(int(request.form.get("max_cards", 10)), 20)  # cap at 20
+    max_cards = min(int(request.form.get("max_cards", 10)), 30)  # cap at 30
     subject_name = request.form.get("subject_name", "this subject")
 
     # ── 3. Extract text from PDF using pdfminer (pure Python, no system deps) ─
@@ -1745,7 +1745,7 @@ def generate_flashcards_from_pdf(user_id):
     raw_text = None
     try:
         resp = http_requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}",
             headers={"Content-Type": "application/json"},
             json={
                 "contents": [{"parts": [{"text": prompt}]}],

@@ -2018,27 +2018,16 @@ def generate_flashcards_from_pdf(user_id):
     max_cards = min(int(request.form.get("max_cards", 10)), 30)  # cap at 30
     subject_name = request.form.get("subject_name", "this subject")
 
-    # ── 3. Extract text from PDF using pdfminer (pure Python, no system deps) ─
+    # ── 3. Extract text from PDF ──────────────────────────────────────────────
     try:
         from pdfminer.high_level import extract_text as pdf_extract_text
 
         pdf_text = pdf_extract_text(_io.BytesIO(raw_bytes))
-        pdf_text = pdf_text.strip()
-    except ImportError:
-        # Fallback: try pypdf
-        try:
-            import pypdf
-
-            reader = pypdf.PdfReader(_io.BytesIO(raw_bytes))
-            pdf_text = "\n".join(
-                page.extract_text() or "" for page in reader.pages
-            ).strip()
-        except Exception as e2:
-            return jsonify({
-                "error": f"Could not read PDF. Please ensure it contains selectable text (not a scanned image). Error: {str(e2)[:100]}"
-            }), 400
+        pdf_text = (pdf_text or "").strip()
     except Exception as e:
-        return jsonify({"error": f"Could not read PDF: {str(e)[:100]}"}), 400
+        return jsonify({
+            "error": f"Could not read PDF. Make sure it contains selectable text (not a scanned image). ({str(e)[:80]})"
+        }), 400
 
     if not pdf_text or len(pdf_text) < 50:
         return jsonify({

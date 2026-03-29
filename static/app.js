@@ -636,6 +636,29 @@ function isPro() {
   return currentUser && currentUser.is_pro === true;
 }
 
+function updateStreakUI() {
+  const streak = currentUser && currentUser.streak ? parseInt(currentUser.streak) : 0;
+  const chip   = document.getElementById('streakChip');
+  const count  = document.getElementById('streakCount');
+  if (!chip) return;
+  if (streak > 0) {
+    chip.style.display = 'flex';
+    count.textContent  = streak;
+    // Add fire animation for milestone streaks
+    chip.classList.toggle('streak-milestone', streak >= 7);
+  } else {
+    chip.style.display = 'none';
+  }
+}
+
+function updateStreakFromResponse(data) {
+  // Called after topic/subsection is marked done — update streak from server
+  if (data && data.streak !== undefined) {
+    if (currentUser) currentUser.streak = data.streak;
+    updateStreakUI();
+  }
+}
+
 function updateProUI() {
   const pro         = isPro();
   const plan        = currentUser && currentUser.plan;

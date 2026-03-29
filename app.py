@@ -125,12 +125,14 @@ def init_db():
             password_hash TEXT NOT NULL,
             avatar        TEXT,
             exam_date     TEXT,
-            is_paused     BOOLEAN DEFAULT FALSE,
-            is_pro        BOOLEAN DEFAULT TRUE,
-            plan          TEXT DEFAULT 'trial',
-            plan_expires  TIMESTAMPTZ,
-            pro_since     TIMESTAMPTZ DEFAULT NOW(),
-            created_at    TIMESTAMPTZ DEFAULT NOW()
+            is_paused       BOOLEAN DEFAULT FALSE,
+            is_pro          BOOLEAN DEFAULT TRUE,
+            plan            TEXT DEFAULT 'trial',
+            plan_expires    TIMESTAMPTZ,
+            pro_since       TIMESTAMPTZ DEFAULT NOW(),
+            streak          INTEGER DEFAULT 0,
+            last_study_date DATE,
+            created_at      TIMESTAMPTZ DEFAULT NOW()
         )
     """)
     db_execute("""
@@ -281,6 +283,12 @@ try:
             db_execute(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_since TIMESTAMPTZ DEFAULT NOW()"
             )
+            db_execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0"
+            )
+            db_execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_study_date DATE"
+            )
             # Fix existing trial accounts that have NULL plan_expires — set to 7 days from created_at
             db_execute("""
                 UPDATE users SET plan_expires = created_at + INTERVAL '7 days'
@@ -414,6 +422,56 @@ def record_account_deletion(email):
             print(f"[Ban] {email} banned for 2 months")
     except Exception as e:
         print(f"[RecordDeletion] Error: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  STREAK SYSTEM
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def update_streak(user_id):
+    """
+    Called whenever a user marks something as done.
+    - If last_study_date is today → no change (already counted)
+    - If last_study_date is yesterday → increment streak
+    - If last_study_date is 2+ days ago → reset streak to 1
+    - If never studied before → set streak to 1
+    """
+    try:
+        from datetime import date
+
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+
+        user = db_execute(
+            "SELECT streak, last_study_date FROM users WHERE id=%s",
+            (user_id,),
+            fetch="one",
+        )
+        if not user:
+            return
+
+        last = user.get("last_study_date")
+        current_streak = int(user.get("streak") or 0)
+
+        # Already studied today — no update needed
+        if last and str(last) == str(today):
+            return
+
+        if last and str(last) == str(yesterday):
+            # Studied yesterday → extend streak
+            new_streak = current_streak + 1
+        else:
+            # Missed a day or first time → start fresh
+            new_streak = 1
+
+        db_execute(
+            "UPDATE users SET streak=%s, last_study_date=%s WHERE id=%s",
+            (new_streak, today, user_id),
+        )
+        invalidate_user_cache(user_id)
+    except Exception as e:
+        print(f"[Streak] Error: {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -635,6 +693,10 @@ def safe_user(u):
         if u.get("plan_expires")
         else None,
         "pro_since": str(u.get("pro_since", "")),
+        "streak": int(u.get("streak") or 0),
+        "last_study_date": str(u.get("last_study_date", ""))
+        if u.get("last_study_date")
+        else None,
         "created_at": str(u.get("created_at", "")),
     }
 
@@ -1295,6 +1357,8 @@ def update_subsection(user_id, subject_id, sub_id):
             "UPDATE subsections SET done=%s WHERE id=%s AND user_id=%s",
             (bool(body["done"]), sub_id, user_id),
         )
+        if bool(body["done"]):
+            update_streak(user_id)
     ss = db_execute("SELECT * FROM subsections WHERE id=%s", (sub_id,), fetch="one")
     if not ss:
         return jsonify({"error": "Not found"}), 404
@@ -1357,6 +1421,8 @@ def update_topic(user_id, subject_id, sub_id, topic_id):
             "UPDATE topics SET done=%s WHERE id=%s AND user_id=%s",
             (bool(body["done"]), topic_id, user_id),
         )
+        if bool(body["done"]):
+            update_streak(user_id)
     if "note" in body:
         db_execute(
             "UPDATE topics SET note=%s WHERE id=%s AND user_id=%s",

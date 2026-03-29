@@ -283,12 +283,6 @@ try:
             db_execute(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_since TIMESTAMPTZ DEFAULT NOW()"
             )
-            db_execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0"
-            )
-            db_execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_study_date DATE"
-            )
             # Fix existing trial accounts that have NULL plan_expires — set to 7 days from created_at
             db_execute("""
                 UPDATE users SET plan_expires = created_at + INTERVAL '7 days'
@@ -296,6 +290,17 @@ try:
             """)
         except Exception:
             pass
+        # Streak columns — separate block so it always runs
+        try:
+            db_execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0"
+            )
+            db_execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_study_date DATE"
+            )
+            print("[DB] Streak columns ready ✅")
+        except Exception as e:
+            print(f"[DB] Streak migration error: {e}")
         try:
             db_execute("""
                 CREATE TABLE IF NOT EXISTS banned_emails (

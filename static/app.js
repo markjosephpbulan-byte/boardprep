@@ -1352,7 +1352,13 @@ async function toggleSubsectionDone(subjectId, ssId) {
   fetch(`${apiBase()}/subjects/${subjectId}/subsections/${ssId}`, {
     method: 'PUT', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ done: nowDone })
-  });
+  }).then(() => {
+    if (nowDone) {
+      fetch('/api/auth/me').then(r => r.json()).then(u => {
+        if (u && u.streak !== undefined) { currentUser.streak = u.streak; updateStreakUI(); }
+      }).catch(() => {});
+    }
+  }).catch(() => {});
 
   // ── Save each topic to DB (fire all in parallel) ──────────────
   ss.topics.forEach(t => {
@@ -1457,10 +1463,17 @@ async function toggleTopicDone(subjectId, ssId, topicId) {
   }
   refreshCardProgress(subjectId);
 
-  // Always save the topic's done state
+  // Always save the topic's done state and update streak
   fetch(`${apiBase()}/subjects/${subjectId}/subsections/${ssId}/topics/${topicId}`, {
     method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ done: t.done })
-  });
+  }).then(r => r.ok ? r.json() : null).then(data => {
+    if (data && t.done) {
+      // Refresh currentUser streak from server
+      fetch('/api/auth/me').then(r => r.json()).then(u => {
+        if (u && u.streak !== undefined) { currentUser.streak = u.streak; updateStreakUI(); }
+      }).catch(() => {});
+    }
+  }).catch(() => {});
 
   // If subsection done state changed automatically, save that too
   if (ss.done !== prevSsDone) {

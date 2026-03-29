@@ -1571,6 +1571,10 @@ def admin_list_users():
             "progress_pct": pct,
             "is_paused": bool(u.get("is_paused", False)),
             "is_pro": bool(u.get("is_pro", True)),
+            "plan": u.get("plan", "trial"),
+            "plan_expires": str(u.get("plan_expires", ""))
+            if u.get("plan_expires")
+            else None,
             "pro_since": str(u.get("pro_since", "")),
             "created_at": str(u["created_at"]),
         })

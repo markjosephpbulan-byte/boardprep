@@ -686,8 +686,8 @@ function filterAndRenderUsers() {
 
     // Filter
     let matchFilter = true;
-    if (currentFilter === 'pro')    matchFilter = u.is_pro && !u.is_paused;
-    if (currentFilter === 'basic')  matchFilter = !u.is_pro && !u.is_paused;
+    if (currentFilter === 'pro')    matchFilter = u.is_pro && !u.is_paused && u.plan !== 'trial';
+    if (currentFilter === 'basic')  matchFilter = !u.is_pro && !u.is_paused && u.plan !== 'expired';
     if (currentFilter === 'trial')  matchFilter = u.plan === 'trial' && !u.is_paused;
     if (currentFilter === 'paused') matchFilter = u.is_paused;
 

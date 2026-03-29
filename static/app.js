@@ -637,21 +637,45 @@ function isPro() {
 }
 
 function updateProUI() {
-  const pro     = isPro();
-  const proSince = currentUser && currentUser.pro_since ? new Date(currentUser.pro_since) : null;
-  const created  = currentUser && currentUser.created_at ? new Date(currentUser.created_at) : null;
+  const pro         = isPro();
+  const plan        = currentUser && currentUser.plan;
+  const planExpires = currentUser && currentUser.plan_expires ? new Date(currentUser.plan_expires) : null;
+  const created     = currentUser && currentUser.created_at  ? new Date(currentUser.created_at)   : null;
 
-  // Pro badge in header
+  // Pro badge in header — show for pro but NOT for trial
   const badge = document.getElementById('proBadge');
-  if (badge) badge.style.display = pro ? 'inline-flex' : 'none';
+  if (badge) badge.style.display = (pro && plan !== 'trial') ? 'inline-flex' : 'none';
 
-  // Trial banner — show if pro AND account is less than 7 days old
+  // Trial banner — show if on trial plan with days remaining
   const trialBanner = document.getElementById('trialBanner');
   const freeBanner  = document.getElementById('basicBanner');
+
   if (trialBanner && freeBanner) {
-    const isNew = created && ((Date.now() - created.getTime()) < 7 * 24 * 60 * 60 * 1000);
-    trialBanner.style.display = (pro && isNew) ? 'flex' : 'none';
-    freeBanner.style.display  = (!pro) ? 'flex' : 'none';
+    const isTrial = plan === 'trial' && !currentUser.is_paused;
+
+    if (isTrial && planExpires) {
+      // Calculate days remaining from plan_expires
+      const msLeft   = planExpires.getTime() - Date.now();
+      const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+
+      if (daysLeft > 0) {
+        const dayWord = daysLeft === 1 ? 'day' : 'days';
+        trialBanner.innerHTML = `
+          🎉 You're on <strong>Pro Trial</strong> —
+          <span style="color:var(--gold);font-weight:800">${daysLeft} ${dayWord} remaining</span>.
+          After trial: Basic ₱70/year or Pro ₱100 / 4 months.
+          <a href="https://www.facebook.com/boardpreph/" target="_blank"
+             style="color:var(--gold);font-weight:700;margin-left:4px;text-decoration:none">Contact us →</a>
+        `;
+        trialBanner.style.display = 'flex';
+      } else {
+        trialBanner.style.display = 'none';
+      }
+    } else {
+      trialBanner.style.display = 'none';
+    }
+
+    freeBanner.style.display = (!pro && plan !== 'trial') ? 'flex' : 'none';
   }
 
   // PDF section

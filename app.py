@@ -1890,7 +1890,26 @@ def admin_toggle_pro(user_id):
     return jsonify({"ok": True, "is_pro": new_state})
 
 
-@app.route("/api/admin/banned-emails", methods=["GET"])
+@app.route("/api/admin/run-migrations", methods=["POST"])
+@admin_required
+def run_migrations():
+    """Manually run any pending DB migrations."""
+    results = []
+    try:
+        db_execute(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0"
+        )
+        results.append("✅ streak column")
+    except Exception as e:
+        results.append(f"❌ streak: {e}")
+    try:
+        db_execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_study_date DATE")
+        results.append("✅ last_study_date column")
+    except Exception as e:
+        results.append(f"❌ last_study_date: {e}")
+    return jsonify({"ok": True, "results": results})
+
+
 @admin_required
 def admin_banned_emails():
     bans = (

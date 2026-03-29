@@ -2934,7 +2934,8 @@ async function startPdfGeneration() {
 
   } catch(e) {
     showPdfStep(1);
-    showPdfError('Connection error. Please check your internet and try again.');
+    showPdfError(`Error: ${e.message || 'Unknown error. Please try again.'}`);
+    console.error('PDF generation error:', e);
   }
 }
 

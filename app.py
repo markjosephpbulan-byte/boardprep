@@ -2015,8 +2015,8 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 
 @app.route("/api/profiles/<user_id>/generate-pdf-flashcards", methods=["POST"])
-@rate_limit(5, 300, "pdf_generate")
 @owner_required
+@rate_limit(5, 300, "pdf_generate")
 def generate_flashcards_from_pdf(user_id):
     """
     Upload a PDF → extract text → call Gemini → return Q&A pairs.

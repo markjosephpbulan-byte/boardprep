@@ -281,6 +281,11 @@ try:
             db_execute(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_since TIMESTAMPTZ DEFAULT NOW()"
             )
+            # Fix existing trial accounts that have NULL plan_expires — set to 7 days from created_at
+            db_execute("""
+                UPDATE users SET plan_expires = created_at + INTERVAL '7 days'
+                WHERE plan = 'trial' AND plan_expires IS NULL
+            """)
         except Exception:
             pass
         try:
@@ -340,14 +345,30 @@ except Exception as e:
 
 
 def check_and_pause_expired_plans():
-    """Pause all users whose plan has expired. Called on every login."""
+    """
+    Smart auto-pause — runs on every login.
+    - basic_pro_bonus expired → downgrade to basic (11 months remaining), NOT paused
+    - trial/pro/basic expired  → pause account
+    """
     try:
+        # 1. Downgrade basic_pro_bonus to basic (don't pause — they paid for 1 year)
+        db_execute("""
+            UPDATE users
+            SET is_pro=FALSE, plan='basic',
+                plan_expires=plan_expires + INTERVAL '11 months'
+            WHERE plan = 'basic_pro_bonus'
+              AND plan_expires IS NOT NULL
+              AND plan_expires < NOW()
+              AND is_paused = FALSE
+        """)
+        # 2. Pause everything else that has expired (trial, pro, basic)
         db_execute("""
             UPDATE users
             SET is_paused = TRUE, is_pro = FALSE, plan = 'expired'
             WHERE plan_expires IS NOT NULL
               AND plan_expires < NOW()
               AND is_paused = FALSE
+              AND plan != 'basic_pro_bonus'
         """)
     except Exception as e:
         print(f"[AutoPause] Error: {e}")
@@ -1745,6 +1766,18 @@ def admin_set_plan(user_id):
             (user_id,),
         )
         msg = "Reverted to Basic (no expiry) ✅"
+
+    elif plan == "pro_bonus":
+        # Give 1 month Pro bonus without changing their existing plan expiry
+        db_execute(
+            """
+            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
+            plan='basic_pro_bonus', plan_expires=NOW() + INTERVAL '1 month'
+            WHERE id=%s
+        """,
+            (user_id,),
+        )
+        msg = "1 month Pro bonus granted ✅"
 
     elif plan == "trial":
         db_execute(

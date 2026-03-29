@@ -316,6 +316,20 @@
     border: 1px solid var(--border);
   }
   .btn-plan-revoke:hover { background: rgba(150,150,150,0.15); }
+  .btn-plan-pro-bonus {
+    padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+    border-radius: 6px; transition: all 0.15s;
+    background: rgba(62,207,142,0.12); color: var(--green);
+    border: 1px solid rgba(62,207,142,0.35);
+  }
+  .btn-plan-pro-bonus:hover { background: rgba(62,207,142,0.22); }
+  .btn-plan-trial {
+    padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+    border-radius: 6px; transition: all 0.15s;
+    background: rgba(96,165,250,0.12); color: #60a5fa;
+    border: 1px solid rgba(96,165,250,0.35);
+  }
+  .btn-plan-trial:hover { background: rgba(96,165,250,0.22); }
   /* Expiry badge */
   .expiry-badge-admin {
     display: inline-block; font-size: 0.62rem; font-weight: 600;
@@ -635,7 +649,7 @@ function renderUsersTable(users) {
       <td style="color:var(--text3)">${formatDate(u.created_at)}</td>
       <td>
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
-          <button class="btn-plan-pro" title="Pro 4 months (₱100)"
+          <button class="btn-plan-pro" title="Pro for 4 months (₱100)"
                   onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_4mo')">
             ⭐ Pro 4mo
           </button>
@@ -643,9 +657,17 @@ function renderUsersTable(users) {
                   onclick="setPlan('${u.id}','${esc(u.display_name)}','basic_1yr')">
             📦 Basic 1yr
           </button>
+          <button class="btn-plan-pro-bonus" title="Give 1 month Pro bonus"
+                  onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_bonus')">
+            🎁 Pro B
+          </button>
+          <button class="btn-plan-trial" title="Reset trial for 7 days"
+                  onclick="setPlan('${u.id}','${esc(u.display_name)}','trial')">
+            🔄 Trial
+          </button>
           <button class="btn-plan-revoke" title="Set to Basic (no expiry)"
                   onclick="setPlan('${u.id}','${esc(u.display_name)}','revoke')">
-            🔒 Set Basic
+            🔒 Basic
           </button>
           <button class="${u.is_paused ? 'btn-unpause' : 'btn-pause'}"
                   id="pause-btn-${u.id}"
@@ -686,8 +708,8 @@ function filterAndRenderUsers() {
 
     // Filter
     let matchFilter = true;
-    if (currentFilter === 'pro')    matchFilter = u.is_pro && !u.is_paused && u.plan !== 'trial';
-    if (currentFilter === 'basic')  matchFilter = !u.is_pro && !u.is_paused && u.plan !== 'expired';
+    if (currentFilter === 'pro')    matchFilter = u.is_pro && !u.is_paused && u.plan !== 'trial' && u.plan !== 'basic_pro_bonus';
+    if (currentFilter === 'basic')  matchFilter = (!u.is_pro || u.plan === 'basic_pro_bonus') && !u.is_paused && u.plan !== 'expired';
     if (currentFilter === 'trial')  matchFilter = u.plan === 'trial' && !u.is_paused;
     if (currentFilter === 'paused') matchFilter = u.is_paused;
 
@@ -832,8 +854,9 @@ function showToast(msg) {
 const PLAN_LABELS = {
   'pro_4mo':   'Pro for 4 months (₱100)',
   'basic_1yr': 'Basic 1 year (₱70) + 1 month Pro bonus',
+  'pro_bonus': '1 month Pro bonus',
+  'trial':     'Trial reset for 7 days',
   'revoke':    'Basic plan (no expiry)',
-  'trial':     'Trial reset (7 days)',
 };
 
 async function setPlan(userId, displayName, plan) {

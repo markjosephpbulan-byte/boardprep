@@ -2021,181 +2021,168 @@ def generate_flashcards_from_pdf(user_id):
     Upload a PDF → extract text → call Gemini → return Q&A pairs.
     PDF is processed entirely in memory and NEVER stored in the database.
     """
-    import re as _re
-    import io as _io
-
-    # Pro-only feature check
-    user = get_user_by_id(user_id)
-    if not user or not user.get("is_pro", True):
-        return jsonify({
-            "error": "This feature requires a Pro account. Please upgrade to continue."
-        }), 403
-
-    if not GEMINI_API_KEY:
-        return jsonify({
-            "error": "AI generation is not configured on this server. Please set GEMINI_API_KEY."
-        }), 503
-
-    # ── 1. Validate file upload ───────────────────────────────────────────────
-    if "pdf" not in request.files:
-        return jsonify({"error": "No PDF file uploaded."}), 400
-
-    pdf_file = request.files["pdf"]
-    if not pdf_file.filename or not pdf_file.filename.lower().endswith(".pdf"):
-        return jsonify({"error": "Please upload a valid PDF file."}), 400
-
-    raw_bytes = pdf_file.read()
-    if len(raw_bytes) == 0:
-        return jsonify({"error": "The uploaded PDF is empty."}), 400
-    if len(raw_bytes) > 20 * 1024 * 1024:  # 20MB max
-        return jsonify({"error": "PDF is too large. Maximum size is 20MB."}), 400
-
-    # ── 2. Get request params ─────────────────────────────────────────────────
-    max_cards = min(int(request.form.get("max_cards", 10)), 50)  # cap at 50
-    subject_name = request.form.get("subject_name", "this subject")
-
-    # ── 3. Extract text from PDF ──────────────────────────────────────────────
     try:
-        import pypdf
+        import re as _re
+        import io as _io
 
-        reader = pypdf.PdfReader(_io.BytesIO(raw_bytes))
-        pdf_text = "\n".join(
-            (page.extract_text() or "") for page in reader.pages
-        ).strip()
-    except Exception as e:
-        return jsonify({
-            "error": f"Could not read PDF. Make sure it contains selectable text (not a scanned image). ({str(e)[:80]})"
-        }), 400
+        # Pro-only feature check
+        user = get_user_by_id(user_id)
+        if not user or not user.get("is_pro", True):
+            return jsonify({
+                "error": "This feature requires a Pro account. Please upgrade to continue."
+            }), 403
 
-    if not pdf_text or len(pdf_text) < 50:
-        return jsonify({
-            "error": "Could not extract readable text from this PDF. Make sure it is not a scanned image."
-        }), 400
+        if not GEMINI_API_KEY:
+            return jsonify({
+                "error": "AI generation is not configured on this server. Please set GEMINI_API_KEY."
+            }), 503
 
-    # Trim to 3000 chars (~750 tokens) to save quota
-    if len(pdf_text) > 3000:
-        pdf_text = pdf_text[:3000]
+        # ── 1. Validate file upload ───────────────────────────────────────────────
+        if "pdf" not in request.files:
+            return jsonify({"error": "No PDF file uploaded."}), 400
 
-    prompt = (
-        f"You are an expert board exam question writer for Filipino professional licensure examinations. "
-        f'Your task is to generate {max_cards} high-quality flashcard Q&A pairs from the study material below about "{subject_name}". '
-        f"\n\n"
-        f"WHAT TO FOCUS ON (include these):\n"
-        f"- Key definitions, terms, and concepts\n"
-        f"- Laws, theorems, principles, and formulas\n"
-        f"- Classifications, types, and categories\n"
-        f"- Processes, procedures, and steps\n"
-        f"- Causes, effects, and relationships between concepts\n"
-        f"- Numerical values, standards, and thresholds that are commonly tested\n"
-        f"- Important facts that appear in board exams\n"
-        f"\n"
-        f"WHAT TO STRICTLY IGNORE (never make questions about these):\n"
-        f"- Author names, editors, or publishers\n"
-        f"- Book titles, edition numbers, or ISBN\n"
-        f"- Chapter objectives, learning outcomes, or course goals\n"
-        f"- Table of contents, preface, introduction, or acknowledgements\n"
-        f"- Page numbers, figure numbers, or table numbers\n"
-        f"- Bibliography, references, or citations\n"
-        f"- Copyright notices or legal disclaimers\n"
-        f"\n"
-        f"QUESTION QUALITY RULES:\n"
-        f"- Questions must test actual subject knowledge, not trivia about the book\n"
-        f"- Vary question types: What is, Define, What are the types of, What happens when, How many, Which law states\n"
-        f"- Answers must be direct and factual (1-2 sentences only)\n"
-        f"- LANGUAGE: If the study material is written in English, write ALL questions and answers in English. If in Filipino/Tagalog, write in Filipino. Do NOT translate or change the language.\n"
-        f"\n"
-        f"Output ONLY valid JSON with no extra text, no markdown, no explanation:\n"
-        f'{{"flashcards":[{{"question":"...","answer":"..."}}]}}\n'
-        f"\n"
-        f"Study material:\n{pdf_text}"
-    )
+        pdf_file = request.files["pdf"]
+        if not pdf_file.filename or not pdf_file.filename.lower().endswith(".pdf"):
+            return jsonify({"error": "Please upload a valid PDF file."}), 400
 
-    # ── Call Gemini ───────────────────────────────────────────────────────────
-    if not GEMINI_API_KEY:
-        return jsonify({
-            "error": "AI generation is not configured. Please set GEMINI_API_KEY."
-        }), 503
+        raw_bytes = pdf_file.read()
+        if len(raw_bytes) == 0:
+            return jsonify({"error": "The uploaded PDF is empty."}), 400
+        if len(raw_bytes) > 20 * 1024 * 1024:
+            return jsonify({"error": "PDF is too large. Maximum size is 20MB."}), 400
 
-    raw_text = None
-    try:
-        resp = http_requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}",
-            headers={"Content-Type": "application/json"},
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.4},
-            },
-            timeout=45,
-        )
-        if resp.ok:
-            data = resp.json()
-            raw_text = (
-                data
-                .get("candidates", [{}])[0]
-                .get("content", {})
-                .get("parts", [{}])[0]
-                .get("text", "")
+        # ── 2. Get request params ─────────────────────────────────────────────────
+        max_cards = min(int(request.form.get("max_cards", 10)), 50)
+        subject_name = request.form.get("subject_name", "this subject")
+
+        # ── 3. Extract text from PDF ──────────────────────────────────────────────
+        try:
+            import pypdf
+
+            reader = pypdf.PdfReader(_io.BytesIO(raw_bytes))
+            pdf_text = "\n".join(
+                (page.extract_text() or "") for page in reader.pages
             ).strip()
-        else:
-            try:
-                err_msg = (
-                    resp.json().get("error", {}).get("message", str(resp.status_code))
-                )
-            except Exception:
-                err_msg = str(resp.status_code)
-            return jsonify({"error": f"AI service error: {err_msg[:150]}"}), 502
+        except Exception as e:
+            return jsonify({
+                "error": f"Could not read PDF. Make sure it contains selectable text. ({str(e)[:80]})"
+            }), 400
+
+        if not pdf_text or len(pdf_text) < 50:
+            return jsonify({
+                "error": "Could not extract readable text. Make sure the PDF is not a scanned image."
+            }), 400
+
+        if len(pdf_text) > 3000:
+            pdf_text = pdf_text[:3000]
+
+        prompt = (
+            f"You are an expert board exam question writer for Filipino professional licensure examinations. "
+            f'Your task is to generate {max_cards} high-quality flashcard Q&A pairs from the study material below about "{subject_name}". '
+            f"\n\nWHAT TO FOCUS ON:\n"
+            f"- Key definitions, terms, and concepts\n"
+            f"- Laws, theorems, principles, and formulas\n"
+            f"- Classifications, types, and categories\n"
+            f"- Important facts that appear in board exams\n"
+            f"\nWHAT TO IGNORE:\n"
+            f"- Author names, book titles, chapter objectives, page numbers\n"
+            f"\nRULES:\n"
+            f"- Questions must test actual subject knowledge\n"
+            f"- Answers must be direct and factual (1-2 sentences only)\n"
+            f"- LANGUAGE: Match the language of the study material exactly. Do NOT translate.\n"
+            f"\nOutput ONLY valid JSON:\n"
+            f'{{"flashcards":[{{"question":"...","answer":"..."}}]}}\n'
+            f"\nStudy material:\n{pdf_text}"
+        )
+
+        # ── 4. Call Gemini ────────────────────────────────────────────────────────
+        try:
+            resp = http_requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.4},
+                },
+                timeout=45,
+            )
+            if resp.ok:
+                data = resp.json()
+                raw_text = (
+                    data
+                    .get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                ).strip()
+            else:
+                try:
+                    err_msg = (
+                        resp
+                        .json()
+                        .get("error", {})
+                        .get("message", str(resp.status_code))
+                    )
+                except Exception:
+                    err_msg = str(resp.status_code)
+                return jsonify({"error": f"AI service error: {err_msg[:150]}"}), 502
+        except Exception as e:
+            return jsonify({
+                "error": f"AI service timeout. Please try again. ({str(e)[:80]})"
+            }), 503
+
+        if not raw_text:
+            return jsonify({
+                "error": "AI returned an empty response. Please try again."
+            }), 500
+
+        # ── 5. Parse response ─────────────────────────────────────────────────────
+        try:
+            raw_text = _re.sub(r"^```(?:json)?\s*", "", raw_text, flags=_re.MULTILINE)
+            raw_text = _re.sub(r"\s*```$", "", raw_text, flags=_re.MULTILINE)
+            raw_text = raw_text.strip()
+            json_match = _re.search(r"\{.*\}", raw_text, _re.DOTALL)
+            if json_match:
+                raw_text = json_match.group(0)
+            parsed = json.loads(raw_text)
+            cards = parsed.get("flashcards", [])
+            if not cards or not isinstance(cards, list):
+                raise ValueError("No flashcards in response")
+            result = []
+            for c in cards:
+                q = str(c.get("question", "")).strip()
+                a = str(c.get("answer", "")).strip()
+                if q and a:
+                    result.append({"question": q, "answer": a})
+            if not result:
+                raise ValueError("All cards were empty")
+            return jsonify({"flashcards": result, "count": len(result)})
+        except Exception as e:
+            return jsonify({
+                "error": f"Could not parse AI response. Please try again. ({str(e)[:80]})"
+            }), 500
+
     except Exception as e:
-        return jsonify({
-            "error": f"AI service timeout. Please try again. ({str(e)[:80]})"
-        }), 503
-
-    if not raw_text:
-        return jsonify({
-            "error": "AI returned an empty response. Please try again."
-        }), 500
-
-    # ── 5. Parse response ─────────────────────────────────────────────────────
-    try:
-        raw_text = _re.sub(r"^```(?:json)?\s*", "", raw_text, flags=_re.MULTILINE)
-        raw_text = _re.sub(r"\s*```$", "", raw_text, flags=_re.MULTILINE)
-        raw_text = raw_text.strip()
-
-        # Find JSON object in response
-        json_match = _re.search(r"\{.*\}", raw_text, _re.DOTALL)
-        if json_match:
-            raw_text = json_match.group(0)
-
-        parsed = json.loads(raw_text)
-        cards = parsed.get("flashcards", [])
-
-        if not cards or not isinstance(cards, list):
-            raise ValueError("No flashcards in response")
-
-        result = []
-        for c in cards:
-            q = str(c.get("question", "")).strip()
-            a = str(c.get("answer", "")).strip()
-            if q and a:
-                result.append({"question": q, "answer": a})
-
-        if not result:
-            raise ValueError("All cards were empty")
-
-        return jsonify({"flashcards": result, "count": len(result)})
-
-    except (json.JSONDecodeError, ValueError, KeyError, IndexError) as e:
-        return jsonify({
-            "error": f"Could not parse AI response. Please try again. ({str(e)[:80]})"
-        }), 500
-
-    except Exception as e:
-        print(f"[PDF Generate Error] {e}")
-        return jsonify({"error": f"An unexpected error occurred: {str(e)[:100]}"}), 500
+        print(f"[PDF Generate CRASH] {type(e).__name__}: {e}")
+        return jsonify({"error": f"Server error: {str(e)[:100]}"}), 500
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONFIG + FRONTEND
 # ══════════════════════════════════════════════════════════════════════════════
+
+
+@app.errorhandler(500)
+def internal_error(e):
+    print(f"[500 ERROR] {e}")
+    return jsonify({"error": f"Internal server error: {str(e)[:100]}"}), 500
+
+
+@app.errorhandler(404)
+def not_found(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Not found"}), 404
+    return send_from_directory("static", "index.html")
 
 
 @app.route("/api/config", methods=["GET"])

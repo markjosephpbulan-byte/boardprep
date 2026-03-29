@@ -1768,16 +1768,16 @@ def admin_set_plan(user_id):
         msg = "Reverted to Basic (no expiry) ✅"
 
     elif plan == "pro_bonus":
-        # Give 1 month Pro bonus without changing their existing plan expiry
+        # Give 1 month Pro bonus — pauses after 1 month (not a Basic plan)
         db_execute(
             """
             UPDATE users SET is_pro=TRUE, is_paused=FALSE,
-            plan='basic_pro_bonus', plan_expires=NOW() + INTERVAL '1 month'
+            plan='pro_bonus', plan_expires=NOW() + INTERVAL '1 month'
             WHERE id=%s
         """,
             (user_id,),
         )
-        msg = "1 month Pro bonus granted ✅"
+        msg = "1 month Pro bonus granted ✅ (pauses after 1 month)"
 
     elif plan == "trial":
         db_execute(

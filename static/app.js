@@ -2915,7 +2915,18 @@ async function startPdfGeneration() {
       body: formData   // NO Content-Type header — browser sets multipart boundary
     });
 
-    const data = await r.json();
+    // Safely parse response — server might return HTML on 500 errors
+    let data;
+    const contentType = r.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      data = await r.json();
+    } else {
+      const text = await r.text();
+      console.error('Non-JSON response:', text.substring(0, 200));
+      showPdfStep(1);
+      showPdfError(`Server error (${r.status}). Please try again.`);
+      return;
+    }
 
     if (!r.ok) {
       showPdfStep(1);

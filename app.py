@@ -2016,7 +2016,6 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 @app.route("/api/profiles/<user_id>/generate-pdf-flashcards", methods=["POST"])
 @owner_required
-@rate_limit(5, 300, "pdf_generate")
 def generate_flashcards_from_pdf(user_id):
     """
     Upload a PDF → extract text → call Gemini → return Q&A pairs.
@@ -2188,6 +2187,10 @@ def generate_flashcards_from_pdf(user_id):
         return jsonify({
             "error": f"Could not parse AI response. Please try again. ({str(e)[:80]})"
         }), 500
+
+    except Exception as e:
+        print(f"[PDF Generate Error] {e}")
+        return jsonify({"error": f"An unexpected error occurred: {str(e)[:100]}"}), 500
 
 
 # ══════════════════════════════════════════════════════════════════════════════

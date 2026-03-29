@@ -751,6 +751,7 @@ function updateCountdown() {
   const chip  = document.getElementById('countdownChip');
   const days  = document.getElementById('countdownDays');
   const label = document.getElementById('countdownLabel');
+  const sub   = chip ? chip.querySelector('.countdown-sub') : null;
   if (!chip) return;
 
   const examDate = currentUser?.exam_date;
@@ -766,18 +767,22 @@ function updateCountdown() {
   if (diff < 0) {
     days.textContent  = '🎉';
     label.textContent = 'Board exam passed!';
+    if (sub) sub.textContent = 'Congratulations!';
     chip.classList.add('done');
   } else if (diff === 0) {
     days.textContent  = 'TODAY';
     label.textContent = 'Board exam is today!';
+    if (sub) sub.textContent = 'Good luck! Kaya mo yan! 💪';
     chip.classList.add('urgent');
   } else if (diff <= 7) {
     days.textContent  = diff;
     label.textContent = `day${diff !== 1 ? 's' : ''} to board exam`;
+    if (sub) sub.textContent = '⚠️ Final stretch — focus up!';
     chip.classList.add('urgent');
   } else {
     days.textContent  = diff;
     label.textContent = 'days to board exam';
+    if (sub) sub.textContent = '🗓️ Tap to update exam date';
   }
 }
 

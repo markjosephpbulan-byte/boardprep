@@ -994,8 +994,9 @@
 
         <label style="margin-top:4px">Number of flashcards to generate</label>
         <div class="pdf-count-row">
-          <input type="range" id="pdfCardCount" min="3" max="50" value="10"
-                 oninput="document.getElementById('pdfCountLabel').textContent=this.value"/>
+          <input type="range" id="pdfCardCount" min="3" max="50" value="10" step="1"
+                 oninput="this.nextElementSibling.textContent=this.value"
+                 onchange="this.nextElementSibling.textContent=this.value"/>
           <span class="pdf-count-label" id="pdfCountLabel">10</span>
         </div>
 

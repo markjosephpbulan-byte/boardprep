@@ -2807,6 +2807,9 @@ function openPdfGenerateModal() {
   safeStyle('pdfDropZone',   'display', 'block');
   safeSet('pdfCardCount',  'value', '10');
   safeSet('pdfCountLabel', 'textContent', '10');
+  // Ensure label stays in sync with slider
+  const sliderEl = document.getElementById('pdfCardCount');
+  if (sliderEl) sliderEl.dispatchEvent(new Event('input'));
   safeStyle('pdfError', 'display', 'none');
   safeSet('pdfError', 'textContent', '');
   safeSet('pdfGenerateBtn', 'disabled', false);
@@ -2897,7 +2900,8 @@ async function startPdfGeneration() {
     return;
   }
 
-  const maxCards     = parseInt(document.getElementById('pdfCardCount').value) || 10;
+  const slider    = document.getElementById('pdfCardCount');
+  const maxCards  = slider ? Math.round(parseFloat(slider.value)) : 10;
   const subjectName  = fcSidebarSubjectName || 'this subject';
 
   // ── Show loading step ───────────────────────────────────────

@@ -1632,6 +1632,13 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   flex-direction: column;
   gap: 8px;
 }
+/* Inline version inside scroll area (fixes iPad Chrome) */
+.fc-add-form-inline {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  margin-top: 0.5rem;
+  padding-bottom: 1.5rem;
+}
 .fc-add-label {
   font-family: 'Syne', sans-serif;
   font-size: 0.78rem; font-weight: 700;

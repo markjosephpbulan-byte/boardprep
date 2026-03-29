@@ -846,51 +846,52 @@
     <div class="fc-panel" id="fc-subject-panel" style="display:none">
       <div class="fc-panel-bar" id="fc-panel-bar"></div>
 
-      <!-- Scrollable cards area -->
+      <!-- Single scrollable area — cards + add form together -->
       <div class="fc-panel-inner">
         <div class="fc-panel-title" id="fc-panel-title"></div>
         <div class="fc-cards-list" id="fc-cards-list"></div>
-      </div>
 
-      <!-- Fixed add form at bottom -->
-      <div class="fc-add-form">
-        <div class="fc-add-label">➕ New Flashcard</div>
-        <input  class="fc-input" id="fc-new-question"
-                placeholder="Question…"
-                onkeydown="if(event.key==='Enter') document.getElementById('fc-new-answer').focus()"/>
-        <textarea class="fc-textarea" id="fc-new-answer"
-                  placeholder="Answer…"
-                  rows="3"
-                  onkeydown="if(event.key==='Enter' && event.ctrlKey) addFlashcard()"></textarea>
-        <button class="btn-primary btn-full"
-                onclick="addFlashcard()">Save Flashcard</button>
-        <div style="font-size:0.72rem;color:var(--text3);text-align:center;margin-top:4px">
-          Ctrl + Enter to save quickly
-        </div>
-        <div class="fc-or-divider"><span>or</span></div>
-        <!-- Pro users see the button -->
-        <div id="pdfProSection">
-          <button class="btn-pdf-generate" onclick="openPdfGenerateModal()">
-            📄 Generate from PDF
-          </button>
-          <div style="font-size:0.72rem;color:var(--text3);text-align:center;margin-top:2px">
-            Upload a PDF — AI generates flashcards for you ✨
+        <!-- Add form — inside scroll area so iPad Chrome can reach it -->
+        <div class="fc-add-form fc-add-form-inline">
+          <div class="fc-add-label">➕ New Flashcard</div>
+          <input  class="fc-input" id="fc-new-question"
+                  placeholder="Question…"
+                  onkeydown="if(event.key==='Enter') document.getElementById('fc-new-answer').focus()"/>
+          <textarea class="fc-textarea" id="fc-new-answer"
+                    placeholder="Answer…"
+                    rows="3"
+                    onkeydown="if(event.key==='Enter' && event.ctrlKey) addFlashcard()"></textarea>
+          <button class="btn-primary btn-full"
+                  onclick="addFlashcard()">Save Flashcard</button>
+          <div style="font-size:0.72rem;color:var(--text3);text-align:center;margin-top:4px">
+            Ctrl + Enter to save quickly
           </div>
-        </div>
-        <!-- Free users see upgrade prompt -->
-        <div id="pdfFreeSection" style="display:none">
-          <div class="pdf-upgrade-box">
-            <div style="font-size:1.4rem">🔒</div>
-            <div style="font-weight:700;font-size:0.85rem;color:var(--text)">Pro Feature</div>
-            <div style="font-size:0.75rem;color:var(--text2);line-height:1.5;text-align:center">
-              Generate flashcards from PDF using AI.<br/>Upgrade to Pro to unlock this.
+          <div class="fc-or-divider"><span>or</span></div>
+          <!-- Pro users see the button -->
+          <div id="pdfProSection">
+            <button class="btn-pdf-generate" onclick="openPdfGenerateModal()">
+              📄 Generate from PDF
+            </button>
+            <div style="font-size:0.72rem;color:var(--text3);text-align:center;margin-top:2px">
+              Upload a PDF — AI generates flashcards for you ✨
             </div>
-            <a href="https://www.facebook.com/boardpreph/" target="_blank"
-               style="display:block;text-align:center;margin-top:4px;font-size:0.78rem;color:var(--gold);font-weight:700;text-decoration:none">
-              Contact us to Upgrade →
-            </a>
+          </div>
+          <!-- Free users see upgrade prompt -->
+          <div id="pdfFreeSection" style="display:none">
+            <div class="pdf-upgrade-box">
+              <div style="font-size:1.4rem">🔒</div>
+              <div style="font-weight:700;font-size:0.85rem;color:var(--text)">Pro Feature</div>
+              <div style="font-size:0.75rem;color:var(--text2);line-height:1.5;text-align:center">
+                Generate flashcards from PDF using AI.<br/>Upgrade to Pro to unlock this.
+              </div>
+              <a href="https://www.facebook.com/boardpreph/" target="_blank"
+                 style="display:block;text-align:center;margin-top:4px;font-size:0.78rem;color:var(--gold);font-weight:700;text-decoration:none">
+                Contact us to Upgrade →
+              </a>
+            </div>
           </div>
         </div>
+
       </div>
     </div>
 

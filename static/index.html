@@ -517,14 +517,6 @@
         </div>
       </div>
 
-      <!-- Countdown chip -->
-      <div class="countdown-chip" id="countdownChip" style="display:none" onclick="openProfileModal()">
-        <span class="countdown-icon">🗓️</span>
-        <div class="countdown-info">
-          <div class="countdown-days" id="countdownDays">—</div>
-          <div class="countdown-label" id="countdownLabel">days to board exam</div>
-        </div>
-      </div>
       <div class="header-actions">
         <button class="btn-notes-toggle" onclick="toggleNotesSidebar()">
           🗒️ Quick Notes <span class="notes-badge" id="notesBadge">0</span>
@@ -634,6 +626,15 @@
         <div class="motivation-tip" id="motivationTip" style="display:none">
           <div class="tip-label">💡 Study Tip</div>
           <div class="tip-text" id="motivationTipText"></div>
+        </div>
+
+        <!-- Countdown — shown inside motivation card -->
+        <div class="motivation-countdown" id="countdownChip" style="display:none" onclick="openProfileModal()">
+          <span>🗓️</span>
+          <div>
+            <span class="countdown-days" id="countdownDays">—</span>
+            <span class="countdown-label" id="countdownLabel"> days to board exam</span>
+          </div>
         </div>
       </aside>
 

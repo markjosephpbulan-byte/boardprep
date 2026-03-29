@@ -761,7 +761,7 @@ function updateCountdown() {
   const diff  = Math.round((exam - today) / 86400000);
 
   chip.style.display = 'flex';
-  chip.className = 'countdown-chip';
+  chip.className = 'motivation-countdown';
 
   if (diff < 0) {
     days.textContent  = '🎉';

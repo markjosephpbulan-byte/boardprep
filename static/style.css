@@ -378,31 +378,33 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 /* ══════════════════════════════════════════════════════════════
    COUNTDOWN CHIP
    ══════════════════════════════════════════════════════════════ */
-.countdown-chip {
+.countdown-chip { display: none !important; } /* moved inside motivation card */
+.motivation-countdown {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: linear-gradient(135deg, rgba(245,200,66,0.12), rgba(62,207,142,0.08));
-  border: 1px solid rgba(245,200,66,0.3);
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(245,200,66,0.1), rgba(62,207,142,0.06));
+  border: 1px solid rgba(245,200,66,0.25);
   border-radius: var(--radius-sm);
-  padding: 0.45rem 0.9rem;
   cursor: pointer;
   transition: all 0.2s;
-  flex-shrink: 0;
+  font-size: 0.85rem;
 }
-.countdown-chip:hover { border-color: var(--gold); background: linear-gradient(135deg, rgba(245,200,66,0.2), rgba(62,207,142,0.12)); }
-.countdown-icon { font-size: 1.2rem; }
-.countdown-days {
+.motivation-countdown:hover { border-color: var(--gold); }
+.motivation-countdown .countdown-days {
   font-family: 'Syne', sans-serif;
-  font-size: 1.1rem;
   font-weight: 800;
+  font-size: 1rem;
   color: var(--gold);
-  line-height: 1;
 }
-.countdown-label { font-size: 0.68rem; color: var(--text3); margin-top: 1px; white-space: nowrap; }
-.countdown-chip.urgent .countdown-days { color: var(--red); }
-.countdown-chip.urgent { border-color: rgba(245,101,101,0.4); background: rgba(245,101,101,0.08); }
-.countdown-chip.done .countdown-days { color: var(--green); font-size: 0.85rem; }
+.motivation-countdown .countdown-label {
+  font-size: 0.78rem;
+  color: var(--text2);
+}
+.motivation-countdown.urgent .countdown-days { color: var(--red); }
+.motivation-countdown.done   .countdown-days { color: var(--green); }
 
 /* ══════════════════════════════════════════════════════════════
    POMODORO
@@ -539,7 +541,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 @media (max-width: 640px) {
   .pomodoro-widget { right: 1rem; left: 1rem; width: auto; bottom: 5rem; }
   .pomodoro-fab { bottom: 1.25rem; right: 1.25rem; }
-  .countdown-chip { display: none !important; }
+
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1020,10 +1022,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 [data-theme="sakura"] .topic-checkbox.checked { border-color: #e8607a; background: #e8607a; }
 [data-theme="sakura"] .modal-backdrop { background: rgba(80,20,20,0.45); }
 [data-theme="sakura"] .search-highlight { background: rgba(232,96,122,0.18); color: var(--gold); }
-[data-theme="sakura"] .countdown-chip {
-  background: linear-gradient(135deg, rgba(232,96,122,0.1), rgba(212,95,138,0.07));
-  border-color: rgba(232,96,122,0.3);
-}
+
 [data-theme="sakura"] .motivation-header {
   background: linear-gradient(135deg, rgba(232,96,122,0.06), transparent);
 }
@@ -1073,10 +1072,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 [data-theme="matcha"] .topic-checkbox.checked { border-color: #5a9a40; background: #5a9a40; }
 [data-theme="matcha"] .modal-backdrop { background: rgba(20,40,15,0.45); }
 [data-theme="matcha"] .search-highlight { background: rgba(90,154,64,0.18); color: var(--gold); }
-[data-theme="matcha"] .countdown-chip {
-  background: linear-gradient(135deg, rgba(90,154,64,0.1), rgba(62,207,142,0.07));
-  border-color: rgba(90,154,64,0.3);
-}
+
 [data-theme="matcha"] .motivation-header {
   background: linear-gradient(135deg, rgba(90,154,64,0.06), transparent);
 }
@@ -1125,10 +1121,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 [data-theme="lavender"] .custom-checkbox.partial { border-color: #b48eff; color: #b48eff; }
 [data-theme="lavender"] .topic-checkbox.checked { border-color: #7ec8a0; background: #7ec8a0; color: #13101e; }
 [data-theme="lavender"] .search-highlight { background: rgba(180,142,255,0.2); color: var(--gold); }
-[data-theme="lavender"] .countdown-chip {
-  background: linear-gradient(135deg, rgba(180,142,255,0.1), rgba(126,200,160,0.07));
-  border-color: rgba(180,142,255,0.3);
-}
+
 [data-theme="lavender"] .motivation-header {
   background: linear-gradient(135deg, rgba(180,142,255,0.06), transparent);
 }
@@ -1219,10 +1212,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 [data-theme="ocean"] .topic-checkbox.checked { border-color: #1a9e6e; background: #1a9e6e; }
 [data-theme="ocean"] .modal-backdrop { background: rgba(10,30,60,0.45); }
 [data-theme="ocean"] .search-highlight { background: rgba(26,127,212,0.15); color: var(--gold); }
-[data-theme="ocean"] .countdown-chip {
-  background: linear-gradient(135deg, rgba(26,127,212,0.1), rgba(26,158,110,0.07));
-  border-color: rgba(26,127,212,0.3);
-}
+
 [data-theme="ocean"] .motivation-header {
   background: linear-gradient(135deg, rgba(26,127,212,0.06), transparent);
 }

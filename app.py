@@ -2056,17 +2056,40 @@ def generate_flashcards_from_pdf(user_id):
         subject_name = request.form.get("subject_name", "this subject")
 
         # ── 3. Extract text from PDF ──────────────────────────────────────────────
-        try:
-            import pypdf
+        pdf_text = None
+        pdf_error = None
 
-            reader = pypdf.PdfReader(_io.BytesIO(raw_bytes))
-            pdf_text = "\n".join(
-                (page.extract_text() or "") for page in reader.pages
-            ).strip()
-        except Exception as e:
+        def extract_pdf():
+            nonlocal pdf_text, pdf_error
+            try:
+                import pypdf
+
+                reader = pypdf.PdfReader(_io.BytesIO(raw_bytes))
+                max_pages = min(len(reader.pages), 8)  # max 8 pages
+                texts = []
+                for i in range(max_pages):
+                    try:
+                        t = reader.pages[i].extract_text() or ""
+                        if t.strip():
+                            texts.append(t)
+                    except Exception:
+                        continue
+                pdf_text = "\n".join(texts).strip()
+            except Exception as e:
+                pdf_error = str(e)
+
+        import threading as _threading
+
+        t = _threading.Thread(target=extract_pdf, daemon=True)
+        t.start()
+        t.join(timeout=20)  # 20 second max for PDF extraction
+
+        if t.is_alive():
             return jsonify({
-                "error": f"Could not read PDF. Make sure it contains selectable text. ({str(e)[:80]})"
+                "error": "PDF extraction timed out. Try a smaller or simpler PDF."
             }), 400
+        if pdf_error:
+            return jsonify({"error": f"Could not read PDF: {pdf_error[:80]}"}), 400
 
         if not pdf_text or len(pdf_text) < 50:
             return jsonify({

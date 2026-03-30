@@ -2,17 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>BoardPrep PH</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>BoardPrep PH — Board Exam Learning Tracker</title>
+<meta name="description" content="Track your board exam review progress, generate AI flashcards from PDFs, and stay motivated. For Filipino reviewees."/>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
 <link rel="icon" href="/static/favicon.png" type="image/png" sizes="32x32"/>
 <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png"/>
-<link rel="apple-touch-icon" href="/static/apple-touch-icon.png"/>
-<meta name="apple-mobile-web-app-title" content="BoardPrep PH"/>
+<meta name="apple-mobile-web-app-title" content="BoardPrep"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="theme-color" content="#0d1117"/>
+<meta name="application-name" content="BoardPrep PH"/>
 <link rel="manifest" href="/static/manifest.json"/>
 <!-- Preconnect to external domains — starts TCP handshake early -->
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -1111,5 +1112,15 @@ document.addEventListener('click', function(e) {
 })();
 </script>
 <script src="/static/app.js" defer></script>
+<script>
+  // Register service worker for PWA/offline support
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log('[SW] Registered'))
+        .catch(e => console.log('[SW] Failed:', e));
+    });
+  }
+</script>
 </body>
 </html>

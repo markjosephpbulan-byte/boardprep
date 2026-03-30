@@ -2346,6 +2346,14 @@ def daily_motivation(user_id):
     return jsonify({"error": "fallback"}), 500
 
 
+@app.route("/sw.js")
+def service_worker():
+    response = send_from_directory("static", "sw.js")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Content-Type"] = "application/javascript"
+    return response
+
+
 @app.route("/")
 def index():
     return send_from_directory("static", "index.html")

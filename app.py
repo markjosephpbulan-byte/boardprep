@@ -16,6 +16,9 @@ import io
 
 app = Flask(__name__, static_folder="static")
 app.secret_key = os.environ.get("SECRET_KEY", "boardprep-dev-secret-change-in-prod")
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SECURE"] = False  # Allow HTTP in local dev
 
 # Tell browser to cache static files aggressively
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000  # 1 year for static files
@@ -24,17 +27,21 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000  # 1 year for static files
 @app.after_request
 def add_performance_headers(response):
     """Add headers that make the browser and CDN cache responses efficiently."""
-    # Compress JSON responses
-    if (
-        response.content_type.startswith("application/json")
-        and len(response.data) > 1024
-        and "gzip" in request.headers.get("Accept-Encoding", "")
-    ):
-        compressed = gzip.compress(response.data, compresslevel=6)
-        if len(compressed) < len(response.data):
-            response.data = compressed
-            response.headers["Content-Encoding"] = "gzip"
-            response.headers["Vary"] = "Accept-Encoding"
+    # Compress JSON responses — safely handle streaming/direct passthrough responses
+    try:
+        if (
+            response.content_type.startswith("application/json")
+            and response.direct_passthrough is False
+            and len(response.data) > 1024
+            and "gzip" in request.headers.get("Accept-Encoding", "")
+        ):
+            compressed = gzip.compress(response.data, compresslevel=6)
+            if len(compressed) < len(response.data):
+                response.data = compressed
+                response.headers["Content-Encoding"] = "gzip"
+                response.headers["Vary"] = "Accept-Encoding"
+    except Exception:
+        pass  # Skip compression if response doesn't support it
 
     # Cache static files for 1 year (they have unique names via versioning)
     if request.path.startswith("/static/"):
@@ -2392,7 +2399,34 @@ YOUR ROLE:
 - Keep responses concise (3-5 sentences unless a detailed explanation is needed)
 - Respond in the SAME LANGUAGE the user uses (Filipino/Tagalog or English)
 - Never make up facts — if unsure, say so honestly
-- Format with bullet points or numbered lists when listing steps or items"""
+- Format with bullet points or numbered lists when listing steps or items
+
+FLASHCARD GENERATION:
+- If the user asks you to make/create/generate flashcards OR questions for any subject or topic, you MUST respond ONLY with valid JSON in this exact format — no extra text before or after, no markdown fences:
+{{"flashcards": [{{"question": "...", "answer": "..."}}], "subject": "exact subject name", "subsection": "exact subsection name or null", "message": "short friendly message in same language as user"}}
+- Maximum 10 flashcards per request
+- Questions must test actual knowledge
+- Answers must be direct and factual (1-2 sentences max)
+- Match subject/subsection name EXACTLY from the user's list above
+- If user says "mathematics" and subject is "Mathematics" — use "Mathematics"
+- IMPORTANT: Output raw JSON only, starting with {{ and ending with }}"""
+
+        # ── Detect flashcard intent — broader keywords ────────────────────────
+        msg_lower = user_message.lower()
+        flashcard_keywords = [
+            "flashcard",
+            "flash card",
+            "tanong",
+            "questions for",
+            "make me",
+            "create",
+            "generate",
+            "gumawa",
+            "make a",
+            "give me question",
+            "give me flashcard",
+        ]
+        wants_flashcards = any(kw in msg_lower for kw in flashcard_keywords)
 
         # ── Get recent chat history for context ───────────────────────────────
         history = (
@@ -2419,16 +2453,70 @@ YOUR ROLE:
         contents.append({"role": "user", "parts": [{"text": user_message}]})
 
         # ── Call Gemini ───────────────────────────────────────────────────────
-        resp = http_requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}",
-            headers={"Content-Type": "application/json"},
-            json={
-                "system_instruction": {"parts": [{"text": system_prompt}]},
-                "contents": contents,
-                "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.7},
-            },
-            timeout=30,
-        )
+        if wants_flashcards:
+            # Strict JSON-only prompt for flashcard generation
+            # Extract how many cards the user wants
+            import re as _re2
+
+            num_match = _re2.search(r"\b(\d+)\b", user_message)
+            num_cards = min(int(num_match.group(1)), 10) if num_match else 10
+
+            # Find which subject/subsection they mentioned
+            target_subject = subjects_raw[0]["name"] if subjects_raw else "General"
+            target_subject_id = subjects_raw[0]["id"] if subjects_raw else ""
+            target_ss_name = None
+            target_ss_id = None
+
+            msg_lower2 = user_message.lower()
+            for s in subjects_raw:
+                if s["name"].lower() in msg_lower2:
+                    target_subject = s["name"]
+                    target_subject_id = s["id"]
+                    for ss in s.get("subsections", []):
+                        if ss["name"].lower() in msg_lower2:
+                            target_ss_name = ss["name"]
+                            target_ss_id = ss["id"]
+                            break
+                    break
+                for ss in s.get("subsections", []):
+                    if ss["name"].lower() in msg_lower2:
+                        target_subject = s["name"]
+                        target_subject_id = s["id"]
+                        target_ss_name = ss["name"]
+                        target_ss_id = ss["id"]
+                        break
+
+            fc_prompt = f"""Generate exactly {num_cards} board exam flashcard Q&A pairs for the subject "{target_ss_name or target_subject}" for a Filipino board exam reviewer.
+
+Rules:
+- Questions must test actual subject knowledge
+- Answers must be direct and factual (1-2 sentences max)
+- Language: respond in {"Filipino/Tagalog" if any(w in msg_lower2 for w in ["po", "ko", "mga", "ng", "sa", "ang"]) else "English"}
+
+Respond ONLY with raw JSON starting with {{ and ending with }}. Do NOT use markdown, backticks, or code fences. For math expressions use LaTeX notation with $ delimiters (e.g. $x^n$, $\frac{{dy}}{{dx}}$, $\sin(x)$) — they will be rendered beautifully. Output the JSON directly:
+{{"flashcards":[{{"question":"...","answer":"..."}}],"subject":"{target_subject}","subsection":{f'"{target_ss_name}"' if target_ss_name else "null"},"message":"friendly short message to {user.get("display_name", "reviewer")}"}}"""
+
+            resp = http_requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": [{"role": "user", "parts": [{"text": fc_prompt}]}],
+                    "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.4},
+                },
+                timeout=30,
+            )
+        else:
+            # Normal chat call
+            resp = http_requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "system_instruction": {"parts": [{"text": system_prompt}]},
+                    "contents": contents,
+                    "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.7},
+                },
+                timeout=30,
+            )
 
         if not resp.ok:
             try:
@@ -2449,6 +2537,74 @@ YOUR ROLE:
         if not ai_reply:
             return jsonify({"error": "AI returned empty response"}), 500
 
+        # ── Check if response is flashcard JSON — always try ─────────────────
+        import re as _re, json as _json
+
+        flashcard_data = None
+        save_reply = ai_reply
+
+        try:
+            clean = ai_reply.strip()
+            # Remove all markdown code fences (```json, ```, etc.)
+            clean = _re.sub(r"```(?:json)?\s*", "", clean)
+            clean = clean.replace("`", "").strip()
+            json_match = _re.search(r"\{.*\}", clean, _re.DOTALL)
+            if json_match:
+                parsed = _json.loads(json_match.group(0))
+                if "flashcards" in parsed and isinstance(parsed["flashcards"], list):
+                    cards = [
+                        c
+                        for c in parsed["flashcards"]
+                        if c.get("question") and c.get("answer")
+                    ][:10]
+                    if cards:
+                        flashcard_data = {
+                            "flashcards": cards,
+                            "subject": parsed.get("subject", ""),
+                            "subsection": parsed.get("subsection"),
+                            "message": parsed.get(
+                                "message", f"Here are {len(cards)} flashcards!"
+                            ),
+                        }
+                        # Use pre-matched IDs if we already found them
+                        if wants_flashcards and target_subject_id:
+                            flashcard_data["subject_id"] = target_subject_id
+                            flashcard_data["subject_name"] = target_subject
+                            if target_ss_id:
+                                flashcard_data["subsection_id"] = target_ss_id
+                                flashcard_data["subsection_name"] = target_ss_name
+                        else:
+                            # Try to match from parsed subject name
+                            for s in subjects_raw:
+                                if (
+                                    s["name"].lower()
+                                    == flashcard_data["subject"].lower()
+                                ):
+                                    flashcard_data["subject_id"] = s["id"]
+                                    flashcard_data["subject_name"] = s["name"]
+                                    if flashcard_data.get("subsection"):
+                                        for ss in s.get("subsections", []):
+                                            if (
+                                                ss["name"].lower()
+                                                == (
+                                                    flashcard_data["subsection"] or ""
+                                                ).lower()
+                                            ):
+                                                flashcard_data["subsection_id"] = ss[
+                                                    "id"
+                                                ]
+                                                flashcard_data["subsection_name"] = ss[
+                                                    "name"
+                                                ]
+                                                break
+                                    break
+                            if not flashcard_data.get("subject_id") and subjects_raw:
+                                flashcard_data["subject_id"] = subjects_raw[0]["id"]
+                                flashcard_data["subject_name"] = subjects_raw[0]["name"]
+                        save_reply = flashcard_data["message"]
+        except Exception:
+            flashcard_data = None
+
         # ── Save both messages to DB ──────────────────────────────────────────
         db_execute(
             "INSERT INTO chat_messages (user_id, role, content) VALUES (%s, 'user', %s)",
@@ -2456,7 +2612,7 @@ YOUR ROLE:
         )
         db_execute(
             "INSERT INTO chat_messages (user_id, role, content) VALUES (%s, 'assistant', %s)",
-            (user_id, ai_reply),
+            (user_id, save_reply),
         )
 
         # ── Keep only last 50 messages ────────────────────────────────────────
@@ -2472,6 +2628,8 @@ YOUR ROLE:
             (user_id, user_id),
         )
 
+        if flashcard_data:
+            return jsonify({"reply": save_reply, "flashcards": flashcard_data})
         return jsonify({"reply": ai_reply})
 
     except Exception as e:

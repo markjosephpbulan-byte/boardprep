@@ -21,7 +21,7 @@ async function boot() {
   // Fire both requests in parallel — saves one full round trip on load
   const [configResp, meResp] = await Promise.allSettled([
     fetch('/api/config'),
-    fetch('/api/auth/me-full')
+    fetch('/api/auth/me-full', { credentials: 'include' })
   ]);
 
   // Apply config
@@ -717,7 +717,7 @@ async function enterTracker() {
   try { showPomodoroFab(); }     catch(e) {}
   try {
     // Use me-full to get everything in one request
-    const r = await fetch('/api/auth/me-full');
+    const r = await fetch('/api/auth/me-full', { credentials: 'include' });
     if (r.ok) {
       const full = await r.json();
       subjects = full.subjects || [];
@@ -1474,7 +1474,7 @@ async function toggleTopicDone(subjectId, ssId, topicId) {
   }).then(r => r.ok ? r.json() : null).then(data => {
     if (data && t.done) {
       // Refresh currentUser streak from server
-      fetch('/api/auth/me').then(r => r.json()).then(u => {
+      fetch('/api/auth/me', { credentials: 'include' }).then(r => r.json()).then(u => {
         if (u && u.streak !== undefined) { currentUser.streak = u.streak; updateStreakUI(); }
       }).catch(() => {});
     }
@@ -2378,6 +2378,7 @@ async function toggleChatSidebar() {
       await loadChatHistory();
       chatLoaded = true;
     }
+    setTimeout(() => scrollChatToBottom(), 100);
   }
 }
 
@@ -2400,7 +2401,7 @@ function setupChatUI() {
 async function loadChatHistory() {
   if (!currentUser) return;
   try {
-    const r = await fetch(`${apiBase()}/chat-history`);
+    const r = await fetch(`${apiBase()}/chat-history`, { credentials: 'include' });
     if (!r.ok) return;
     const messages = await r.json();
     const container = document.getElementById('chatMessages');
@@ -2419,8 +2420,13 @@ async function sendChatMessage() {
   const input   = document.getElementById('chatInput');
   const sendBtn = document.getElementById('chatSendBtn');
   const typing  = document.getElementById('chatTyping');
-  const message = (input.value || '').trim();
-  if (!message || sendBtn.disabled) return;
+  const message = (input ? input.value || '' : '').trim();
+  if (!message || !sendBtn || sendBtn.disabled) return;
+
+  // Detect flashcard intent early for progressive UI
+  const msgLower = message.toLowerCase();
+  const flashcardIntent = ['flashcard','flash card','make me','create','generate',
+    'gumawa','tanong','questions for'].some(kw => msgLower.includes(kw));
 
   // Clear welcome message on first send
   const container = document.getElementById('chatMessages');
@@ -2435,30 +2441,46 @@ async function sendChatMessage() {
   // Disable input, show typing
   sendBtn.disabled    = true;
   input.disabled      = true;
-  typing.style.display = 'block';
+  if (typing) typing.style.display = 'block';
   scrollChatToBottom();
+
+  // Show loading modal immediately if flashcard intent detected
+  if (flashcardIntent) showFlashcardLoadingModal();
 
   try {
     const r = await fetch(`${apiBase()}/chat`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message })
     });
 
     const data = await r.json();
-    typing.style.display = 'none';
+    if (typing) typing.style.display = 'none';
 
     if (!r.ok) {
       if (data.error === 'pro_required') {
-        setupChatUI(); // show upgrade box
+        setupChatUI();
       } else {
         appendChatBubble('ai', `⚠️ ${data.error || 'Something went wrong. Please try again.'}`, null, true);
       }
+    } else if (data.flashcards) {
+      // Show flashcard preview FIRST, then friendly message below
+      appendFlashcardPreview(data.flashcards);
+      appendChatBubble('ai', data.reply || data.flashcards.message, null, true);
+      scrollChatToBottom();
+    } else if (data.reply && data.reply.includes('"flashcards"')) {
+      // Raw JSON from AI — parse and show preview first
+      if (!tryRenderFlashcardReply(data.reply)) {
+        closeChatFlashcardModal(); // close loading if parse failed
+        appendChatBubble('ai', '⚠️ Could not render flashcards. Please try again.', null, true);
+      }
     } else {
+      closeChatFlashcardModal(); // close loading modal if not flashcards
       appendChatBubble('ai', data.reply, null, true);
     }
   } catch(e) {
-    typing.style.display = 'none';
+    if (typing) typing.style.display = 'none';
     appendChatBubble('ai', '⚠️ Connection error. Please check your internet and try again.', null, true);
   } finally {
     sendBtn.disabled = false;
@@ -2487,30 +2509,267 @@ function appendChatBubble(role, content, timestamp, animate) {
   wrap.appendChild(bubble);
   wrap.appendChild(time);
 
+  const typing = document.getElementById('chatTyping');
+  const insertBefore = typing && typing.parentNode === container ? typing : null;
+
   if (animate) {
     wrap.style.opacity = '0';
     wrap.style.transform = 'translateY(8px)';
     wrap.style.transition = 'opacity 0.25s, transform 0.25s';
-    container.appendChild(wrap);
+    insertBefore ? container.insertBefore(wrap, insertBefore) : container.appendChild(wrap);
     requestAnimationFrame(() => {
       wrap.style.opacity = '1';
       wrap.style.transform = 'translateY(0)';
     });
   } else {
-    container.appendChild(wrap);
+    insertBefore ? container.insertBefore(wrap, insertBefore) : container.appendChild(wrap);
   }
 }
 
+function tryRenderFlashcardReply(text) {
+  if (!text) return false;
+  console.log('[Tsuki] tryRenderFlashcardReply called, text starts with:', text.substring(0, 50));
+  if (!text.includes('"flashcards"')) {
+    console.log('[Tsuki] No flashcards key found, skipping');
+    return false;
+  }
+  try {
+    // Strip markdown fences
+    let clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    // Fix LaTeX backslashes — replace \letter with \\letter so JSON.parse accepts it
+    // e.g. \sin → \\sin, \frac → \\frac, \cos → \\cos
+    clean = clean.replace(/\\([a-zA-Z{}\[\]^_|])/g, '\\\\$1');
+
+    // Find the outermost JSON object
+    const start = clean.indexOf('{');
+    const end   = clean.lastIndexOf('}');
+    if (start === -1 || end === -1) { console.log('[Tsuki] No JSON object found'); return false; }
+    const jsonStr = clean.slice(start, end + 1);
+    console.log('[Tsuki] Attempting JSON.parse...');
+    const parsed  = JSON.parse(jsonStr);
+    console.log('[Tsuki] Parsed OK, cards:', parsed.flashcards?.length);
+    if (!parsed.flashcards || !Array.isArray(parsed.flashcards)) return false;
+    const cards = parsed.flashcards.filter(c => c.question && c.answer).slice(0, 10);
+    if (!cards.length) return false;
+
+    // Match subject/subsection to real IDs
+    const subjectName = parsed.subject || '';
+    const ssName      = parsed.subsection || null;
+    let subjectId = null, ssId = null, subjectDisplay = subjectName, ssDisplay = ssName;
+
+    for (const s of subjects) {
+      if (s.name.toLowerCase() === subjectName.toLowerCase()) {
+        subjectId      = s.id;
+        subjectDisplay = s.name;
+        if (ssName) {
+          for (const ss of (s.subsections || [])) {
+            if (ss.name.toLowerCase() === ssName.toLowerCase()) {
+              ssId      = ss.id;
+              ssDisplay = ss.name;
+              break;
+            }
+          }
+        }
+        break;
+      }
+    }
+    if (!subjectId && subjects.length) {
+      subjectId      = subjects[0].id;
+      subjectDisplay = subjects[0].name;
+    }
+
+    const fcData = {
+      flashcards:      cards,
+      subject:         subjectDisplay,
+      subject_id:      subjectId,
+      subject_name:    subjectDisplay,
+      subsection:      ssDisplay,
+      subsection_id:   ssId,
+      subsection_name: ssDisplay,
+      message:         parsed.message || `Here are ${cards.length} flashcards!`
+    };
+
+    appendFlashcardPreview(fcData);
+    appendChatBubble('ai', fcData.message, null, true);
+    scrollChatToBottom();
+    return true;
+  } catch(e) {
+    console.error('[tryRenderFlashcardReply]', e);
+    return false;
+  }
+}
+
+
+function appendFlashcardPreview(fcData) {
+  showChatFlashcardModal(fcData);
+}
+
+// Store current flashcard data for saving
+let _currentChatFcData = null;
+
+function renderMath(element) {
+  if (typeof renderMathInElement === 'function') {
+    try {
+      renderMathInElement(element, {
+        delimiters: [
+          { left: '$$', right: '$$', display: true  },
+          { left: '$',  right: '$',  display: false },
+          { left: '\\(', right: '\\)', display: false },
+          { left: '\\[', right: '\\]', display: true  }
+        ],
+        throwOnError: false,
+        strict: false
+      });
+    } catch(e) {}
+  }
+}
+
+
+function showFlashcardLoadingModal() {
+  const modal = document.getElementById('chatFlashcardModal');
+  document.getElementById('chatFcModalTitle').textContent = '✨ Generating Flashcards...';
+  const list = document.getElementById('chatFcModalList');
+  list.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 2rem;gap:16px;">
+      <div class="fc-gen-spinner"></div>
+      <div style="font-size:0.9rem;color:var(--text2);text-align:center;">
+        Tsuki is crafting your flashcards...<br/>
+        <span style="font-size:0.8rem;color:var(--text3);">This may take a few seconds</span>
+      </div>
+    </div>`;
+  const saveBtn = document.getElementById('chatFcSaveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Generating...'; }
+  modal.style.display = 'flex';
+}
+
+function showChatFlashcardModal(fcData) {
+  _currentChatFcData = fcData;
+  const cards   = fcData.flashcards || [];
+  const subName = fcData.subsection_name || fcData.subject_name || 'your subject';
+
+  // Animate title update
+  const title = document.getElementById('chatFcModalTitle');
+  title.textContent = `🎴 ${cards.length} Flashcards — ${subName}`;
+
+  // Build list with stagger animation
+  const list = document.getElementById('chatFcModalList');
+  list.innerHTML = '';
+  cards.forEach((c, i) => {
+    const item = document.createElement('div');
+    item.style.cssText = `padding:12px 20px;border-bottom:1px solid var(--border);
+      opacity:0;transform:translateY(8px);transition:opacity 0.2s ${i*40}ms, transform 0.2s ${i*40}ms;`;
+    const q = document.createElement('div');
+    q.style.cssText = 'font-size:0.88rem;font-weight:600;color:var(--text);margin-bottom:5px;line-height:1.4;';
+    q.innerHTML = `<span>${i+1}. </span>${esc(c.question)}`;
+    renderMath(q);
+    const a = document.createElement('div');
+    a.style.cssText = 'font-size:0.82rem;color:var(--text2);border-left:3px solid var(--gold);padding-left:10px;line-height:1.5;';
+    a.textContent = c.answer;
+    renderMath(a);
+    item.appendChild(q);
+    item.appendChild(a);
+    list.appendChild(item);
+    // Trigger animation
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      item.style.opacity = '1';
+      item.style.transform = 'translateY(0)';
+    }));
+  });
+
+  // Reset save button
+  const saveBtn = document.getElementById('chatFcSaveBtn');
+  if (saveBtn) {
+    saveBtn.textContent  = '💾 Save All to Flashcards';
+    saveBtn.disabled     = false;
+    saveBtn.style.background = '';
+    saveBtn.style.color = '';
+  }
+
+  // Show modal (already visible if loading was shown)
+  document.getElementById('chatFlashcardModal').style.display = 'flex';
+}
+
+function closeChatFlashcardModal() {
+  document.getElementById('chatFlashcardModal').style.display = 'none';
+  _currentChatFcData = null;
+}
+
+async function saveChatFlashcardsFromModal() {
+  if (!_currentChatFcData || !currentUser) return;
+  const { flashcards: cards, subject_id: subjectId, subsection_id: ssId } = _currentChatFcData;
+  const btn = document.getElementById('chatFcSaveBtn');
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
+
+  let saved = 0;
+  for (const card of cards) {
+    try {
+      const r = await fetch(`${apiBase()}/flashcards`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject_id:    subjectId,
+          subsection_id: ssId || null,
+          question:      card.question,
+          answer:        card.answer
+        })
+      });
+      if (r.ok) saved++;
+    } catch(e) {}
+  }
+
+  btn.textContent      = `✅ ${saved} saved!`;
+  btn.style.background = 'var(--green)';
+  btn.style.color      = '#fff';
+  setTimeout(() => closeChatFlashcardModal(), 1500);
+
+  // Refresh flashcard sidebar counts
+  try { await loadAllFlashcardCounts(); renderFlashcardSubjectList(); } catch(e) {}
+}
+
+async function saveFlashcardsFromChat(cards, subjectId, subsectionId, btn) {
+  if (!currentUser || !subjectId) return;
+  btn.disabled     = true;
+  btn.textContent  = 'Saving…';
+
+  let saved = 0;
+  for (const card of cards) {
+    try {
+      const r = await fetch(`${apiBase()}/flashcards`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject_id:    subjectId,
+          subsection_id: subsectionId || null,
+          question:      card.question,
+          answer:        card.answer
+        })
+      });
+      if (r.ok) saved++;
+    } catch(e) { /* continue */ }
+  }
+
+  btn.textContent = `✅ ${saved} flashcard${saved !== 1 ? 's' : ''} saved!`;
+  btn.style.background = 'var(--green)';
+  btn.style.color      = '#fff';
+
+  // Refresh flashcard counts if sidebar is open
+  try { await loadAllFlashcardCounts(); renderFlashcardSubjectList(); } catch(e) {}
+}
+
 function scrollChatToBottom() {
-  const container = document.getElementById('chatMessages');
-  if (container) container.scrollTop = container.scrollHeight;
+  const c = document.getElementById('chatMessages');
+  if (c) c.scrollTop = c.scrollHeight;
 }
 
 async function clearChatHistory() {
   if (!currentUser) return;
   if (!confirm('Clear all chat history? This cannot be undone.')) return;
   try {
-    await fetch(`${apiBase()}/chat-history`, { method: 'DELETE' });
+    await fetch(`${apiBase()}/chat-history`, { method: 'DELETE', credentials: 'include' });
     const container = document.getElementById('chatMessages');
     if (container) {
       container.innerHTML = `
@@ -2663,22 +2922,49 @@ function renderFlashcardList(subjectId, ssId) {
   const list  = document.getElementById('fc-cards-list');
   const key   = ssId ? 'ss_' + ssId : subjectId;
   const cards = flashcards[key] || [];
-  // Always pass real subjectId — use global sidebar state as fallback when null
   const realSid = subjectId || fcSidebarSubjectId;
   const delArg  = ssId ? `'${realSid}','${ssId}'` : `'${realSid}',null`;
   if (!cards.length) {
     list.innerHTML = '<div class="fc-empty">No flashcards yet. Add your first one below!</div>';
     return;
   }
-  list.innerHTML = cards.map((c, i) => `
-    <div class="fc-card-item" id="fcard-${c.id}">
-      <div class="fc-card-num">${i + 1}</div>
-      <div class="fc-card-content">
-        <div class="fc-card-q">${esc(c.question)}</div>
-        <div class="fc-card-a">${esc(c.answer) || '<span style="color:var(--text3);font-style:italic">No answer yet</span>'}</div>
-      </div>
-      <button class="btn-icon" onclick="deleteFlashcard(${delArg},'${c.id}')">🗑️</button>
-    </div>`).join('');
+  // Build DOM elements so renderMath works properly
+  list.innerHTML = '';
+  cards.forEach((c, i) => {
+    const item = document.createElement('div');
+    item.className = 'fc-card-item';
+    item.id = `fcard-${c.id}`;
+
+    const num = document.createElement('div');
+    num.className = 'fc-card-num';
+    num.textContent = i + 1;
+
+    const content = document.createElement('div');
+    content.className = 'fc-card-content';
+
+    const q = document.createElement('div');
+    q.className = 'fc-card-q';
+    q.textContent = c.question;
+    renderMath(q);
+
+    const a = document.createElement('div');
+    a.className = 'fc-card-a';
+    a.textContent = c.answer || '';
+    if (!c.answer) a.innerHTML = '<span style="color:var(--text3);font-style:italic">No answer yet</span>';
+    else renderMath(a);
+
+    const btn = document.createElement('button');
+    btn.className = 'btn-icon';
+    btn.textContent = '🗑️';
+    btn.onclick = () => deleteFlashcard(realSid, ssId || null, c.id);
+
+    content.appendChild(q);
+    content.appendChild(a);
+    item.appendChild(num);
+    item.appendChild(content);
+    item.appendChild(btn);
+    list.appendChild(item);
+  });
 }
 
 function updateFlashcardCount(subjectId) {
@@ -2930,9 +3216,13 @@ function renderQuizCard() {
   document.getElementById('quiz-counter').textContent       = `${quizIndex + 1} / ${total}`;
   document.getElementById('quiz-got-count').textContent     = quizGot;
   document.getElementById('quiz-missed-count').textContent  = quizMissed;
-  document.getElementById('quiz-question').textContent      = card.question;
-  document.getElementById('quiz-answer').textContent        = card.answer || '(No answer provided)';
-  document.getElementById('quiz-answer').style.display      = 'none';
+  const qEl = document.getElementById('quiz-question');
+  const aEl = document.getElementById('quiz-answer');
+  qEl.textContent = card.question;
+  renderMath(qEl);
+  aEl.textContent = card.answer || '(No answer provided)';
+  renderMath(aEl);
+  aEl.style.display      = 'none';
   document.getElementById('quiz-reveal-btn').style.display  = 'block';
   document.getElementById('quiz-answer-btns').style.display = 'none';
   document.getElementById('quiz-card-area').style.display   = 'block';
@@ -3192,22 +3482,40 @@ function renderPdfPreview() {
   const list = document.getElementById('pdfPreviewList');
   if (!list) return;
 
-  list.innerHTML = pdfGeneratedCards.map((card, i) => {
+  list.innerHTML = '';
+  pdfGeneratedCards.forEach((card, i) => {
     const checked = pdfSelectedCards.includes(i);
-    return `
-    <div class="pdf-preview-card ${checked ? 'selected' : ''}" id="pdf-card-${i}"
-         onclick="togglePdfCard(${i})">
-      <div class="pdf-preview-check">
-        <div class="pdf-check-box ${checked ? 'checked' : ''}">
-          ${checked ? '✓' : ''}
-        </div>
-      </div>
-      <div class="pdf-preview-content">
-        <div class="pdf-preview-q">${esc(card.question)}</div>
-        <div class="pdf-preview-a">${esc(card.answer)}</div>
-      </div>
-    </div>`;
-  }).join('');
+    const item = document.createElement('div');
+    item.className = `pdf-preview-card ${checked ? 'selected' : ''}`;
+    item.id = `pdf-card-${i}`;
+    item.onclick = () => togglePdfCard(i);
+
+    const checkWrap = document.createElement('div');
+    checkWrap.className = 'pdf-preview-check';
+    const checkBox = document.createElement('div');
+    checkBox.className = `pdf-check-box ${checked ? 'checked' : ''}`;
+    checkBox.textContent = checked ? '✓' : '';
+    checkWrap.appendChild(checkBox);
+
+    const content = document.createElement('div');
+    content.className = 'pdf-preview-content';
+
+    const q = document.createElement('div');
+    q.className = 'pdf-preview-q';
+    q.textContent = card.question;
+    renderMath(q);
+
+    const a = document.createElement('div');
+    a.className = 'pdf-preview-a';
+    a.textContent = card.answer;
+    renderMath(a);
+
+    content.appendChild(q);
+    content.appendChild(a);
+    item.appendChild(checkWrap);
+    item.appendChild(content);
+    list.appendChild(item);
+  });
 
   updatePdfSelectedCount();
 }

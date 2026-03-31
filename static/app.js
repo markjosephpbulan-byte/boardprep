@@ -2673,7 +2673,7 @@ function showChatFlashcardModal(fcData) {
       opacity:0;transform:translateY(8px);transition:opacity 0.2s ${i*40}ms, transform 0.2s ${i*40}ms;`;
     const q = document.createElement('div');
     q.style.cssText = 'font-size:0.88rem;font-weight:600;color:var(--text);margin-bottom:5px;line-height:1.4;';
-    q.innerHTML = `<span>${i+1}. </span>${esc(c.question)}`;
+    q.textContent = `${i+1}. ${c.question}`;
     renderMath(q);
     const a = document.createElement('div');
     a.style.cssText = 'font-size:0.82rem;color:var(--text2);border-left:3px solid var(--gold);padding-left:10px;line-height:1.5;';

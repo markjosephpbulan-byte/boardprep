@@ -2469,30 +2469,53 @@ FLASHCARD GENERATION:
             num_match = _re2.search(r"\b(\d+)\b", user_message)
             num_cards = min(int(num_match.group(1)), 10) if num_match else 10
 
-            # Find which subject/subsection they mentioned
+            # Clean message — remove filler words before matching
+            msg_lower2 = user_message.lower()
+            msg_clean = _re2.sub(
+                r"\b(subject|sub-subject|subsection|topic|chapter|my|the|for|on|about|please|thank|you|can|make|create|generate|give|me|a|an|some|flashcard[s]?|question[s]?)\b",
+                " ",
+                msg_lower2,
+            ).strip()
+
             target_subject = subjects_raw[0]["name"] if subjects_raw else "General"
             target_subject_id = subjects_raw[0]["id"] if subjects_raw else ""
             target_ss_name = None
             target_ss_id = None
 
-            msg_lower2 = user_message.lower()
+            def match_score(candidate_name, msg):
+                """Score how well candidate_name matches the message. Higher = better."""
+                words = [w for w in candidate_name.lower().split() if len(w) > 2]
+                if not words:
+                    return 0
+                score = sum(1 for w in words if w in msg)
+                # Bonus: if any word from message is contained in candidate name
+                msg_words = [w for w in msg.split() if len(w) > 2]
+                score += sum(0.5 for w in msg_words if w in candidate_name.lower())
+                return score
+
+            # Always check subsections first — they are more specific
+            best_ss_score = 0
             for s in subjects_raw:
-                if s["name"].lower() in msg_lower2:
-                    target_subject = s["name"]
-                    target_subject_id = s["id"]
-                    for ss in s.get("subsections", []):
-                        if ss["name"].lower() in msg_lower2:
-                            target_ss_name = ss["name"]
-                            target_ss_id = ss["id"]
-                            break
-                    break
                 for ss in s.get("subsections", []):
-                    if ss["name"].lower() in msg_lower2:
-                        target_subject = s["name"]
-                        target_subject_id = s["id"]
+                    score = match_score(ss["name"], msg_clean)
+                    if score > best_ss_score:
+                        best_ss_score = score
                         target_ss_name = ss["name"]
                         target_ss_id = ss["id"]
-                        break
+                        target_subject = s["name"]
+                        target_subject_id = s["id"]
+
+            # Only fall back to subject-level if NO subsection matched at all
+            if best_ss_score == 0:
+                best_s_score = 0
+                for s in subjects_raw:
+                    score = match_score(s["name"], msg_clean)
+                    if score > best_s_score:
+                        best_s_score = score
+                        target_subject = s["name"]
+                        target_subject_id = s["id"]
+                target_ss_name = None
+                target_ss_id = None
 
             no_latex_escape = r"\frac{dy}{dx}"
             fc_prompt = f"""Generate exactly {num_cards} board exam flashcard Q&A pairs for the subject "{target_ss_name or target_subject}" for a Filipino board exam reviewer.

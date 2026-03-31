@@ -624,12 +624,13 @@ async function enterTrackerWithData() {
   // Data (subjects + notes) already in memory — just render, no fetches
   try { updateHeaderProfile(); } catch(e) {}
   try { updateCountdown(); }     catch(e) {}
+  try { updateProUI(); }         catch(e) {}
+  try { updateStreakUI(); }      catch(e) {}
   showView('tracker');
   try { showPomodoroFab(); }     catch(e) {}
   try { renderSubjectsGrid(); renderProgressOverview(); } catch(e) {}
   try { renderNotes(); }         catch(e) {}
   try { fetchMotivation(); }     catch(e) {}
-  try { updateProUI(); }         catch(e) {}
 }
 
 function isPro() {
@@ -713,6 +714,7 @@ async function enterTracker() {
   try { updateHeaderProfile(); } catch(e) {}
   try { updateCountdown(); }     catch(e) {}
   try { updateProUI(); }         catch(e) {}
+  try { updateStreakUI(); }      catch(e) {}
   showView('tracker');
   try { showPomodoroFab(); }     catch(e) {}
   try {
@@ -720,6 +722,8 @@ async function enterTracker() {
     const r = await fetch('/api/auth/me-full', { credentials: 'include' });
     if (r.ok) {
       const full = await r.json();
+      // Update currentUser with fresh data including streak
+      if (full.user) currentUser = full.user;
       subjects = full.subjects || [];
       notes    = full.notes    || [];
       renderSubjectsGrid(); renderProgressOverview();
@@ -733,6 +737,7 @@ async function enterTracker() {
   }
   try { fetchMotivation(); } catch(e) {}
   try { updateProUI(); }     catch(e) {}
+  try { updateStreakUI(); }  catch(e) {}
 }
 
 function updateHeaderProfile() {

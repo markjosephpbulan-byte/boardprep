@@ -2615,20 +2615,26 @@ function appendFlashcardPreview(fcData) {
 let _currentChatFcData = null;
 
 function renderMath(element) {
-  if (typeof renderMathInElement === 'function') {
-    try {
-      renderMathInElement(element, {
-        delimiters: [
-          { left: '$$', right: '$$', display: true  },
-          { left: '$',  right: '$',  display: false },
-          { left: '\\(', right: '\\)', display: false },
-          { left: '\\[', right: '\\]', display: true  }
-        ],
-        throwOnError: false,
-        strict: false
-      });
-    } catch(e) {}
-  }
+  if (typeof renderMathInElement !== 'function') return;
+  try {
+    renderMathInElement(element, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true  },
+        { left: '$',  right: '$',  display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true  }
+      ],
+      throwOnError: false,
+      errorColor: 'var(--text2)',  // use normal text color for errors
+      strict: false,
+      trust: false
+    });
+    // Remove any red KaTeX error spans and replace with plain text
+    element.querySelectorAll('.katex-error').forEach(err => {
+      const plain = document.createTextNode(err.textContent);
+      err.replaceWith(plain);
+    });
+  } catch(e) {}
 }
 
 

@@ -10,6 +10,14 @@ from collections import defaultdict
 import threading
 import requests as http_requests
 
+# Load .env file for local development
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not installed — use system env vars (Railway)
+
 from flask import make_response
 import gzip
 import io
@@ -2486,14 +2494,16 @@ FLASHCARD GENERATION:
                         target_ss_id = ss["id"]
                         break
 
+            no_latex_escape = r"\frac{dy}{dx}"
             fc_prompt = f"""Generate exactly {num_cards} board exam flashcard Q&A pairs for the subject "{target_ss_name or target_subject}" for a Filipino board exam reviewer.
 
 Rules:
 - Questions must test actual subject knowledge
 - Answers must be direct and factual (1-2 sentences max)
 - Language: respond in {"Filipino/Tagalog" if any(w in msg_lower2 for w in ["po", "ko", "mga", "ng", "sa", "ang"]) else "English"}
+- For math expressions use LaTeX with $ delimiters (e.g. $x^n$, $\\frac{{dy}}{{dx}}$, $\\sin(x)$)
 
-Respond ONLY with raw JSON starting with {{ and ending with }}. Do NOT use markdown, backticks, or code fences. For math expressions use LaTeX notation with $ delimiters (e.g. $x^n$, $\frac{{dy}}{{dx}}$, $\sin(x)$) — they will be rendered beautifully. Output the JSON directly:
+Respond ONLY with raw JSON starting with {{ and ending with }}. No markdown, no backticks:
 {{"flashcards":[{{"question":"...","answer":"..."}}],"subject":"{target_subject}","subsection":{f'"{target_ss_name}"' if target_ss_name else "null"},"message":"friendly short message to {user.get("display_name", "reviewer")}"}}"""
 
             resp = http_requests.post(

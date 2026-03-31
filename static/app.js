@@ -2516,7 +2516,7 @@ async function clearChatHistory() {
       container.innerHTML = `
         <div class="chat-welcome">
           <div style="font-size:2rem">👋</div>
-          <div style="font-weight:700;color:var(--text)">Hi! I'm Prep, your AI study buddy.</div>
+          <div style="font-weight:700;color:var(--text)">Hi! I'm Tsuki, your AI study buddy 🌙.</div>
           <div style="font-size:0.83rem;color:var(--text2);line-height:1.6">
             Ask me anything about your board exam subjects, request a quick review, or just tell me how studying is going!
           </div>

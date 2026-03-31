@@ -2373,7 +2373,7 @@ def chat_with_ai(user_id):
             except Exception:
                 exam_date_text = f"Board exam date: {user['exam_date']}"
 
-        system_prompt = f"""You are Prep, a friendly and encouraging AI study assistant for BoardPrep PH — a board exam review tracker for Filipino students.
+        system_prompt = f"""You are Tsuki, a friendly and encouraging AI study assistant for BoardPrep PH — a board exam review tracker for Filipino students.
 
 USER PROFILE:
 - Name: {user.get("display_name", "reviewer")} (@{user.get("username", "")})

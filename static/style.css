@@ -2787,3 +2787,41 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 @keyframes fcSpin {
   to { transform: rotate(360deg); }
 }
+
+/* Override KaTeX error color — show as normal text instead of red */
+.katex-error { color: var(--text2) !important; }
+
+/* ── Tsuki AI Button ─────────────────────────────────────────── */
+.btn-tsuki {
+  display: flex; align-items: center; gap: 8px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.15));
+  border: 1px solid rgba(168,85,247,0.35);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px 5px 8px;
+  cursor: pointer; transition: all 0.2s;
+  flex-shrink: 0;
+}
+.btn-tsuki:hover {
+  background: linear-gradient(135deg, rgba(99,102,241,0.25), rgba(168,85,247,0.25));
+  border-color: rgba(168,85,247,0.6);
+  transform: translateY(-1px);
+}
+.btn-tsuki-icon { font-size: 1.1rem; line-height: 1; }
+.btn-tsuki-text {
+  display: flex; flex-direction: column;
+  align-items: flex-start; line-height: 1.2;
+}
+.btn-tsuki-name {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800; font-size: 0.82rem;
+  color: #c084fc;
+}
+.btn-tsuki-sub {
+  font-size: 0.6rem; color: var(--text3);
+  font-weight: 500; letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+@media (max-width: 768px) {
+  .btn-tsuki-sub { display: none; }
+  .btn-tsuki { padding: 5px 10px; }
+}

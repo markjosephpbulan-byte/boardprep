@@ -2410,7 +2410,13 @@ async function loadChatHistory() {
     // Clear welcome if we have history
     if (messages.length > 0) {
       container.innerHTML = '';
-      messages.forEach(m => appendChatBubble(m.role, m.content, m.created_at, false));
+      messages.forEach(m => {
+        // Skip raw JSON flashcard messages — show friendly message only
+        if (m.role === 'assistant' && m.content.trim().startsWith('{') && m.content.includes('"flashcards"')) {
+          return;
+        }
+        appendChatBubble(m.role, m.content, m.created_at, false);
+      });
     }
     scrollChatToBottom();
   } catch(e) { console.error('Chat history load error:', e); }

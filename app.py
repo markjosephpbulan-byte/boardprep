@@ -2551,7 +2551,11 @@ Respond ONLY with raw JSON starting with {{ and ending with }}. No markdown, no 
         import re as _re, json as _json
 
         flashcard_data = None
-        save_reply = ai_reply
+        # Default save_reply — if it looks like raw JSON, save a placeholder instead
+        if ai_reply.strip().startswith("{") and '"flashcards"' in ai_reply:
+            save_reply = "✨ Flashcards generated!"
+        else:
+            save_reply = ai_reply
 
         try:
             clean = ai_reply.strip()

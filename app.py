@@ -2281,8 +2281,212 @@ def generate_flashcards_from_pdf(user_id):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CONFIG + FRONTEND
+#  AI STUDY CHAT
 # ══════════════════════════════════════════════════════════════════════════════
+
+
+@app.route("/api/profiles/<user_id>/chat-history", methods=["GET"])
+@owner_required
+def get_chat_history(user_id):
+    try:
+        messages = (
+            db_execute(
+                """
+            SELECT id, role, content, created_at
+            FROM chat_messages
+            WHERE user_id=%s
+            ORDER BY created_at ASC
+            LIMIT 50
+        """,
+                (user_id,),
+                fetch="all",
+            )
+            or []
+        )
+        for m in messages:
+            m["created_at"] = str(m["created_at"])
+        return jsonify(messages)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/profiles/<user_id>/chat", methods=["POST"])
+@owner_required
+def chat_with_ai(user_id):
+    try:
+        # Pro-only (not trial)
+        user = get_user_by_id(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        if not user.get("is_pro") or user.get("plan") == "trial":
+            return jsonify({"error": "pro_required"}), 403
+
+        if not GEMINI_API_KEY:
+            return jsonify({"error": "AI not configured"}), 503
+
+        body = request.json or {}
+        user_message = (body.get("message") or "").strip()
+        if not user_message:
+            return jsonify({"error": "Message is required"}), 400
+        if len(user_message) > 2000:
+            return jsonify({"error": "Message too long (max 2000 characters)"}), 400
+
+        # ── Build context from user data ──────────────────────────────────────
+        subjects_raw = get_subjects_for_user(user_id)
+        total_topics = sum(
+            len(ss.get("topics", []))
+            for s in subjects_raw
+            for ss in s.get("subsections", [])
+        )
+        done_topics = sum(
+            1
+            for s in subjects_raw
+            for ss in s.get("subsections", [])
+            for t in ss.get("topics", [])
+            if t.get("done")
+        )
+        progress_pct = (
+            0 if total_topics == 0 else round((done_topics / total_topics) * 100)
+        )
+
+        subject_list = []
+        for s in subjects_raw:
+            ss_names = [ss["name"] for ss in s.get("subsections", [])]
+            subject_list.append(
+                f"- {s['name']}"
+                + (f" (subsections: {', '.join(ss_names)})" if ss_names else "")
+            )
+        subjects_text = (
+            "\n".join(subject_list) if subject_list else "No subjects added yet."
+        )
+
+        exam_date_text = ""
+        if user.get("exam_date"):
+            try:
+                from datetime import date
+
+                exam = date.fromisoformat(user["exam_date"])
+                days_left = (exam - date.today()).days
+                exam_date_text = (
+                    f"Board exam date: {user['exam_date']} ({days_left} days away)"
+                )
+            except Exception:
+                exam_date_text = f"Board exam date: {user['exam_date']}"
+
+        system_prompt = f"""You are Prep, a friendly and encouraging AI study assistant for BoardPrep PH — a board exam review tracker for Filipino students.
+
+USER PROFILE:
+- Name: {user.get("display_name", "reviewer")} (@{user.get("username", "")})
+- Study streak: {user.get("streak", 0)} day(s) 🔥
+- Overall progress: {progress_pct}% done ({done_topics}/{total_topics} topics)
+- {exam_date_text}
+
+SUBJECTS BEING REVIEWED:
+{subjects_text}
+
+YOUR ROLE:
+- Answer board exam review questions clearly and accurately
+- Suggest what to study next based on their subjects and progress
+- Motivate the user — especially reference their streak if it's impressive
+- Be friendly, warm, and encouraging like a kuya/ate study buddy
+- Keep responses concise (3-5 sentences unless a detailed explanation is needed)
+- Respond in the SAME LANGUAGE the user uses (Filipino/Tagalog or English)
+- Never make up facts — if unsure, say so honestly
+- Format with bullet points or numbered lists when listing steps or items"""
+
+        # ── Get recent chat history for context ───────────────────────────────
+        history = (
+            db_execute(
+                """
+            SELECT role, content FROM chat_messages
+            WHERE user_id=%s
+            ORDER BY created_at DESC LIMIT 10
+        """,
+                (user_id,),
+                fetch="all",
+            )
+            or []
+        )
+        history.reverse()
+
+        # Build Gemini conversation
+        contents = []
+        for h in history:
+            contents.append({
+                "role": "user" if h["role"] == "user" else "model",
+                "parts": [{"text": h["content"]}],
+            })
+        contents.append({"role": "user", "parts": [{"text": user_message}]})
+
+        # ── Call Gemini ───────────────────────────────────────────────────────
+        resp = http_requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}",
+            headers={"Content-Type": "application/json"},
+            json={
+                "system_instruction": {"parts": [{"text": system_prompt}]},
+                "contents": contents,
+                "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.7},
+            },
+            timeout=30,
+        )
+
+        if not resp.ok:
+            try:
+                err = resp.json().get("error", {}).get("message", str(resp.status_code))
+            except Exception:
+                err = str(resp.status_code)
+            return jsonify({"error": f"AI error: {err[:150]}"}), 502
+
+        data = resp.json()
+        ai_reply = (
+            data
+            .get("candidates", [{}])[0]
+            .get("content", {})
+            .get("parts", [{}])[0]
+            .get("text", "")
+        ).strip()
+
+        if not ai_reply:
+            return jsonify({"error": "AI returned empty response"}), 500
+
+        # ── Save both messages to DB ──────────────────────────────────────────
+        db_execute(
+            "INSERT INTO chat_messages (user_id, role, content) VALUES (%s, 'user', %s)",
+            (user_id, user_message),
+        )
+        db_execute(
+            "INSERT INTO chat_messages (user_id, role, content) VALUES (%s, 'assistant', %s)",
+            (user_id, ai_reply),
+        )
+
+        # ── Keep only last 50 messages ────────────────────────────────────────
+        db_execute(
+            """
+            DELETE FROM chat_messages
+            WHERE user_id=%s AND id NOT IN (
+                SELECT id FROM chat_messages
+                WHERE user_id=%s
+                ORDER BY created_at DESC LIMIT 50
+            )
+        """,
+            (user_id, user_id),
+        )
+
+        return jsonify({"reply": ai_reply})
+
+    except Exception as e:
+        print(f"[Chat Error] {e}")
+        return jsonify({"error": f"Server error: {str(e)[:100]}"}), 500
+
+
+@app.route("/api/profiles/<user_id>/chat-history", methods=["DELETE"])
+@owner_required
+def clear_chat_history(user_id):
+    try:
+        db_execute("DELETE FROM chat_messages WHERE user_id=%s", (user_id,))
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.errorhandler(500)

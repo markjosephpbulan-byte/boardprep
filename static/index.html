@@ -525,6 +525,9 @@
         <button class="btn-notes-toggle" onclick="toggleFlashcardSidebar()">
           🎴 Flashcards
         </button>
+        <button class="btn-notes-toggle" id="chatBtn" onclick="toggleChatSidebar()">
+          🤖 AI Chat
+        </button>
         <button class="btn-primary" onclick="openAddSubjectModal()">+ Add Subject</button>
         <!-- Theme Switcher -->
         <div class="theme-switcher" id="themeSwitcher">
@@ -907,6 +910,76 @@
   </div>
 </aside>
 <div class="flashcard-overlay" id="flashcardOverlay" onclick="toggleFlashcardSidebar()"></div>
+
+<!-- ══ AI CHAT SIDEBAR ══════════════════════════════════════════════════════ -->
+<aside class="chat-sidebar" id="chatSidebar">
+
+  <!-- Header -->
+  <div class="chat-sidebar-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:1.3rem">🤖</span>
+      <div>
+        <div class="chat-sidebar-title">AI Study Assistant</div>
+        <div class="chat-sidebar-sub">Powered by Gemini ✦</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="chat-clear-btn" onclick="clearChatHistory()" title="Clear chat history">🗑️ Clear</button>
+      <button class="btn-close-sidebar" onclick="toggleChatSidebar()">✕</button>
+    </div>
+  </div>
+
+  <!-- Pro-only gate -->
+  <div class="chat-upgrade-box" id="chatUpgradeBox" style="display:none">
+    <div style="font-size:2rem">🔒</div>
+    <div style="font-weight:700;font-size:1rem;color:var(--text)">Pro Feature</div>
+    <div style="font-size:0.85rem;color:var(--text2);line-height:1.6;text-align:center;max-width:260px">
+      The AI Study Assistant is available for Pro users only.<br/>Upgrade to get personalized study help!
+    </div>
+    <a href="https://www.facebook.com/boardpreph/" target="_blank"
+       style="display:inline-block;margin-top:8px;padding:8px 20px;background:var(--gold);color:#0d1117;border-radius:8px;font-weight:700;font-size:0.85rem;text-decoration:none">
+      Contact us to Upgrade →
+    </a>
+  </div>
+
+  <!-- Chat area (Pro users) -->
+  <div class="chat-body" id="chatBody">
+    <!-- Messages -->
+    <div class="chat-messages" id="chatMessages">
+      <div class="chat-welcome">
+        <div style="font-size:2rem">👋</div>
+        <div style="font-weight:700;color:var(--text)">Hi! I'm Prep, your AI study buddy.</div>
+        <div style="font-size:0.83rem;color:var(--text2);line-height:1.6">
+          Ask me anything about your board exam subjects, request a quick review, or just tell me how studying is going!
+        </div>
+      </div>
+    </div>
+
+    <!-- Typing indicator -->
+    <div class="chat-typing" id="chatTyping" style="display:none">
+      <div class="chat-bubble ai">
+        <div class="typing-dots"><span></span><span></span><span></span></div>
+      </div>
+    </div>
+
+    <!-- Input area -->
+    <div class="chat-input-area">
+      <textarea class="chat-input" id="chatInput"
+        placeholder="Ask anything about your board exam…"
+        rows="1"
+        onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); sendChatMessage(); }"
+        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+      <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+</aside>
+<div class="chat-overlay" id="chatOverlay" onclick="toggleChatSidebar()"></div>
 
 <!-- ══ QUIZ MODAL ═══════════════════════════════════════════════════════════ -->
 <div class="modal-backdrop" id="quizModal">

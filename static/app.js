@@ -2356,6 +2356,176 @@ async function toggleFlashcardSidebar() {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+//  AI CHAT SIDEBAR
+// ══════════════════════════════════════════════════════════════
+
+let chatLoaded = false;
+
+async function toggleChatSidebar() {
+  const sidebar = document.getElementById('chatSidebar');
+  const overlay = document.getElementById('chatOverlay');
+  const isOpen  = sidebar.classList.contains('open');
+
+  if (isOpen) {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+  } else {
+    sidebar.classList.add('open');
+    overlay.classList.add('open');
+    setupChatUI();
+    if (!chatLoaded) {
+      await loadChatHistory();
+      chatLoaded = true;
+    }
+  }
+}
+
+function setupChatUI() {
+  const plan    = currentUser && currentUser.plan;
+  const isPaid  = currentUser && currentUser.is_pro && plan !== 'trial';
+  const body    = document.getElementById('chatBody');
+  const upgrade = document.getElementById('chatUpgradeBox');
+  if (!body || !upgrade) return;
+
+  if (isPaid) {
+    body.style.display    = 'flex';
+    upgrade.style.display = 'none';
+  } else {
+    body.style.display    = 'none';
+    upgrade.style.display = 'flex';
+  }
+}
+
+async function loadChatHistory() {
+  if (!currentUser) return;
+  try {
+    const r = await fetch(`${apiBase()}/chat-history`);
+    if (!r.ok) return;
+    const messages = await r.json();
+    const container = document.getElementById('chatMessages');
+    if (!container) return;
+
+    // Clear welcome if we have history
+    if (messages.length > 0) {
+      container.innerHTML = '';
+      messages.forEach(m => appendChatBubble(m.role, m.content, m.created_at, false));
+    }
+    scrollChatToBottom();
+  } catch(e) { console.error('Chat history load error:', e); }
+}
+
+async function sendChatMessage() {
+  const input   = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('chatSendBtn');
+  const typing  = document.getElementById('chatTyping');
+  const message = (input.value || '').trim();
+  if (!message || sendBtn.disabled) return;
+
+  // Clear welcome message on first send
+  const container = document.getElementById('chatMessages');
+  const welcome   = container.querySelector('.chat-welcome');
+  if (welcome) welcome.remove();
+
+  // Show user bubble
+  appendChatBubble('user', message, null, true);
+  input.value = '';
+  input.style.height = 'auto';
+
+  // Disable input, show typing
+  sendBtn.disabled    = true;
+  input.disabled      = true;
+  typing.style.display = 'block';
+  scrollChatToBottom();
+
+  try {
+    const r = await fetch(`${apiBase()}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message })
+    });
+
+    const data = await r.json();
+    typing.style.display = 'none';
+
+    if (!r.ok) {
+      if (data.error === 'pro_required') {
+        setupChatUI(); // show upgrade box
+      } else {
+        appendChatBubble('ai', `⚠️ ${data.error || 'Something went wrong. Please try again.'}`, null, true);
+      }
+    } else {
+      appendChatBubble('ai', data.reply, null, true);
+    }
+  } catch(e) {
+    typing.style.display = 'none';
+    appendChatBubble('ai', '⚠️ Connection error. Please check your internet and try again.', null, true);
+  } finally {
+    sendBtn.disabled = false;
+    input.disabled   = false;
+    input.focus();
+    scrollChatToBottom();
+  }
+}
+
+function appendChatBubble(role, content, timestamp, animate) {
+  const container = document.getElementById('chatMessages');
+  if (!container) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = `chat-bubble-wrap ${role === 'user' ? 'user' : 'ai'}`;
+
+  const bubble = document.createElement('div');
+  bubble.className = `chat-bubble ${role === 'user' ? 'user' : 'ai'}`;
+  bubble.textContent = content;
+
+  const time = document.createElement('div');
+  time.className = 'chat-bubble-time';
+  const d = timestamp ? new Date(timestamp) : new Date();
+  time.textContent = d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+
+  wrap.appendChild(bubble);
+  wrap.appendChild(time);
+
+  if (animate) {
+    wrap.style.opacity = '0';
+    wrap.style.transform = 'translateY(8px)';
+    wrap.style.transition = 'opacity 0.25s, transform 0.25s';
+    container.appendChild(wrap);
+    requestAnimationFrame(() => {
+      wrap.style.opacity = '1';
+      wrap.style.transform = 'translateY(0)';
+    });
+  } else {
+    container.appendChild(wrap);
+  }
+}
+
+function scrollChatToBottom() {
+  const container = document.getElementById('chatMessages');
+  if (container) container.scrollTop = container.scrollHeight;
+}
+
+async function clearChatHistory() {
+  if (!currentUser) return;
+  if (!confirm('Clear all chat history? This cannot be undone.')) return;
+  try {
+    await fetch(`${apiBase()}/chat-history`, { method: 'DELETE' });
+    const container = document.getElementById('chatMessages');
+    if (container) {
+      container.innerHTML = `
+        <div class="chat-welcome">
+          <div style="font-size:2rem">👋</div>
+          <div style="font-weight:700;color:var(--text)">Hi! I'm Prep, your AI study buddy.</div>
+          <div style="font-size:0.83rem;color:var(--text2);line-height:1.6">
+            Ask me anything about your board exam subjects, request a quick review, or just tell me how studying is going!
+          </div>
+        </div>`;
+    }
+    chatLoaded = false;
+  } catch(e) { alert('Failed to clear chat. Please try again.'); }
+}
+
 async function loadAllFlashcardCounts() {
   // Fetch all flashcards for this user in ONE request, then group by subject/subsection
   try {

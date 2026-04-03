@@ -2118,7 +2118,7 @@ def request_delete_otp():
 
 # ── Vertex AI Express Mode (bills to GCP $300 credit) ──
 VERTEX_AI_EXPRESS_KEY = os.environ.get("VERTEX_AI_EXPRESS_KEY", "")
-VERTEX_AI_MODEL = "gemini-2.5-flash-lite-preview-09-2025"
+VERTEX_AI_MODEL = "gemini-2.5-flash-lite"
 
 
 def _vertex_url():

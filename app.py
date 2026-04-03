@@ -9,8 +9,6 @@ from functools import wraps
 from collections import defaultdict
 import threading
 import requests as http_requests
-from google.oauth2 import service_account
-from google.auth.transport.requests import Request as GoogleAuthRequest
 
 # Load .env file for local development
 try:
@@ -2118,39 +2116,15 @@ def request_delete_otp():
 #  PDF → FLASHCARD GENERATION
 # ══════════════════════════════════════════════════════════════════════════════
 
-# ── Vertex AI config (uses Google Cloud $300 credit instead of AI Studio) ──
-VERTEX_AI_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
-VERTEX_AI_LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
-VERTEX_AI_MODEL = "gemini-2.0-flash-001"
-
-_vertex_token_cache = {"token": None, "expiry": 0}
-
-
-def _get_vertex_token():
-    """Get a cached OAuth2 bearer token via service account JSON (refreshes 60s before expiry)."""
-    import time
-
-    now = time.time()
-    if _vertex_token_cache["token"] and now < _vertex_token_cache["expiry"] - 60:
-        return _vertex_token_cache["token"]
-    sa_b64 = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
-    if not sa_b64:
-        return None
-    sa_info = json.loads(base64.b64decode(sa_b64))
-    creds = service_account.Credentials.from_service_account_info(
-        sa_info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-    creds.refresh(GoogleAuthRequest())
-    _vertex_token_cache["token"] = creds.token
-    _vertex_token_cache["expiry"] = creds.expiry.timestamp()
-    return creds.token
+# ── Vertex AI Express Mode (bills to GCP $300 credit) ──
+VERTEX_AI_EXPRESS_KEY = os.environ.get("VERTEX_AI_EXPRESS_KEY", "")
+VERTEX_AI_MODEL = "gemini-2.5-flash-lite-preview-09-2025"
 
 
 def _vertex_url():
     return (
-        f"https://{VERTEX_AI_LOCATION}-aiplatform.googleapis.com/v1"
-        f"/projects/{VERTEX_AI_PROJECT}/locations/{VERTEX_AI_LOCATION}"
-        f"/publishers/google/models/{VERTEX_AI_MODEL}:generateContent"
+        f"https://aiplatform.googleapis.com/v1/publishers/google/models"
+        f"/{VERTEX_AI_MODEL}:generateContent?key={VERTEX_AI_EXPRESS_KEY}"
     )
 
 
@@ -2172,7 +2146,7 @@ def generate_flashcards_from_pdf(user_id):
                 "error": "This feature requires a Pro account. Please upgrade to continue."
             }), 403
 
-        if not VERTEX_AI_PROJECT or not os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"):
+        if not VERTEX_AI_EXPRESS_KEY:
             return jsonify({
                 "error": "AI generation is not configured on this server."
             }), 503
@@ -2260,13 +2234,9 @@ def generate_flashcards_from_pdf(user_id):
 
         # ── 4. Call Gemini via Vertex AI ──────────────────────────────────────────
         try:
-            token = _get_vertex_token()
             resp = http_requests.post(
                 _vertex_url(),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {token}",
-                },
+                headers={"Content-Type": "application/json"},
                 json={
                     "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.4},
@@ -2375,7 +2345,7 @@ def chat_with_ai(user_id):
         if not user.get("is_pro") or user.get("plan") == "trial":
             return jsonify({"error": "pro_required"}), 403
 
-        if not VERTEX_AI_PROJECT or not os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"):
+        if not VERTEX_AI_EXPRESS_KEY:
             return jsonify({"error": "AI not configured"}), 503
 
         body = request.json or {}
@@ -2728,13 +2698,9 @@ Required format:
                 })
             fc_contents.append({"role": "user", "parts": [{"text": user_message}]})
 
-            token = _get_vertex_token()
             resp = http_requests.post(
                 _vertex_url(),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {token}",
-                },
+                headers={"Content-Type": "application/json"},
                 json={
                     "system_instruction": {"parts": [{"text": fc_system}]},
                     "contents": fc_contents,
@@ -2744,13 +2710,9 @@ Required format:
             )
         else:
             # Normal chat call
-            token = _get_vertex_token()
             resp = http_requests.post(
                 _vertex_url(),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {token}",
-                },
+                headers={"Content-Type": "application/json"},
                 json={
                     "system_instruction": {"parts": [{"text": system_prompt}]},
                     "contents": contents,
@@ -2938,7 +2900,7 @@ def daily_motivation(user_id):
     subjects = (body.get("subjects") or "")[:200]
     pct = int(body.get("pct") or 0)
 
-    if not VERTEX_AI_PROJECT or not os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"):
+    if not VERTEX_AI_EXPRESS_KEY:
         return jsonify({"error": "AI not configured"}), 503
 
     prompt = (
@@ -2949,13 +2911,9 @@ def daily_motivation(user_id):
     )
 
     try:
-        token = _get_vertex_token()
         resp = http_requests.post(
             _vertex_url(),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {token}",
-            },
+            headers={"Content-Type": "application/json"},
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {"maxOutputTokens": 150, "temperature": 0.9},

@@ -9,6 +9,8 @@ from functools import wraps
 from collections import defaultdict
 import threading
 import requests as http_requests
+from google.oauth2 import service_account
+from google.auth.transport.requests import Request as GoogleAuthRequest
 
 # Load .env file for local development
 try:
@@ -2116,7 +2118,40 @@ def request_delete_otp():
 #  PDF → FLASHCARD GENERATION
 # ══════════════════════════════════════════════════════════════════════════════
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+# ── Vertex AI config (uses Google Cloud $300 credit instead of AI Studio) ──
+VERTEX_AI_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+VERTEX_AI_LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+VERTEX_AI_MODEL = "gemini-2.5-flash-lite"
+
+_vertex_token_cache = {"token": None, "expiry": 0}
+
+
+def _get_vertex_token():
+    """Get a cached OAuth2 bearer token via service account JSON (refreshes 60s before expiry)."""
+    import time
+
+    now = time.time()
+    if _vertex_token_cache["token"] and now < _vertex_token_cache["expiry"] - 60:
+        return _vertex_token_cache["token"]
+    sa_b64 = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    if not sa_b64:
+        return None
+    sa_info = json.loads(base64.b64decode(sa_b64))
+    creds = service_account.Credentials.from_service_account_info(
+        sa_info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    creds.refresh(GoogleAuthRequest())
+    _vertex_token_cache["token"] = creds.token
+    _vertex_token_cache["expiry"] = creds.expiry.timestamp()
+    return creds.token
+
+
+def _vertex_url():
+    return (
+        f"https://{VERTEX_AI_LOCATION}-aiplatform.googleapis.com/v1"
+        f"/projects/{VERTEX_AI_PROJECT}/locations/{VERTEX_AI_LOCATION}"
+        f"/publishers/google/models/{VERTEX_AI_MODEL}:generateContent"
+    )
 
 
 @app.route("/api/profiles/<user_id>/generate-pdf-flashcards", methods=["POST"])
@@ -2137,9 +2172,9 @@ def generate_flashcards_from_pdf(user_id):
                 "error": "This feature requires a Pro account. Please upgrade to continue."
             }), 403
 
-        if not GEMINI_API_KEY:
+        if not VERTEX_AI_PROJECT or not os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"):
             return jsonify({
-                "error": "AI generation is not configured on this server. Please set GEMINI_API_KEY."
+                "error": "AI generation is not configured on this server."
             }), 503
 
         # ── 1. Validate file upload ───────────────────────────────────────────────
@@ -2223,11 +2258,15 @@ def generate_flashcards_from_pdf(user_id):
             f"\nStudy material:\n{pdf_text}"
         )
 
-        # ── 4. Call Gemini ────────────────────────────────────────────────────────
+        # ── 4. Call Gemini via Vertex AI ──────────────────────────────────────────
         try:
+            token = _get_vertex_token()
             resp = http_requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}",
-                headers={"Content-Type": "application/json"},
+                _vertex_url(),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}",
+                },
                 json={
                     "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.4},
@@ -2336,7 +2375,7 @@ def chat_with_ai(user_id):
         if not user.get("is_pro") or user.get("plan") == "trial":
             return jsonify({"error": "pro_required"}), 403
 
-        if not GEMINI_API_KEY:
+        if not VERTEX_AI_PROJECT or not os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"):
             return jsonify({"error": "AI not configured"}), 503
 
         body = request.json or {}
@@ -2437,6 +2476,7 @@ FLASHCARD GENERATION:
         wants_flashcards = any(kw in msg_lower for kw in flashcard_keywords)
 
         # ── Get recent chat history for context ───────────────────────────────
+        # (fetched before clarification check so we can inspect last message)
         history = (
             db_execute(
                 """
@@ -2450,6 +2490,17 @@ FLASHCARD GENERATION:
             or []
         )
         history.reverse()
+
+        # If the user's last message is a follow-up reply to our clarification prompt
+        # (e.g. they typed "Differential Equation" in response to "which subject?"),
+        # treat it as a flashcard request even if no flashcard keywords are present
+        if not wants_flashcards and history:
+            _last_asst = next(
+                (h["content"] for h in reversed(history) if h["role"] == "assistant"),
+                "",
+            )
+            if "Which subject or sub-subject should I focus on?" in _last_asst:
+                wants_flashcards = True
 
         # Build Gemini conversation
         contents = []
@@ -2484,20 +2535,31 @@ FLASHCARD GENERATION:
 
             def match_score(candidate_name, msg):
                 """Score how well candidate_name matches the message. Higher = better."""
-                words = [w for w in candidate_name.lower().split() if len(w) > 2]
+                words = [w for w in candidate_name.lower().split() if len(w) >= 2]
                 if not words:
                     return 0
                 score = sum(1 for w in words if w in msg)
                 # Bonus: if any word from message is contained in candidate name
-                msg_words = [w for w in msg.split() if len(w) > 2]
+                msg_words = [w for w in msg.split() if len(w) >= 2]
                 score += sum(0.5 for w in msg_words if w in candidate_name.lower())
                 return score
+
+            # Build negation set — penalize subjects/subsections matching "not X" / "hindi X"
+            import re as _re_neg
+
+            _negation_patterns = _re_neg.findall(r"\b(?:not|hindi)\s+(\w+)", msg_clean)
+            negated_words = set(w.lower() for w in _negation_patterns)
+
+            def penalized_score(candidate_name, msg):
+                base = match_score(candidate_name, msg)
+                penalty = sum(2 for w in negated_words if w in candidate_name.lower())
+                return base - penalty
 
             # Always check subsections first — they are more specific
             best_ss_score = 0
             for s in subjects_raw:
                 for ss in s.get("subsections", []):
-                    score = match_score(ss["name"], msg_clean)
+                    score = penalized_score(ss["name"], msg_clean)
                     if score > best_ss_score:
                         best_ss_score = score
                         target_ss_name = ss["name"]
@@ -2509,7 +2571,7 @@ FLASHCARD GENERATION:
             if best_ss_score == 0:
                 best_s_score = 0
                 for s in subjects_raw:
-                    score = match_score(s["name"], msg_clean)
+                    score = penalized_score(s["name"], msg_clean)
                     if score > best_s_score:
                         best_s_score = score
                         target_subject = s["name"]
@@ -2517,32 +2579,178 @@ FLASHCARD GENERATION:
                 target_ss_name = None
                 target_ss_id = None
 
-            no_latex_escape = r"\frac{dy}{dx}"
-            fc_prompt = f"""Generate exactly {num_cards} board exam flashcard Q&A pairs for the subject "{target_ss_name or target_subject}" for a Filipino board exam reviewer.
+                # No subject/subsection recognized — ask for clarification instead of guessing
+                if best_s_score == 0:
+                    options_lines = []
+                    for s in subjects_raw:
+                        ss_names = [ss["name"] for ss in s.get("subsections", [])]
+                        if ss_names:
+                            options_lines.append(
+                                f"• {s['name']} — {', '.join(ss_names)}"
+                            )
+                        else:
+                            options_lines.append(f"• {s['name']}")
+                    if options_lines:
+                        options_text = "\n".join(options_lines)
+                        example_hint = (
+                            subjects_raw[0]["name"] if subjects_raw else "Mathematics"
+                        )
+                    else:
+                        options_text = "• (no subjects added yet — add some in your tracker first!)"
+                        example_hint = "Mathematics"
+                    clarification_reply = (
+                        "Sure, I'd love to make flashcards for you! "
+                        "Which subject or sub-subject should I focus on? Here's what you're studying:\n\n"
+                        f"{options_text}\n\n"
+                        f'Just tell me which one (e.g. "flashcards for {example_hint}") and I\'ll get right on it! \U0001f60a'
+                    )
+                    db_execute(
+                        "INSERT INTO chat_messages (user_id, role, content) VALUES (%s, 'user', %s)",
+                        (user_id, user_message),
+                    )
+                    db_execute(
+                        "INSERT INTO chat_messages (user_id, role, content) VALUES (%s, 'assistant', %s)",
+                        (user_id, clarification_reply),
+                    )
+                    return jsonify({"reply": clarification_reply})
+
+            # ── Detect explicit mode — user specified their own content focus ──────
+            matched_name_words = set(
+                w
+                for w in (target_ss_name or target_subject or "").lower().split()
+                if len(w) >= 2
+            )
+            residual_words = [
+                w for w in msg_clean.split() if w and w not in matched_name_words
+            ]
+            explicit_mode = len(residual_words) >= 3
+
+            # ── Build context instruction based on match level and completion status
+            context_instruction = ""
+            if not explicit_mode:
+                if target_ss_id:
+                    # Subsection matched — inject topics (incomplete first, then done)
+                    topic_names_incomplete = []
+                    topic_names_done = []
+                    for s in subjects_raw:
+                        if s["id"] == target_subject_id:
+                            for ss in s.get("subsections", []):
+                                if ss["id"] == target_ss_id:
+                                    for t in ss.get("topics", []):
+                                        if t.get("done"):
+                                            topic_names_done.append(t["name"])
+                                        else:
+                                            topic_names_incomplete.append(t["name"])
+                                    break
+                            break
+                    all_topics = [
+                        f"{n} [NOT YET DONE]" for n in topic_names_incomplete
+                    ] + [f"{n} [DONE]" for n in topic_names_done]
+                    if all_topics:
+                        context_instruction = (
+                            f"The sub-subject '{target_ss_name}' has these topics "
+                            f"(prioritize NOT YET DONE ones): {', '.join(all_topics)}. "
+                            f"Generate flashcards covering these topics proportionally, "
+                            f"focusing more on the not-yet-done ones."
+                        )
+                    else:
+                        context_instruction = (
+                            f"Generate flashcards broadly covering '{target_ss_name}'."
+                        )
+                else:
+                    # Subject matched — inject sub-subjects (incomplete first, then done)
+                    ss_incomplete = []
+                    ss_done = []
+                    for s in subjects_raw:
+                        if s["id"] == target_subject_id:
+                            for ss in s.get("subsections", []):
+                                topics = ss.get("topics", [])
+                                all_done = bool(topics) and all(
+                                    t.get("done") for t in topics
+                                )
+                                if all_done:
+                                    ss_done.append(ss["name"])
+                                else:
+                                    ss_incomplete.append(ss["name"])
+                            break
+                    all_ss = [f"{n} [NOT YET DONE]" for n in ss_incomplete] + [
+                        f"{n} [DONE]" for n in ss_done
+                    ]
+                    if all_ss:
+                        context_instruction = (
+                            f"The subject '{target_subject}' has these sub-subjects "
+                            f"(prioritize NOT YET DONE ones): {', '.join(all_ss)}. "
+                            f"Generate flashcards sampling across these sub-subjects, "
+                            f"focusing more on the not-yet-done ones."
+                        )
+                    else:
+                        context_instruction = (
+                            f"Generate flashcards broadly covering '{target_subject}'."
+                        )
+            else:
+                context_instruction = (
+                    f"The user has specified their own content focus in their message. "
+                    f"Respect their specification and generate flashcards accordingly "
+                    f"within '{target_ss_name or target_subject}'."
+                )
+
+            fc_lang = (
+                "Filipino/Tagalog"
+                if any(w in msg_lower2 for w in ["po", "ko", "mga", "ng", "sa", "ang"])
+                else "English"
+            )
+            fc_system = f"""You are Tsuki, a board exam flashcard generator for BoardPrep PH — a Filipino board exam review app.
+
+The user wants exactly {num_cards} flashcard Q&A pairs for: "{target_ss_name or target_subject}".
+
+{context_instruction}
 
 Rules:
-- Questions must test actual subject knowledge
+- Questions must test actual subject knowledge relevant to Filipino board exams
 - Answers must be direct and factual (1-2 sentences max)
-- Language: respond in {"Filipino/Tagalog" if any(w in msg_lower2 for w in ["po", "ko", "mga", "ng", "sa", "ang"]) else "English"}
+- Language: {fc_lang}
 - For math expressions use LaTeX with $ delimiters (e.g. $x^n$, $\\frac{{dy}}{{dx}}$, $\\sin(x)$)
 
-Respond ONLY with raw JSON starting with {{ and ending with }}. No markdown, no backticks:
+You MUST output ONLY raw JSON starting with {{ and ending with }}. No markdown, no backticks, no explanation.
+Required format:
 {{"flashcards":[{{"question":"...","answer":"..."}}],"subject":"{target_subject}","subsection":{f'"{target_ss_name}"' if target_ss_name else "null"},"message":"friendly short message to {user.get("display_name", "reviewer")}"}}"""
 
+            # Include recent chat history so corrections and context carry over
+            fc_history = history[-6:] if len(history) >= 6 else history
+            # Ensure history starts with a user turn (Gemini requirement)
+            if fc_history and fc_history[0]["role"] != "user":
+                fc_history = fc_history[1:]
+            fc_contents = []
+            for h in fc_history:
+                fc_contents.append({
+                    "role": "user" if h["role"] == "user" else "model",
+                    "parts": [{"text": h["content"]}],
+                })
+            fc_contents.append({"role": "user", "parts": [{"text": user_message}]})
+
+            token = _get_vertex_token()
             resp = http_requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}",
-                headers={"Content-Type": "application/json"},
+                _vertex_url(),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}",
+                },
                 json={
-                    "contents": [{"role": "user", "parts": [{"text": fc_prompt}]}],
-                    "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.4},
+                    "system_instruction": {"parts": [{"text": fc_system}]},
+                    "contents": fc_contents,
+                    "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.4},
                 },
                 timeout=30,
             )
         else:
             # Normal chat call
+            token = _get_vertex_token()
             resp = http_requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}",
-                headers={"Content-Type": "application/json"},
+                _vertex_url(),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}",
+                },
                 json={
                     "system_instruction": {"parts": [{"text": system_prompt}]},
                     "contents": contents,
@@ -2587,7 +2795,25 @@ Respond ONLY with raw JSON starting with {{ and ending with }}. No markdown, no 
             clean = clean.replace("`", "").strip()
             json_match = _re.search(r"\{.*\}", clean, _re.DOTALL)
             if json_match:
-                parsed = _json.loads(json_match.group(0))
+                # Fix ALL invalid JSON backslash sequences before parsing.
+                # Covers: LaTeX letter commands (\frac \sin \Omega),
+                # LaTeX special chars (\{ \} \, \; \! \|), and anything else invalid.
+                def _fix_latex_json(s):
+                    def _repl(m):
+                        if m.group(1) is not None:
+                            return m.group(0)  # valid \uXXXX unicode escape — keep
+                        seq = m.group(2)
+                        # Valid single-char JSON escapes: " \ / b f n r t u
+                        if len(seq) == 1 and seq in '"\\\/bfnrtu':
+                            return m.group(0)
+                        return "\\\\" + seq  # double-escape everything else
+
+                    # Alt 1: valid \uXXXX  |  Alt 2: letter command or any other char
+                    return _re.sub(
+                        r'\\(u[0-9a-fA-F]{4})|\\([a-zA-Z]+|[^"\\\s])', _repl, s
+                    )
+
+                parsed = _json.loads(_fix_latex_json(json_match.group(0)))
                 if "flashcards" in parsed and isinstance(parsed["flashcards"], list):
                     cards = [
                         c
@@ -2712,7 +2938,7 @@ def daily_motivation(user_id):
     subjects = (body.get("subjects") or "")[:200]
     pct = int(body.get("pct") or 0)
 
-    if not GEMINI_API_KEY:
+    if not VERTEX_AI_PROJECT or not os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"):
         return jsonify({"error": "AI not configured"}), 503
 
     prompt = (
@@ -2723,9 +2949,13 @@ def daily_motivation(user_id):
     )
 
     try:
+        token = _get_vertex_token()
         resp = http_requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}",
-            headers={"Content-Type": "application/json"},
+            _vertex_url(),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+            },
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {"maxOutputTokens": 150, "temperature": 0.9},

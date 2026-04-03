@@ -3,3 +3,5 @@ gunicorn
 requests
 psycopg2-binary
 pypdf
+python-dotenv
+google-auth

@@ -2121,7 +2121,7 @@ def request_delete_otp():
 # ── Vertex AI config (uses Google Cloud $300 credit instead of AI Studio) ──
 VERTEX_AI_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 VERTEX_AI_LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
-VERTEX_AI_MODEL = "gemini-2.5-flash-lite"
+VERTEX_AI_MODEL = "gemini-2.0-flash-001"
 
 _vertex_token_cache = {"token": None, "expiry": 0}
 

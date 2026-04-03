@@ -2437,7 +2437,7 @@ async function sendChatMessage() {
   // Detect flashcard intent early for progressive UI
   const msgLower = message.toLowerCase();
   const flashcardIntent = ['flashcard','flash card','make me','create','generate',
-    'gumawa','tanong','questions for'].some(kw => msgLower.includes(kw));
+    'gumawa','tanong','questions for','in english','in tagalog','ulit','redo'].some(kw => msgLower.includes(kw));
 
   // Clear welcome message on first send
   const container = document.getElementById('chatMessages');
@@ -2548,9 +2548,13 @@ function tryRenderFlashcardReply(text) {
     // Strip markdown fences
     let clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
-    // Fix LaTeX backslashes — replace \letter with \\letter so JSON.parse accepts it
-    // e.g. \sin → \\sin, \frac → \\frac, \cos → \\cos
-    clean = clean.replace(/\\([a-zA-Z{}\[\]^_|])/g, '\\\\$1');
+    // Fix ALL invalid JSON backslash sequences (LaTeX commands, special chars, etc.)
+    // Mirrors the backend _fix_latex_json logic for consistency.
+    clean = clean.replace(/\\(u[0-9a-fA-F]{4})|\\([a-zA-Z]+|[^"\\\s])/g, function(m, uni, seq) {
+      if (uni !== undefined) return m;  // valid \uXXXX — keep
+      if (seq.length === 1 && '"\\\/bfnrtu'.indexOf(seq) >= 0) return m;  // valid escape
+      return '\\\\' + seq;  // double-escape everything else
+    });
 
     // Find the outermost JSON object
     const start = clean.indexOf('{');

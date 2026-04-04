@@ -2238,7 +2238,7 @@ def generate_flashcards_from_pdf(user_id):
                 _vertex_url(),
                 headers={"Content-Type": "application/json"},
                 json={
-                    "contents": [{"parts": [{"text": prompt}]}],
+                    "contents": [{"role": "user", "parts": [{"text": prompt}]}],
                     "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.4},
                 },
                 timeout=45,
@@ -2901,7 +2901,7 @@ def daily_motivation(user_id):
             _vertex_url(),
             headers={"Content-Type": "application/json"},
             json={
-                "contents": [{"parts": [{"text": prompt}]}],
+                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
                 "generationConfig": {"maxOutputTokens": 150, "temperature": 0.9},
             },
             timeout=15,

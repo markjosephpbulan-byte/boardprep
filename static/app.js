@@ -2453,7 +2453,7 @@ async function sendChatMessage() {
   sendBtn.disabled    = true;
   input.disabled      = true;
   if (typing) typing.style.display = 'block';
-  scrollChatToBottom();
+  requestAnimationFrame(() => scrollChatToBottom());
 
   // Show loading modal immediately if flashcard intent detected
   if (flashcardIntent) showFlashcardLoadingModal();

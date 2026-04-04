@@ -2716,7 +2716,7 @@ Required format:
                 json={
                     "system_instruction": {"parts": [{"text": system_prompt}]},
                     "contents": contents,
-                    "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.7},
+                    "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.4},
                 },
                 timeout=30,
             )

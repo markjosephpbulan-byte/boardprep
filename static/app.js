@@ -2430,7 +2430,6 @@ async function loadChatHistory() {
 async function sendChatMessage() {
   const input   = document.getElementById('chatInput');
   const sendBtn = document.getElementById('chatSendBtn');
-  const typing  = document.getElementById('chatTyping');
   const message = (input ? input.value || '' : '').trim();
   if (!message || !sendBtn || sendBtn.disabled) return;
 
@@ -2452,8 +2451,7 @@ async function sendChatMessage() {
   // Disable input, show typing
   sendBtn.disabled    = true;
   input.disabled      = true;
-  if (typing) typing.style.display = 'block';
-  requestAnimationFrame(() => scrollChatToBottom());
+  showTypingBubble();
 
   // Show loading modal immediately if flashcard intent detected
   if (flashcardIntent) showFlashcardLoadingModal();
@@ -2467,7 +2465,7 @@ async function sendChatMessage() {
     });
 
     const data = await r.json();
-    if (typing) typing.style.display = 'none';
+    removeTypingBubble();
 
     if (!r.ok) {
       if (data.error === 'pro_required') {
@@ -2491,7 +2489,7 @@ async function sendChatMessage() {
       appendChatBubble('ai', data.reply, null, true);
     }
   } catch(e) {
-    if (typing) typing.style.display = 'none';
+    removeTypingBubble();
     appendChatBubble('ai', '⚠️ Connection error. Please check your internet and try again.', null, true);
   } finally {
     sendBtn.disabled = false;
@@ -2499,6 +2497,25 @@ async function sendChatMessage() {
     input.focus();
     scrollChatToBottom();
   }
+}
+
+function showTypingBubble() {
+  const container = document.getElementById('chatMessages');
+  if (!container || document.getElementById('tsukiTypingBubble')) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-bubble-wrap ai';
+  wrap.id = 'tsukiTypingBubble';
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble ai';
+  bubble.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div><div style="font-size:0.78rem;color:var(--text3);margin-top:4px;">Tsuki is thinking...</div>';
+  wrap.appendChild(bubble);
+  container.appendChild(wrap);
+  requestAnimationFrame(() => scrollChatToBottom());
+}
+
+function removeTypingBubble() {
+  const b = document.getElementById('tsukiTypingBubble');
+  if (b) b.remove();
 }
 
 function appendChatBubble(role, content, timestamp, animate) {

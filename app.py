@@ -2685,25 +2685,11 @@ You MUST output ONLY raw JSON starting with {{ and ending with }}. No markdown, 
 Required format:
 {{"flashcards":[{{"question":"...","answer":"..."}}],"subject":"{target_subject}","subsection":{f'"{target_ss_name}"' if target_ss_name else "null"},"message":"friendly short message to {user.get("display_name", "reviewer")}"}}"""
 
-            # Include recent chat history so corrections and context carry over
-            fc_history = history[-6:] if len(history) >= 6 else history
-            # Ensure history starts with a user turn (Gemini requirement)
-            if fc_history and fc_history[0]["role"] != "user":
-                fc_history = fc_history[1:]
-            fc_contents = []
-            for h in fc_history:
-                fc_contents.append({
-                    "role": "user" if h["role"] == "user" else "model",
-                    "parts": [{"text": h["content"]}],
-                })
-            fc_contents.append({"role": "user", "parts": [{"text": user_message}]})
-
             resp = http_requests.post(
                 _vertex_url(),
                 headers={"Content-Type": "application/json"},
                 json={
-                    "system_instruction": {"parts": [{"text": fc_system}]},
-                    "contents": fc_contents,
+                    "contents": [{"role": "user", "parts": [{"text": fc_system}]}],
                     "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.4},
                 },
                 timeout=30,

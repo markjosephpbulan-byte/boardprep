@@ -2505,23 +2505,12 @@ FLASHCARD GENERATION:
 
             def match_score(candidate_name, msg):
                 """Score how well candidate_name matches the message. Higher = better."""
-                import re as _re_ms
-
                 words = [w for w in candidate_name.lower().split() if len(w) >= 2]
                 if not words:
                     return 0
-                # Use word boundaries to avoid 'electronic' matching inside 'electronics'
-                score = sum(
-                    1 for w in words if _re_ms.search(r"" + _re_ms.escape(w) + r"", msg)
-                )
+                score = sum(1 for w in words if w in msg)
                 msg_words = [w for w in msg.split() if len(w) >= 2]
-                score += sum(
-                    0.5
-                    for w in msg_words
-                    if _re_ms.search(
-                        r"" + _re_ms.escape(w) + r"", candidate_name.lower()
-                    )
-                )
+                score += sum(0.5 for w in msg_words if w in candidate_name.lower())
                 return score
 
             # Build negation set — penalize subjects/subsections matching "not X" / "hindi X"
@@ -2559,40 +2548,51 @@ FLASHCARD GENERATION:
                 target_ss_name = None
                 target_ss_id = None
 
-                # No subject/subsection recognized — ask for clarification instead of guessing
+                # No subject/subsection recognized — ask for clarification (once only)
                 if best_s_score == 0:
-                    options_lines = []
-                    for s in subjects_raw:
-                        ss_names = [ss["name"] for ss in s.get("subsections", [])]
-                        if ss_names:
-                            options_lines.append(
-                                f"• {s['name']} — {', '.join(ss_names)}"
+                    # If user already got a clarification, do not loop — fall back to first subject
+                    _already_clarified = history and any(
+                        "Which subject or sub-subject should I focus on?"
+                        in (h.get("content") or "")
+                        for h in history
+                        if h["role"] == "assistant"
+                    )
+                    if not _already_clarified:
+                        options_lines = []
+                        for s in subjects_raw:
+                            ss_names = [ss["name"] for ss in s.get("subsections", [])]
+                            if ss_names:
+                                options_lines.append(
+                                    f"• {s['name']} — {', '.join(ss_names)}"
+                                )
+                            else:
+                                options_lines.append(f"• {s['name']}")
+                        if options_lines:
+                            options_text = "\n".join(options_lines)
+                            example_hint = (
+                                subjects_raw[0]["name"]
+                                if subjects_raw
+                                else "Mathematics"
                             )
                         else:
-                            options_lines.append(f"• {s['name']}")
-                    if options_lines:
-                        options_text = "\n".join(options_lines)
-                        example_hint = (
-                            subjects_raw[0]["name"] if subjects_raw else "Mathematics"
+                            options_text = "• (no subjects added yet — add some in your tracker first!)"
+                            example_hint = "Mathematics"
+                        clarification_reply = (
+                            "Sure, I'd love to make flashcards for you! "
+                            "Which subject or sub-subject should I focus on? Here's what you're studying:\n\n"
+                            f"{options_text}\n\n"
+                            f'Just tell me which one (e.g. "flashcards for {example_hint}") and I\'ll get right on it! \U0001f60a'
                         )
-                    else:
-                        options_text = "• (no subjects added yet — add some in your tracker first!)"
-                        example_hint = "Mathematics"
-                    clarification_reply = (
-                        "Sure, I'd love to make flashcards for you! "
-                        "Which subject or sub-subject should I focus on? Here's what you're studying:\n\n"
-                        f"{options_text}\n\n"
-                        f'Just tell me which one (e.g. "flashcards for {example_hint}") and I\'ll get right on it! \U0001f60a'
-                    )
-                    db_execute(
-                        "INSERT INTO chat_messages (user_id, role, content) VALUES (%s, 'user', %s)",
-                        (user_id, user_message),
-                    )
-                    db_execute(
-                        "INSERT INTO chat_messages (user_id, role, content) VALUES (%s, 'assistant', %s)",
-                        (user_id, clarification_reply),
-                    )
-                    return jsonify({"reply": clarification_reply})
+                        db_execute(
+                            "INSERT INTO chat_messages (user_id, role, content) VALUES (%s, 'user', %s)",
+                            (user_id, user_message),
+                        )
+                        db_execute(
+                            "INSERT INTO chat_messages (user_id, role, content) VALUES (%s, 'assistant', %s)",
+                            (user_id, clarification_reply),
+                        )
+                        return jsonify({"reply": clarification_reply})
+                    # else: fall through — generate with subjects_raw[0] as fallback
 
             # ── Detect explicit mode — user specified their own content focus ──────
             matched_name_words = set(

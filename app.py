@@ -2505,13 +2505,23 @@ FLASHCARD GENERATION:
 
             def match_score(candidate_name, msg):
                 """Score how well candidate_name matches the message. Higher = better."""
+                import re as _re_ms
+
                 words = [w for w in candidate_name.lower().split() if len(w) >= 2]
                 if not words:
                     return 0
-                score = sum(1 for w in words if w in msg)
-                # Bonus: if any word from message is contained in candidate name
+                # Use word boundaries to avoid 'electronic' matching inside 'electronics'
+                score = sum(
+                    1 for w in words if _re_ms.search(r"" + _re_ms.escape(w) + r"", msg)
+                )
                 msg_words = [w for w in msg.split() if len(w) >= 2]
-                score += sum(0.5 for w in msg_words if w in candidate_name.lower())
+                score += sum(
+                    0.5
+                    for w in msg_words
+                    if _re_ms.search(
+                        r"" + _re_ms.escape(w) + r"", candidate_name.lower()
+                    )
+                )
                 return score
 
             # Build negation set — penalize subjects/subsections matching "not X" / "hindi X"
@@ -2664,22 +2674,80 @@ FLASHCARD GENERATION:
                     f"within '{target_ss_name or target_subject}'."
                 )
 
-            fc_lang = (
-                "Filipino/Tagalog"
-                if any(w in msg_lower2 for w in ["po", "ko", "mga", "ng", "sa", "ang"])
-                else "English"
+            # Language: only Filipino for Filipino-language subjects, always English otherwise
+            _filipino_subject_kws = [
+                "filipino",
+                "pilipino",
+                "tagalog",
+                "panitikan",
+                "komunikasyon",
+                "wika",
+                "araling",
+                "edukasyon",
+            ]
+            _subject_is_filipino = any(
+                kw in (target_ss_name or target_subject or "").lower()
+                for kw in _filipino_subject_kws
             )
-            fc_system = f"""You are Tsuki, a board exam flashcard generator for BoardPrep PH — a Filipino board exam review app.
+            fc_lang = "Filipino/Tagalog" if _subject_is_filipino else "English"
 
-The user wants exactly {num_cards} flashcard Q&A pairs for: "{target_ss_name or target_subject}".
+            # Difficulty detection from user message
+            _hard_kws = [
+                "hard",
+                "difficult",
+                "advanced",
+                "challenging",
+                "complex",
+                "tough",
+                "harder",
+                "harder",
+            ]
+            _easy_kws = ["easy", "basic", "simple", "beginner", "introductory"]
+            _med_kws = ["medium", "intermediate", "moderate"]
+            if any(kw in msg_lower2 for kw in _hard_kws):
+                difficulty_instruction = "Difficulty: HARD — use complex, multi-step, application-based, and analysis questions. Avoid simple recall. Require deeper understanding."
+            elif any(kw in msg_lower2 for kw in _easy_kws):
+                difficulty_instruction = "Difficulty: EASY — use straightforward recall and definition questions."
+            elif any(kw in msg_lower2 for kw in _med_kws):
+                difficulty_instruction = (
+                    "Difficulty: MEDIUM — mix recall and application questions."
+                )
+            else:
+                difficulty_instruction = (
+                    "Difficulty: MEDIUM — mix recall and application questions."
+                )
+
+            # Formula/equation emphasis detection
+            _formula_kws = [
+                "formula",
+                "formulas",
+                "equation",
+                "equations",
+                "derivation",
+                "derive",
+                "compute",
+                "calculate",
+                "solve",
+            ]
+            if any(kw in msg_lower2 for kw in _formula_kws):
+                formula_instruction = "- IMPORTANT: Include questions involving specific formulas and equations. Show the formula in LaTeX in the answer."
+            else:
+                formula_instruction = ""
+
+            fc_system = f"""You are Tsuki, an expert board exam flashcard generator for BoardPrep PH — a Filipino professional licensure exam review app.
+
+Generate exactly {num_cards} high-quality flashcard Q&A pairs for: "{target_ss_name or target_subject}".
 
 {context_instruction}
 
 Rules:
-- Questions must test actual subject knowledge relevant to Filipino board exams
-- Answers must be direct and factual (1-2 sentences max)
-- Language: {fc_lang}
-- For math expressions use LaTeX with $ delimiters (e.g. $x^n$, $\\frac{{dy}}{{dx}}$, $\\sin(x)$)
+- LANGUAGE: ALWAYS write in {fc_lang}. Do NOT switch languages. For English: write everything in English only.
+- Questions must test real board exam knowledge — definitions, laws, theorems, formulas, problem-solving
+- Answers must be direct and factual (1-3 sentences; include the formula or value if applicable)
+- {difficulty_instruction}
+{formula_instruction}
+- For ALL math/physics formulas use LaTeX with $ delimiters: $x^n$, $\\frac{{dy}}{{dx}}$, $\\sin(\\theta)$, $V = IR$, $P = \\frac{{W}}{{t}}$
+- Cover diverse topics — do not repeat the same concept
 
 You MUST output ONLY raw JSON starting with {{ and ending with }}. No markdown, no backticks, no explanation.
 Required format:

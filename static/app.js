@@ -699,6 +699,7 @@ function updateProUI() {
           After trial:
           <button onclick="openUpgradeModal('basic_1yr')" style="background:transparent;color:var(--gold);border:1px solid var(--gold);border-radius:6px;padding:2px 10px;font-weight:700;font-size:0.82rem;cursor:pointer;margin-left:6px">📦 Basic ₱70/yr</button>
           <button onclick="openUpgradeModal('pro_4mo')" style="background:var(--gold);color:#0d1117;border:none;border-radius:6px;padding:2px 10px;font-weight:700;font-size:0.82rem;cursor:pointer;margin-left:4px">⭐ Pro ₱100/4mo</button>
+          <a href="https://www.facebook.com/boardpreph/" target="_blank" style="color:var(--gold);font-weight:700;font-size:0.82rem;margin-left:8px;text-decoration:none">or contact us →</a>
         `;
         trialBanner.style.display = 'flex';
       } else {

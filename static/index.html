@@ -163,9 +163,9 @@
           <li><span class="pf-check bonus">★</span> 1 month Pro bonus on signup</li>
           <li><span class="pf-check no">—</span> PDF → AI Flashcards</li>
         </ul>
-        <a href="https://www.facebook.com/boardpreph/" target="_blank" class="btn-ghost btn-full" style="text-decoration:none;text-align:center;display:block">
-          💬 Contact to Subscribe
-        </a>
+        <button class="btn-ghost btn-full" onclick="openUpgradeModal('basic_1yr')" style="cursor:pointer">
+          📦 Get Basic Plan
+        </button>
       </div>
 
       <!-- Pro -->
@@ -186,9 +186,9 @@
           <li><span class="pf-check yes">✓</span> Ask questions, get flashcards via chat</li>
           <li><span class="pf-check yes">✓</span> Priority support</li>
         </ul>
-        <a href="https://www.facebook.com/boardpreph/" target="_blank" class="btn-primary btn-full" style="text-decoration:none;text-align:center;display:block">
-          💬 Contact to Subscribe
-        </a>
+        <button class="btn-primary btn-full" onclick="openUpgradeModal('pro_4mo')" style="cursor:pointer">
+          ⭐ Get Pro Plan
+        </button>
       </div>
 
     </div>
@@ -418,12 +418,19 @@
         <span style="font-size:0.82rem;color:var(--text3)">Basic plan: ₱70/year &nbsp;·&nbsp; Pro plan: ₱100 / 4 months</span>
       </p>
       <div class="paused-contact-box">
-        <div class="paused-contact-label">To reactivate your account, contact us:</div>
-        <a href="https://www.facebook.com/boardpreph/" target="_blank" class="btn-paused-contact">
-          💬 Message us on Facebook
-        </a>
-        <div style="font-size:0.75rem;color:var(--text3);margin-top:6px">
-          facebook.com/boardpreph
+        <div class="paused-contact-label">Choose a plan to reactivate:</div>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px">
+          <button onclick="openUpgradeModal('basic_1yr')" class="btn-paused-plan btn-paused-basic">
+            📦 Basic — ₱70/year
+          </button>
+          <button onclick="openUpgradeModal('pro_4mo')" class="btn-paused-plan btn-paused-pro">
+            ⭐ Pro — ₱100 / 4 months
+          </button>
+        </div>
+        <div style="margin-top:14px;font-size:0.78rem;color:var(--text3)">
+          Have questions?
+          <a href="https://www.facebook.com/boardpreph/" target="_blank"
+             style="color:var(--text2);text-decoration:none;font-weight:500">Message us on Facebook →</a>
         </div>
       </div>
       <div style="margin-top:1.5rem">
@@ -589,12 +596,12 @@
   <!-- Trial banner -->
   <div class="trial-banner" id="trialBanner" style="display:none">
     🎉 You're on <strong>Pro Trial</strong> — enjoy all Pro features for 7 days! After trial: Basic ₱70/year or Pro ₱100 / 4 months.
-    <a href="https://www.facebook.com/boardpreph/" target="_blank" style="color:var(--gold);font-weight:700;margin-left:4px;text-decoration:none">Contact us →</a>
+    <button onclick="openUpgradeModal()" style="background:var(--gold);color:#0d1117;border:none;border-radius:6px;padding:3px 12px;font-weight:700;font-size:0.82rem;cursor:pointer;margin-left:8px">Upgrade Now →</button>
   </div>
   <!-- Basic plan banner -->
   <div class="basic-banner" id="basicBanner" style="display:none">
-    📦 You're on the <strong>Basic plan</strong> (₱70/year). Upgrade to <strong>Pro</strong> (₱100 / 4 months) to unlock AI PDF flashcard generation.
-    <a href="https://www.facebook.com/boardpreph/" target="_blank" style="margin-left:4px">Upgrade →</a>
+    📦 You're on the <strong>Basic plan</strong> (₱70/year). Upgrade to <strong>Pro</strong> (₱100 / 4 months) to unlock AI PDF flashcard generation &amp; Tsuki AI.
+    <button onclick="openUpgradeModal('pro_4mo')" style="background:var(--gold);color:#0d1117;border:none;border-radius:6px;padding:3px 12px;font-weight:700;font-size:0.82rem;cursor:pointer;margin-left:8px">Upgrade to Pro →</button>
   </div>
 
   <!-- Progress overview -->
@@ -930,10 +937,10 @@
               <div style="font-size:0.75rem;color:var(--text2);line-height:1.5;text-align:center">
                 Generate flashcards from PDF using AI.<br/>Upgrade to Pro to unlock this.
               </div>
-              <a href="https://www.facebook.com/boardpreph/" target="_blank"
-                 style="display:block;text-align:center;margin-top:4px;font-size:0.78rem;color:var(--gold);font-weight:700;text-decoration:none">
-                Contact us to Upgrade →
-              </a>
+              <button onclick="openUpgradeModal('pro_4mo')"
+                 style="display:block;width:100%;text-align:center;margin-top:6px;font-size:0.78rem;color:#0d1117;font-weight:700;background:var(--gold);border:none;border-radius:6px;padding:6px 12px;cursor:pointer">
+                Upgrade to Pro →
+              </button>
             </div>
           </div>
         </div>
@@ -970,10 +977,10 @@
     <div style="font-size:0.85rem;color:var(--text2);line-height:1.6;text-align:center;max-width:260px">
       The AI Study Assistant is available for Pro users only.<br/>Upgrade to get personalized study help!
     </div>
-    <a href="https://www.facebook.com/boardpreph/" target="_blank"
-       style="display:inline-block;margin-top:8px;padding:8px 20px;background:var(--gold);color:#0d1117;border-radius:8px;font-weight:700;font-size:0.85rem;text-decoration:none">
-      Contact us to Upgrade →
-    </a>
+    <button onclick="openUpgradeModal('pro_4mo')"
+       style="display:inline-block;margin-top:8px;padding:8px 20px;background:var(--gold);color:#0d1117;border-radius:8px;font-weight:700;font-size:0.85rem;border:none;cursor:pointer">
+      Upgrade to Pro →
+    </button>
   </div>
 
   <!-- Chat area (Pro users) -->
@@ -1218,6 +1225,81 @@ document.addEventListener('click', function(e) {
   applyTheme(saved);
 })();
 </script>
+
+<!-- ══ UPGRADE MODAL ═══════════════════════════════════════════════════════ -->
+<div id="upgradeModal" style="display:none;position:fixed;inset:0;z-index:9999;
+     background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);
+     align-items:center;justify-content:center;padding:1rem">
+  <div style="background:var(--surface,#1e2736);border:1px solid rgba(255,255,255,0.12);
+       border-radius:16px;padding:2rem;width:100%;max-width:480px;
+       box-shadow:0 24px 64px rgba(0,0,0,0.6);animation:fadeUp 0.25s ease">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+      <div>
+        <div style="font-size:1.25rem;font-weight:800;color:var(--text,#e8edf5);font-family:'Syne',sans-serif">
+          Upgrade BoardPrep PH
+        </div>
+        <div style="font-size:0.82rem;color:var(--text3,#5a6678);margin-top:2px">Pay securely via GCash, Maya, or card</div>
+      </div>
+      <button onclick="closeUpgradeModal()" style="background:transparent;border:none;color:var(--text3,#5a6678);
+              font-size:1.3rem;cursor:pointer;padding:4px 8px;border-radius:6px">✕</button>
+    </div>
+
+    <!-- Plan tabs -->
+    <div style="display:flex;gap:10px;margin-bottom:1.25rem">
+      <button id="planTabBasic" onclick="selectUpgradePlan('basic_1yr')"
+        style="flex:1;padding:12px 8px;border-radius:10px;border:2px solid transparent;
+               cursor:pointer;transition:all 0.2s;text-align:center;font-family:'Syne',sans-serif;font-weight:700;font-size:0.85rem">
+        <div>📦 Basic</div>
+        <div style="font-size:1.1rem;font-weight:800;margin:4px 0">₱70</div>
+        <div style="font-size:0.75rem;font-weight:400">per year</div>
+      </button>
+      <button id="planTabPro" onclick="selectUpgradePlan('pro_4mo')"
+        style="flex:1;padding:12px 8px;border-radius:10px;border:2px solid transparent;
+               cursor:pointer;transition:all 0.2s;text-align:center;font-family:'Syne',sans-serif;font-weight:700;font-size:0.85rem">
+        <div>⭐ Pro</div>
+        <div style="font-size:1.1rem;font-weight:800;margin:4px 0">₱100</div>
+        <div style="font-size:0.75rem;font-weight:400">per 4 months</div>
+      </button>
+    </div>
+
+    <!-- Feature list -->
+    <div id="upgradeFeatureList" style="background:rgba(0,0,0,0.2);border-radius:10px;
+         padding:12px 14px;margin-bottom:1.25rem;font-size:0.82rem;
+         color:var(--text2,#8b97a8);line-height:1.9"></div>
+
+    <!-- Pay button -->
+    <button id="upgradePayBtn" onclick="startPayment()"
+      style="width:100%;padding:13px;border:none;border-radius:10px;
+             background:linear-gradient(135deg,#f5c842,#e8b830);color:#0d1117;
+             font-weight:800;font-size:0.95rem;cursor:pointer;
+             font-family:'Syne',sans-serif;transition:opacity 0.2s">
+      Pay with GCash / Maya / Card
+    </button>
+    <div style="text-align:center;margin-top:10px;font-size:0.75rem;color:var(--text3,#5a6678)">
+      Secured by PayMongo &nbsp;·&nbsp; No subscription traps — pay per period
+    </div>
+  </div>
+</div>
+
+<!-- Paused plan button styles -->
+<style>
+.btn-paused-plan {
+  padding: 10px 18px; border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 10px; cursor: pointer; font-weight: 700;
+  font-size: 0.88rem; transition: all 0.2s; font-family: 'Syne', sans-serif;
+}
+.btn-paused-basic {
+  background: rgba(62,207,142,0.1); color: #3ecf8e;
+  border-color: rgba(62,207,142,0.3);
+}
+.btn-paused-basic:hover { background: rgba(62,207,142,0.2); border-color: #3ecf8e; }
+.btn-paused-pro {
+  background: rgba(245,200,66,0.1); color: #f5c842;
+  border-color: rgba(245,200,66,0.3);
+}
+.btn-paused-pro:hover { background: rgba(245,200,66,0.2); border-color: #f5c842; }
+</style>
+
 <script src="/static/app.js?v=3" defer></script>
 <script>
   // Register service worker for PWA/offline support

@@ -631,6 +631,15 @@ async function enterTrackerWithData() {
   try { renderSubjectsGrid(); renderProgressOverview(); } catch(e) {}
   try { renderNotes(); }         catch(e) {}
   try { fetchMotivation(); }     catch(e) {}
+
+  // Show payment result toasts after redirect back from PayMongo
+  if (window._paymentSuccess) {
+    window._paymentSuccess = false;
+    setTimeout(() => showToast('🎉 Payment received! Your plan is now active. Welcome to BoardPrep PH!'), 600);
+  } else if (window._paymentCancelled) {
+    window._paymentCancelled = false;
+    setTimeout(() => showToast('Payment cancelled. You can upgrade anytime.'), 400);
+  }
 }
 
 function isPro() {
@@ -687,9 +696,9 @@ function updateProUI() {
         trialBanner.innerHTML = `
           🎉 You're on <strong>Pro Trial</strong> —
           <span style="color:var(--gold);font-weight:800">${daysLeft} ${dayWord} remaining</span>.
-          After trial: Basic ₱70/year or Pro ₱100 / 4 months.
-          <a href="https://www.facebook.com/boardpreph/" target="_blank"
-             style="color:var(--gold);font-weight:700;margin-left:4px;text-decoration:none">Contact us →</a>
+          After trial:
+          <button onclick="openUpgradeModal('basic_1yr')" style="background:transparent;color:var(--gold);border:1px solid var(--gold);border-radius:6px;padding:2px 10px;font-weight:700;font-size:0.82rem;cursor:pointer;margin-left:6px">📦 Basic ₱70/yr</button>
+          <button onclick="openUpgradeModal('pro_4mo')" style="background:var(--gold);color:#0d1117;border:none;border-radius:6px;padding:2px 10px;font-weight:700;font-size:0.82rem;cursor:pointer;margin-left:4px">⭐ Pro ₱100/4mo</button>
         `;
         trialBanner.style.display = 'flex';
       } else {
@@ -2482,7 +2491,7 @@ async function sendChatMessage() {
       // Raw JSON from AI — parse and show preview first
       if (!tryRenderFlashcardReply(data.reply)) {
         closeChatFlashcardModal(); // close loading if parse failed
-        appendChatBubble('ai', '⚠️ Could not render flashcards. Please try again.', null, true);
+        appendChatBubble('ai', 'I generated flashcards but had trouble displaying them. Please try again.', null, true);
       }
     } else {
       closeChatFlashcardModal(); // close loading modal if not flashcards
@@ -3731,5 +3740,111 @@ function toggleLandingFaq(btn) {
   if (!wasOpen) item.classList.add('open');
 }
 
+
+// ══════════════════════════════════════════════════════════════
+//  UPGRADE MODAL & PAYMONGO PAYMENT
+// ══════════════════════════════════════════════════════════════
+
+let _selectedUpgradePlan = 'pro_4mo';
+
+const _upgradeFeatures = {
+  basic_1yr: [
+    '✓ Progress tracker & subject hierarchy',
+    '✓ Manual flashcard system',
+    '✓ Pomodoro timer & Quick notes',
+    '✓ AI daily motivation',
+    '★ 1 month Pro bonus (all Pro features for 1 month!)',
+    '— No PDF → AI Flashcards after 1st month',
+    '— No Tsuki AI Chat after 1st month',
+    '⏰ Access for 1 year total',
+  ],
+  pro_4mo: [
+    '✓ Everything in Basic',
+    '✓ PDF → AI Flashcard generation (up to 50/PDF)',
+    '✓ 🌙 Tsuki AI Study Assistant',
+    '✓ Ask questions, get flashcards via chat',
+    '✓ Priority support',
+    '⏰ Access for 4 months',
+  ],
+};
+
+function openUpgradeModal(plan) {
+  const modal = document.getElementById('upgradeModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  selectUpgradePlan(plan || 'pro_4mo');
+}
+
+function closeUpgradeModal() {
+  const modal = document.getElementById('upgradeModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function selectUpgradePlan(plan) {
+  _selectedUpgradePlan = plan;
+  const tabBasic = document.getElementById('planTabBasic');
+  const tabPro   = document.getElementById('planTabPro');
+  const feats    = document.getElementById('upgradeFeatureList');
+
+  const activeStyle = 'background:rgba(245,200,66,0.12);border-color:#f5c842;color:#f5c842';
+  const inactiveStyle = 'background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.1);color:var(--text2,#8b97a8)';
+
+  if (tabBasic) tabBasic.style.cssText += plan === 'basic_1yr' ? ';' + activeStyle : ';' + inactiveStyle;
+  if (tabPro)   tabPro.style.cssText   += plan === 'pro_4mo'   ? ';' + activeStyle : ';' + inactiveStyle;
+
+  if (feats) {
+    feats.innerHTML = (_upgradeFeatures[plan] || [])
+      .map(f => `<div style="padding:2px 0">${f}</div>`)
+      .join('');
+  }
+}
+
+async function startPayment() {
+  if (!currentUser) { showView('login-standalone'); return; }
+  const btn = document.getElementById('upgradePayBtn');
+  if (btn) { btn.textContent = 'Redirecting to payment...'; btn.disabled = true; }
+
+  try {
+    const r = await fetch('/api/payment/create-checkout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: _selectedUpgradePlan }),
+    });
+    const data = await r.json();
+    if (!r.ok || !data.checkout_url) {
+      showToast(data.error || 'Payment error. Please try again.');
+      if (btn) { btn.textContent = 'Pay with GCash / Maya / Card'; btn.disabled = false; }
+      return;
+    }
+    window.location.href = data.checkout_url;
+  } catch (e) {
+    showToast('Connection error. Please try again.');
+    if (btn) { btn.textContent = 'Pay with GCash / Maya / Card'; btn.disabled = false; }
+  }
+}
+
+// Close modal when clicking backdrop
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('upgradeModal');
+  if (modal && e.target === modal) closeUpgradeModal();
+});
+
+// Handle PayMongo redirect back to app (?payment=success or ?payment=cancel)
+(function handlePaymentRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get('payment');
+  if (!status) return;
+
+  // Clean URL immediately
+  history.replaceState({}, '', '/');
+
+  if (status === 'success') {
+    // Show success message after boot loads the user
+    window._paymentSuccess = true;
+  } else if (status === 'cancel') {
+    window._paymentCancelled = true;
+  }
+})();
 
 boot();

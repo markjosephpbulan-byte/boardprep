@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-import json, os, uuid, base64, random, string
+import json, os, uuid, base64, random, string, hmac, hashlib
 import psycopg2
 import psycopg2.extras
 from datetime import datetime, timedelta
@@ -1789,6 +1789,81 @@ def admin_pause_user(user_id):
     return jsonify({"ok": True, "is_paused": new_state})
 
 
+def _apply_plan(user_id, plan):
+    """
+    Core plan-setting logic shared by admin_set_plan and the PayMongo webhook.
+    Returns (msg, True) on success or (error_msg, False) on invalid plan.
+    """
+    if plan == "pro_4mo":
+        db_execute(
+            """
+            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
+            plan='pro', plan_expires=NOW() + INTERVAL '4 months'
+            WHERE id=%s
+        """,
+            (user_id,),
+        )
+        return "Pro plan set for 4 months ✅", True
+
+    elif plan == "basic_1yr":
+        db_execute(
+            """
+            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
+            plan='basic_pro_bonus', plan_expires=NOW() + INTERVAL '1 month'
+            WHERE id=%s
+        """,
+            (user_id,),
+        )
+        return "Basic (1yr) + 1 month Pro bonus set ✅", True
+
+    elif plan == "basic":
+        db_execute(
+            """
+            UPDATE users SET is_pro=FALSE, is_paused=FALSE,
+            plan='basic', plan_expires=NOW() + INTERVAL '1 year'
+            WHERE id=%s
+        """,
+            (user_id,),
+        )
+        return "Basic plan set for 1 year ✅", True
+
+    elif plan == "revoke":
+        db_execute(
+            """
+            UPDATE users SET is_pro=FALSE, is_paused=FALSE,
+            plan='basic', plan_expires=NULL
+            WHERE id=%s
+        """,
+            (user_id,),
+        )
+        return "Reverted to Basic (no expiry) ✅", True
+
+    elif plan == "pro_bonus":
+        db_execute(
+            """
+            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
+            plan='pro_bonus', plan_expires=NOW() + INTERVAL '1 month'
+            WHERE id=%s
+        """,
+            (user_id,),
+        )
+        return "1 month Pro bonus granted ✅ (pauses after 1 month)", True
+
+    elif plan == "trial":
+        db_execute(
+            """
+            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
+            plan='trial', plan_expires=NOW() + INTERVAL '7 days'
+            WHERE id=%s
+        """,
+            (user_id,),
+        )
+        return "Trial reset for 7 days ✅", True
+
+    else:
+        return "Invalid plan", False
+
+
 @app.route("/api/admin/users/<user_id>/set-plan", methods=["POST"])
 @admin_required
 def admin_set_plan(user_id):
@@ -1807,77 +1882,9 @@ def admin_set_plan(user_id):
     body = request.json or {}
     plan = body.get("plan", "")
 
-    if plan == "pro_4mo":
-        db_execute(
-            """
-            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
-            plan='pro', plan_expires=NOW() + INTERVAL '4 months'
-            WHERE id=%s
-        """,
-            (user_id,),
-        )
-        msg = "Pro plan set for 4 months ✅"
-
-    elif plan == "basic_1yr":
-        # Basic for 1 year, but Pro bonus for first month
-        db_execute(
-            """
-            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
-            plan='basic_pro_bonus', plan_expires=NOW() + INTERVAL '1 month'
-            WHERE id=%s
-        """,
-            (user_id,),
-        )
-        # Schedule basic after 1 month is handled by auto-pause + re-set
-        msg = "Basic (1yr) + 1 month Pro bonus set ✅"
-
-    elif plan == "basic":
-        db_execute(
-            """
-            UPDATE users SET is_pro=FALSE, is_paused=FALSE,
-            plan='basic', plan_expires=NOW() + INTERVAL '1 year'
-            WHERE id=%s
-        """,
-            (user_id,),
-        )
-        msg = "Basic plan set for 1 year ✅"
-
-    elif plan == "revoke":
-        db_execute(
-            """
-            UPDATE users SET is_pro=FALSE, is_paused=FALSE,
-            plan='basic', plan_expires=NULL
-            WHERE id=%s
-        """,
-            (user_id,),
-        )
-        msg = "Reverted to Basic (no expiry) ✅"
-
-    elif plan == "pro_bonus":
-        # Give 1 month Pro bonus — pauses after 1 month (not a Basic plan)
-        db_execute(
-            """
-            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
-            plan='pro_bonus', plan_expires=NOW() + INTERVAL '1 month'
-            WHERE id=%s
-        """,
-            (user_id,),
-        )
-        msg = "1 month Pro bonus granted ✅ (pauses after 1 month)"
-
-    elif plan == "trial":
-        db_execute(
-            """
-            UPDATE users SET is_pro=TRUE, is_paused=FALSE,
-            plan='trial', plan_expires=NOW() + INTERVAL '7 days'
-            WHERE id=%s
-        """,
-            (user_id,),
-        )
-        msg = "Trial reset for 7 days ✅"
-
-    else:
-        return jsonify({"error": "Invalid plan"}), 400
+    msg, ok = _apply_plan(user_id, plan)
+    if not ok:
+        return jsonify({"error": msg}), 400
 
     invalidate_user_cache(user_id)
     user = get_user_by_id(user_id)
@@ -1903,6 +1910,222 @@ def admin_toggle_pro(user_id):
     db_execute("UPDATE users SET is_pro=%s WHERE id=%s", (new_state, user_id))
     invalidate_user_cache(user_id)
     return jsonify({"ok": True, "is_pro": new_state})
+
+
+# ── PayMongo Payment Routes ────────────────────────────────────────────────
+
+
+@app.route("/api/payment/create-checkout", methods=["POST"])
+def create_checkout():
+    """Create a PayMongo checkout session and return the URL."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+    user = get_user_by_id(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    if not PAYMONGO_SECRET_KEY:
+        return jsonify({"error": "Payment not configured"}), 503
+
+    body = request.json or {}
+    plan = body.get("plan", "")
+
+    if plan == "pro_4mo":
+        amount = 10000  # ₱100 in centavos
+        item_name = "BoardPrep PH — Pro Plan (4 months)"
+    elif plan == "basic_1yr":
+        amount = 7000  # ₱70 in centavos
+        item_name = "BoardPrep PH — Basic Plan (1 year + 1 month Pro bonus)"
+    else:
+        return jsonify({"error": "Invalid plan"}), 400
+
+    encoded_key = base64.b64encode(f"{PAYMONGO_SECRET_KEY}:".encode()).decode()
+
+    try:
+        resp = http_requests.post(
+            f"{PAYMONGO_API}/checkout_sessions",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Basic {encoded_key}",
+            },
+            json={
+                "data": {
+                    "attributes": {
+                        "line_items": [
+                            {
+                                "currency": "PHP",
+                                "amount": amount,
+                                "name": item_name,
+                                "quantity": 1,
+                            }
+                        ],
+                        "payment_method_types": ["gcash", "paymaya", "card", "dob"],
+                        "success_url": "https://boardprepph.com/?payment=success",
+                        "cancel_url": "https://boardprepph.com/?payment=cancel",
+                        "metadata": {
+                            "user_id": user_id,
+                            "plan": plan,
+                        },
+                        "description": item_name,
+                    }
+                }
+            },
+            timeout=15,
+        )
+        data = resp.json()
+        if not resp.ok:
+            err = data.get("errors", [{}])[0].get("detail", "PayMongo error")
+            return jsonify({"error": err}), 502
+        checkout_url = data["data"]["attributes"]["checkout_url"]
+        return jsonify({"checkout_url": checkout_url})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/payment/webhook", methods=["POST"])
+def payment_webhook():
+    """Receive PayMongo webhook events and auto-upgrade the user's plan."""
+    raw_body = request.get_data()
+    sig_header = request.headers.get("Paymongo-Signature", "")
+
+    # Verify webhook signature
+    if PAYMONGO_WEBHOOK_SECRET and sig_header:
+        try:
+            # PayMongo signature: t=timestamp,te=hash,li=hash
+            parts = dict(p.split("=", 1) for p in sig_header.split(",") if "=" in p)
+            timestamp = parts.get("t", "")
+            provided_sig = parts.get("te", "")
+            message = f"{timestamp}.{raw_body.decode('utf-8')}"
+            expected = hmac.new(
+                PAYMONGO_WEBHOOK_SECRET.encode(),
+                message.encode(),
+                hashlib.sha256,
+            ).hexdigest()
+            if not hmac.compare_digest(expected, provided_sig):
+                return jsonify({"error": "Invalid signature"}), 400
+        except Exception:
+            return jsonify({"error": "Signature verification failed"}), 400
+
+    try:
+        payload = request.get_json(force=True) or {}
+        event_type = payload.get("data", {}).get("attributes", {}).get("type", "")
+
+        if event_type != "checkout_session.payment.paid":
+            return jsonify({"received": True})
+
+        # Extract metadata from the checkout session
+        cs_data = payload["data"]["attributes"].get("data", {})
+        meta = cs_data.get("attributes", {}).get("metadata", {})
+        user_id = meta.get("user_id")
+        plan = meta.get("plan")
+        payment_id = payload["data"].get("id", "")
+        amount_paid = cs_data.get("attributes", {}).get("amount", 0)
+
+        if not user_id or not plan:
+            return jsonify({"error": "Missing metadata"}), 400
+
+        user = get_user_by_id(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        # Apply the plan (same logic as admin buttons)
+        msg, ok = _apply_plan(user_id, plan)
+        if not ok:
+            return jsonify({"error": msg}), 400
+
+        # Update last_paid_at on users table
+        db_execute(
+            "UPDATE users SET last_paid_at=NOW() WHERE id=%s",
+            (user_id,),
+        )
+
+        # Record in payments table
+        db_execute(
+            """
+            INSERT INTO payments (id, user_id, plan, amount, status, created_at)
+            VALUES (%s, %s, %s, %s, 'paid', NOW())
+            ON CONFLICT (id) DO NOTHING
+            """,
+            (payment_id or f"pm_{user_id}_{plan}", user_id, plan, amount_paid),
+        )
+
+        invalidate_user_cache(user_id)
+
+        # Send confirmation email
+        plan_label = (
+            "Pro Plan (4 months)"
+            if plan == "pro_4mo"
+            else "Basic Plan (1 year + 1 month Pro bonus)"
+        )
+        amount_display = f"₱{amount_paid // 100}" if amount_paid else "—"
+        email_html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;
+                    background:#0d1117;color:#e8edf5;border-radius:12px;">
+          <div style="text-align:center;margin-bottom:24px;">
+            <div style="font-size:2rem">&#128218;</div>
+            <h1 style="color:#f5c842;font-size:1.4rem;margin:8px 0">BoardPrep PH</h1>
+            <p style="color:#8b97a8;font-size:0.9rem">Payment Confirmed</p>
+          </div>
+          <p style="color:#e8edf5;font-size:1rem;margin-bottom:16px">
+            Hi <strong>{user.get("display_name", "")}</strong>,
+          </p>
+          <p style="color:#8b97a8;margin-bottom:24px">
+            Your payment has been received and your account has been upgraded successfully!
+          </p>
+          <div style="background:#1e2736;border:2px solid #f5c842;border-radius:12px;
+                      padding:20px;text-align:center;margin-bottom:24px;">
+            <div style="color:#f5c842;font-size:1.1rem;font-weight:700">{plan_label}</div>
+            <div style="color:#8b97a8;font-size:0.9rem;margin-top:4px">Amount paid: {amount_display}</div>
+          </div>
+          <p style="color:#8b97a8;font-size:0.85rem;text-align:center">
+            Log in now to continue studying. Good luck on your board exam! 🎓
+          </p>
+          <div style="text-align:center;margin-top:20px">
+            <a href="https://boardprepph.com" style="background:#f5c842;color:#0d1117;
+               padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem">
+              Go to BoardPrep PH →
+            </a>
+          </div>
+        </div>
+        """
+        _brevo_send(
+            user.get("email", ""), "Payment Confirmed — BoardPrep PH", email_html
+        )
+
+        return jsonify({"received": True})
+    except Exception as e:
+        print(f"[Webhook] Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/payments", methods=["GET"])
+@admin_required
+def admin_get_payments():
+    """Return last payment date per user (for admin panel display)."""
+    rows = (
+        db_execute(
+            """
+        SELECT user_id, MAX(created_at) as last_paid_at, MAX(amount) as last_amount,
+               MAX(plan) as last_plan
+        FROM payments
+        WHERE status = 'paid'
+        GROUP BY user_id
+        """,
+            fetch="all",
+        )
+        or []
+    )
+    result = {}
+    for r in rows:
+        result[r["user_id"]] = {
+            "last_paid_at": str(r["last_paid_at"]) if r.get("last_paid_at") else None,
+            "last_amount": r.get("last_amount"),
+            "last_plan": r.get("last_plan"),
+        }
+    return jsonify(result)
+
+
+# ── End PayMongo Routes ────────────────────────────────────────────────────
 
 
 @app.route("/api/admin/run-migrations", methods=["POST"])
@@ -2116,6 +2339,12 @@ def request_delete_otp():
 #  PDF → FLASHCARD GENERATION
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── PayMongo Payment Gateway ──
+PAYMONGO_SECRET_KEY = os.environ.get("PAYMONGO_SECRET_KEY", "")
+PAYMONGO_PUBLIC_KEY = os.environ.get("PAYMONGO_PUBLIC_KEY", "")
+PAYMONGO_WEBHOOK_SECRET = os.environ.get("PAYMONGO_WEBHOOK_SECRET", "")
+PAYMONGO_API = "https://api.paymongo.com/v1"
+
 # ── Vertex AI Express Mode (bills to GCP $300 credit) ──
 VERTEX_AI_EXPRESS_KEY = os.environ.get("VERTEX_AI_EXPRESS_KEY", "")
 VERTEX_AI_MODEL = "gemini-2.5-flash-lite"
@@ -2123,7 +2352,7 @@ VERTEX_AI_MODEL = "gemini-2.5-flash-lite"
 
 def _vertex_url():
     return (
-        f"https://aiplatform.googleapis.com/v1/publishers/google/models"
+        f"https://generativelanguage.googleapis.com/v1beta/models"
         f"/{VERTEX_AI_MODEL}:generateContent?key={VERTEX_AI_EXPRESS_KEY}"
     )
 
@@ -2881,7 +3110,8 @@ Required format:
                                 flashcard_data["subject_id"] = subjects_raw[0]["id"]
                                 flashcard_data["subject_name"] = subjects_raw[0]["name"]
                         save_reply = flashcard_data["message"]
-        except Exception:
+        except Exception as _fc_err:
+            print(f"[Flashcard parse error] {type(_fc_err).__name__}: {_fc_err}")
             flashcard_data = None
 
         # ── Save both messages to DB ──────────────────────────────────────────

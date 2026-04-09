@@ -416,6 +416,9 @@
                    background:var(--surface2);color:var(--text);font-size:0.9rem;margin-bottom:6px">
             <option value="">— Select your profession —</option>
             <option value="ece">ECE — Electronics Engineer</option>
+            <option value="ee">EE — Electrical Engineer</option>
+            <option value="ce">CE — Civil Engineer</option>
+            <option value="me">ME — Mechanical Engineer</option>
             <option value="others">Others (type below)</option>
           </select>
           <input type="text" id="professionOther" placeholder="e.g. Civil Engineer, Nurse, CPA..."
@@ -423,7 +426,7 @@
                         border:1px solid rgba(255,255,255,0.12);background:var(--surface2);
                         color:var(--text);font-size:0.9rem;box-sizing:border-box"/>
           <div id="professionTemplateNote" style="display:none;font-size:0.78rem;color:#3ecf8e;margin-top:4px">
-            ✓ ECE template will be auto-loaded — 4 subjects, 35 sub-subjects ready to go!
+            ✓ <span id="professionTemplateText"></span>
           </div>
         </div>
 
@@ -897,6 +900,9 @@
                    background:var(--surface2);color:var(--text);font-size:0.85rem;margin-bottom:6px">
             <option value="">— Select profession —</option>
             <option value="ece">ECE — Electronics Engineer</option>
+            <option value="ee">EE — Electrical Engineer</option>
+            <option value="ce">CE — Civil Engineer</option>
+            <option value="me">ME — Mechanical Engineer</option>
             <option value="others">Others (type below)</option>
           </select>
           <input type="text" id="profileProfessionOther" placeholder="e.g. Civil Engineer, Nurse, CPA..."

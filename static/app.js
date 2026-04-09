@@ -307,10 +307,25 @@ function onUserTypeChange() {
   if (profSection) profSection.style.display = selected === 'board_exam' ? 'block' : 'none';
 }
 
+const TEMPLATE_INFO = {
+  ece: '4 subjects, 34 sub-subjects',
+  ee:  '3 subjects, 40 sub-subjects',
+  ce:  '3 subjects, 34 sub-subjects',
+  me:  '3 subjects, 42 sub-subjects',
+};
+
 function onProfessionChange() {
   const val = document.getElementById('professionSelect').value;
   document.getElementById('professionOther').style.display = val === 'others' ? 'block' : 'none';
-  document.getElementById('professionTemplateNote').style.display = val === 'ece' ? 'block' : 'none';
+  const note = document.getElementById('professionTemplateNote');
+  const info = TEMPLATE_INFO[val];
+  if (info) {
+    document.getElementById('professionTemplateText').textContent =
+      val.toUpperCase() + ' template will be auto-loaded — ' + info + ' ready to go!';
+    note.style.display = 'block';
+  } else {
+    note.style.display = 'none';
+  }
 }
 
 async function doSetupProfile() {
@@ -369,7 +384,7 @@ function toggleStudyProfileEdit() {
     });
     onProfileTypeChange();
     const sel = document.getElementById('profileProfessionSelect');
-    const knownProfessions = ['ece'];
+    const knownProfessions = ['ece', 'ee', 'ce', 'me'];
     if (knownProfessions.includes(prof)) {
       sel.value = prof;
     } else if (prof) {

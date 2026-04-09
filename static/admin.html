@@ -1,1073 +1,1073 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>BoardPrep PH — Admin</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
-<style>
-  :root {
-    --bg: #0d1117; --bg2: #161b22; --bg3: #1c2330;
-    --surface: #1e2736; --surface2: #242f42;
-    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
-    --text: #e8edf5; --text2: #8b97a8; --text3: #5a6678;
-    --gold: #f5c842; --gold2: #e8b830;
-    --green: #3ecf8e; --red: #f56565;
-    --radius: 14px; --radius-sm: 8px;
-    --shadow: 0 8px 32px rgba(0,0,0,0.4);
-  }
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BoardPrep PH — Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d1117; --bg2: #161b22; --bg3: #1c2330;
+      --surface: #1e2736; --surface2: #242f42;
+      --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+      --text: #e8edf5; --text2: #8b97a8; --text3: #5a6678;
+      --gold: #f5c842; --gold2: #e8b830;
+      --green: #3ecf8e; --red: #f56565;
+      --radius: 14px; --radius-sm: 8px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
 
-  /* ── Login Screen ── */
-  .login-wrap {
-    min-height: 100vh; display: flex; align-items: center;
-    justify-content: center; padding: 2rem;
-    background: radial-gradient(ellipse at 50% 0%, rgba(245,200,66,0.07) 0%, transparent 60%), var(--bg);
-  }
-  .login-card {
-    background: var(--surface); border: 1px solid var(--border2);
-    border-radius: var(--radius); padding: 2.5rem;
-    width: 100%; max-width: 380px;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
-    animation: fadeUp 0.3s ease;
-  }
-  @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-  .login-badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: rgba(245,200,66,0.1); border: 1px solid rgba(245,200,66,0.3);
-    border-radius: 99px; padding: 4px 12px;
-    font-size: 0.75rem; font-weight: 700; color: var(--gold);
-    font-family: 'Syne', sans-serif; letter-spacing: 1px;
-    text-transform: uppercase; margin-bottom: 1.25rem;
-  }
-  .login-card h1 { font-family: 'Syne', sans-serif; font-size: 1.6rem; font-weight: 800; margin-bottom: 6px; }
-  .login-card p { color: var(--text2); font-size: 0.88rem; margin-bottom: 1.5rem; }
-  label { display: block; font-size: 0.75rem; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 6px; }
-  input[type=password] {
-    width: 100%; background: var(--bg3); border: 1px solid var(--border2);
-    border-radius: var(--radius-sm); padding: 0.7rem 0.9rem;
-    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.9rem;
-    outline: none; transition: border-color 0.2s; margin-bottom: 10px;
-  }
-  input[type=password]:focus { border-color: var(--gold); }
-  input::placeholder { color: var(--text3); }
-  .error-msg { font-size: 0.82rem; color: var(--red); min-height: 18px; margin-bottom: 8px; }
+    /* ── Login Screen ── */
+    .login-wrap {
+      min-height: 100vh; display: flex; align-items: center;
+      justify-content: center; padding: 2rem;
+      background: radial-gradient(ellipse at 50% 0%, rgba(245,200,66,0.07) 0%, transparent 60%), var(--bg);
+    }
+    .login-card {
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: var(--radius); padding: 2.5rem;
+      width: 100%; max-width: 380px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+      animation: fadeUp 0.3s ease;
+    }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    .login-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(245,200,66,0.1); border: 1px solid rgba(245,200,66,0.3);
+      border-radius: 99px; padding: 4px 12px;
+      font-size: 0.75rem; font-weight: 700; color: var(--gold);
+      font-family: 'Syne', sans-serif; letter-spacing: 1px;
+      text-transform: uppercase; margin-bottom: 1.25rem;
+    }
+    .login-card h1 { font-family: 'Syne', sans-serif; font-size: 1.6rem; font-weight: 800; margin-bottom: 6px; }
+    .login-card p { color: var(--text2); font-size: 0.88rem; margin-bottom: 1.5rem; }
+    label { display: block; font-size: 0.75rem; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 6px; }
+    input[type=password] {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border2);
+      border-radius: var(--radius-sm); padding: 0.7rem 0.9rem;
+      color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.9rem;
+      outline: none; transition: border-color 0.2s; margin-bottom: 10px;
+    }
+    input[type=password]:focus { border-color: var(--gold); }
+    input::placeholder { color: var(--text3); }
+    .error-msg { font-size: 0.82rem; color: var(--red); min-height: 18px; margin-bottom: 8px; }
 
-  /* ── Buttons ── */
-  .btn { border: none; border-radius: var(--radius-sm); cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; transition: all 0.2s; }
-  .btn-gold { background: var(--gold); color: #0d1117; padding: 0.65rem 1.25rem; font-size: 0.88rem; }
-  .btn-gold:hover { background: var(--gold2); transform: translateY(-1px); }
-  .btn-gold:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-  .btn-full { width: 100%; }
-  .btn-danger-sm {
-    background: rgba(245,101,101,0.12); color: var(--red);
-    border: 1px solid rgba(245,101,101,0.25); border-radius: 6px;
-    padding: 5px 12px; font-size: 0.8rem; cursor: pointer;
-    font-family: 'DM Sans', sans-serif; font-weight: 500;
-    transition: all 0.2s;
-  }
-  .btn-danger-sm:hover { background: rgba(245,101,101,0.22); border-color: var(--red); }
-  .btn-ghost-sm {
-    background: transparent; color: var(--text2);
-    border: 1px solid var(--border2); border-radius: 6px;
-    padding: 5px 12px; font-size: 0.8rem; cursor: pointer;
-    font-family: 'DM Sans', sans-serif; transition: all 0.2s;
-  }
-  .btn-ghost-sm:hover { border-color: var(--text2); color: var(--text); }
+    /* ── Buttons ── */
+    .btn { border: none; border-radius: var(--radius-sm); cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; transition: all 0.2s; }
+    .btn-gold { background: var(--gold); color: #0d1117; padding: 0.65rem 1.25rem; font-size: 0.88rem; }
+    .btn-gold:hover { background: var(--gold2); transform: translateY(-1px); }
+    .btn-gold:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .btn-full { width: 100%; }
+    .btn-danger-sm {
+      background: rgba(245,101,101,0.12); color: var(--red);
+      border: 1px solid rgba(245,101,101,0.25); border-radius: 6px;
+      padding: 5px 12px; font-size: 0.8rem; cursor: pointer;
+      font-family: 'DM Sans', sans-serif; font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn-danger-sm:hover { background: rgba(245,101,101,0.22); border-color: var(--red); }
+    .btn-ghost-sm {
+      background: transparent; color: var(--text2);
+      border: 1px solid var(--border2); border-radius: 6px;
+      padding: 5px 12px; font-size: 0.8rem; cursor: pointer;
+      font-family: 'DM Sans', sans-serif; transition: all 0.2s;
+    }
+    .btn-ghost-sm:hover { border-color: var(--text2); color: var(--text); }
 
-  /* ── Admin Panel ── */
-  #adminPanel { display: none; }
-  .admin-header {
-    background: rgba(13,17,23,0.92); backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 100;
-  }
-  .admin-header-inner {
-    max-width: 100%; padding: 0 2rem;
-    height: 64px; display: flex; align-items: center; justify-content: space-between;
-  }
-  .admin-logo { font-family: 'Syne', sans-serif; font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 10px; }
-  .admin-logo span { color: var(--gold); }
-  .admin-tag {
-    background: rgba(245,200,66,0.1); border: 1px solid rgba(245,200,66,0.3);
-    border-radius: 99px; padding: 2px 10px;
-    font-size: 0.68rem; font-weight: 700; color: var(--gold);
-    letter-spacing: 1px; text-transform: uppercase;
-  }
-  .logout-btn {
-    background: transparent; color: var(--text3); border: 1px solid var(--border2);
-    border-radius: var(--radius-sm); padding: 0.45rem 0.9rem;
-    font-size: 0.82rem; cursor: pointer; transition: all 0.2s;
-  }
-  .logout-btn:hover { color: var(--text); border-color: var(--text2); }
+    /* ── Admin Panel ── */
+    #adminPanel { display: none; }
+    .admin-header {
+      background: rgba(13,17,23,0.92); backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .admin-header-inner {
+      max-width: 100%; padding: 0 2rem;
+      height: 64px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .admin-logo { font-family: 'Syne', sans-serif; font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+    .admin-logo span { color: var(--gold); }
+    .admin-tag {
+      background: rgba(245,200,66,0.1); border: 1px solid rgba(245,200,66,0.3);
+      border-radius: 99px; padding: 2px 10px;
+      font-size: 0.68rem; font-weight: 700; color: var(--gold);
+      letter-spacing: 1px; text-transform: uppercase;
+    }
+    .logout-btn {
+      background: transparent; color: var(--text3); border: 1px solid var(--border2);
+      border-radius: var(--radius-sm); padding: 0.45rem 0.9rem;
+      font-size: 0.82rem; cursor: pointer; transition: all 0.2s;
+    }
+    .logout-btn:hover { color: var(--text); border-color: var(--text2); }
 
-  .admin-main { max-width: 100%; padding: 2rem; }
+    .admin-main { max-width: 100%; padding: 2rem; }
 
-  /* Stats row */
-  .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
-  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
-  .stat-label { font-size: 0.75rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600; margin-bottom: 6px; }
-  .stat-value { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; color: var(--gold); }
+    /* Stats row */
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
+    .stat-label { font-size: 0.75rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600; margin-bottom: 6px; }
+    .stat-value { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; color: var(--gold); }
 
-  /* Users table */
-  .section-title {
-    font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700;
-    margin-bottom: 1rem; display: flex; align-items: center; gap: 10px;
-  }
-  .user-count-badge {
-    background: var(--surface2); border-radius: 99px;
-    padding: 2px 10px; font-size: 0.75rem; color: var(--text2); font-family: 'DM Sans', sans-serif;
-  }
+    /* Users table */
+    .section-title {
+      font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700;
+      margin-bottom: 1rem; display: flex; align-items: center; gap: 10px;
+    }
+    .user-count-badge {
+      background: var(--surface2); border-radius: 99px;
+      padding: 2px 10px; font-size: 0.75rem; color: var(--text2); font-family: 'DM Sans', sans-serif;
+    }
 
-  .users-table { width: 100%; border-collapse: collapse; min-width: 1200px; }
-  .users-table th {
-    text-align: left; font-size: 0.72rem; font-weight: 600;
-    color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px;
-    padding: 0.6rem 1rem; border-bottom: 1px solid var(--border);
-  }
-  .users-table td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 0.88rem; }
-  .users-table tr:hover td { background: var(--surface2); }
-  .users-table tr:last-child td { border-bottom: none; }
+    .users-table { width: 100%; border-collapse: collapse; min-width: 1200px; }
+    .users-table th {
+      text-align: left; font-size: 0.72rem; font-weight: 600;
+      color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px;
+      padding: 0.6rem 1rem; border-bottom: 1px solid var(--border);
+    }
+    .users-table td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 0.88rem; }
+    .users-table tr:hover td { background: var(--surface2); }
+    .users-table tr:last-child td { border-bottom: none; }
 
-  .user-avatar-cell { display: flex; align-items: center; gap: 10px; }
-  .user-avatar-sm {
-    width: 36px; height: 36px; border-radius: 50%;
-    background: var(--surface2); overflow: hidden; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.9rem; border: 1px solid var(--border2);
-  }
-  .user-avatar-sm img { width: 100%; height: 100%; object-fit: cover; }
-  .user-display-name { font-weight: 500; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .user-username { font-size: 0.78rem; color: var(--text3); }
+    .user-avatar-cell { display: flex; align-items: center; gap: 10px; }
+    .user-avatar-sm {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--surface2); overflow: hidden; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.9rem; border: 1px solid var(--border2);
+    }
+    .user-avatar-sm img { width: 100%; height: 100%; object-fit: cover; }
+    .user-display-name { font-weight: 500; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-username { font-size: 0.78rem; color: var(--text3); }
 
-  /* ── Action dropdown ── */
-  .action-menu-wrap { position: relative; display: inline-block; }
-  .action-menu-btn { background: var(--surface2); border: 1px solid var(--border2); color: var(--text); border-radius: 8px; padding: 5px 14px; cursor: pointer; font-size: 0.82rem; font-family: 'DM Sans', sans-serif; white-space: nowrap; transition: border-color 0.15s; }
-  .action-menu-btn:hover { border-color: var(--text2); }
-  .action-dropdown { position: fixed; background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; padding: 5px; z-index: 999; min-width: 190px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: none; }
-  .action-dropdown.open { display: block; }
-  .action-dd-item { display: block; width: 100%; text-align: left; padding: 8px 12px; border-radius: 6px; border: none; background: transparent; color: var(--text2); cursor: pointer; font-size: 0.83rem; font-family: 'DM Sans', sans-serif; transition: all 0.12s; }
-  .action-dd-item:hover { background: var(--surface2); color: var(--text); }
-  .action-dd-divider { height: 1px; background: var(--border); margin: 4px 0; }
-  .action-dd-danger { color: var(--red) !important; }
+    /* ── Action dropdown ── */
+    .action-menu-wrap { position: relative; display: inline-block; }
+    .action-menu-btn { background: var(--surface2); border: 1px solid var(--border2); color: var(--text); border-radius: 8px; padding: 5px 14px; cursor: pointer; font-size: 0.82rem; font-family: 'DM Sans', sans-serif; white-space: nowrap; transition: border-color 0.15s; }
+    .action-menu-btn:hover { border-color: var(--text2); }
+    .action-dropdown { position: fixed; background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; padding: 5px; z-index: 999; min-width: 190px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: none; }
+    .action-dropdown.open { display: block; }
+    .action-dd-item { display: block; width: 100%; text-align: left; padding: 8px 12px; border-radius: 6px; border: none; background: transparent; color: var(--text2); cursor: pointer; font-size: 0.83rem; font-family: 'DM Sans', sans-serif; transition: all 0.12s; }
+    .action-dd-item:hover { background: var(--surface2); color: var(--text); }
+    .action-dd-divider { height: 1px; background: var(--border); margin: 4px 0; }
+    .action-dd-danger { color: var(--red) !important; }
 
-  .progress-inline { display: flex; align-items: center; gap: 8px; }
-  .bar-mini-wrap { width: 70px; height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
-  .bar-mini-fill { height: 100%; background: var(--gold); border-radius: 99px; }
-  .pct-mini { font-family: 'Syne', sans-serif; font-size: 0.75rem; font-weight: 700; color: var(--gold); min-width: 32px; }
+    .progress-inline { display: flex; align-items: center; gap: 8px; }
+    .bar-mini-wrap { width: 70px; height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
+    .bar-mini-fill { height: 100%; background: var(--gold); border-radius: 99px; }
+    .pct-mini { font-family: 'Syne', sans-serif; font-size: 0.75rem; font-weight: 700; color: var(--gold); min-width: 32px; }
 
-  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; }
+    .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; }
 
-  /* Confirm overlay */
-  .confirm-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-    display: none; align-items: center; justify-content: center;
-    z-index: 200; backdrop-filter: blur(4px);
-  }
-  .confirm-overlay.open { display: flex; }
-  .confirm-box {
-    background: var(--surface); border: 1px solid var(--border2);
-    border-radius: var(--radius); padding: 2rem; max-width: 380px; width: 100%;
-    box-shadow: var(--shadow); animation: fadeUp 0.2s ease;
-  }
-  .confirm-box h3 { font-family: 'Syne', sans-serif; font-weight: 700; margin-bottom: 8px; }
-  .confirm-box p { color: var(--text2); font-size: 0.88rem; margin-bottom: 1.5rem; line-height: 1.5; }
-  .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    /* Confirm overlay */
+    .confirm-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: none; align-items: center; justify-content: center;
+      z-index: 200; backdrop-filter: blur(4px);
+    }
+    .confirm-overlay.open { display: flex; }
+    .confirm-box {
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: var(--radius); padding: 2rem; max-width: 380px; width: 100%;
+      box-shadow: var(--shadow); animation: fadeUp 0.2s ease;
+    }
+    .confirm-box h3 { font-family: 'Syne', sans-serif; font-weight: 700; margin-bottom: 8px; }
+    .confirm-box p { color: var(--text2); font-size: 0.88rem; margin-bottom: 1.5rem; line-height: 1.5; }
+    .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
-  /* Toast */
-  .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 0.65rem 1.25rem; font-size: 0.85rem; box-shadow: var(--shadow); z-index: 400; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    /* Toast */
+    .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 0.65rem 1.25rem; font-size: 0.85rem; box-shadow: var(--shadow); z-index: 400; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  .empty-users { text-align: center; padding: 3rem; color: var(--text3); }
+    .empty-users { text-align: center; padding: 3rem; color: var(--text3); }
 
-  /* ── Analytics sections ── */
-  .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
-  .analytics-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem;
-  }
-  .analytics-card-title {
-    font-family: 'Syne', sans-serif; font-size: 0.78rem; font-weight: 700;
-    color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px;
-    margin-bottom: 1rem;
-  }
+    /* ── Analytics sections ── */
+    .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+    .analytics-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem;
+    }
+    .analytics-card-title {
+      font-family: 'Syne', sans-serif; font-size: 0.78rem; font-weight: 700;
+      color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px;
+      margin-bottom: 1rem;
+    }
 
-  /* Funnel */
-  .funnel-row {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0.6rem 0; border-bottom: 1px solid var(--border);
-  }
-  .funnel-row:last-child { border-bottom: none; }
-  .funnel-label { font-size: 0.85rem; color: var(--text2); }
-  .funnel-count {
-    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem;
-  }
-  .funnel-count.warn { color: #f97316; }
-  .funnel-count.ok   { color: var(--green); }
+    /* Funnel */
+    .funnel-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+    }
+    .funnel-row:last-child { border-bottom: none; }
+    .funnel-label { font-size: 0.85rem; color: var(--text2); }
+    .funnel-count {
+      font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem;
+    }
+    .funnel-count.warn { color: #f97316; }
+    .funnel-count.ok   { color: var(--green); }
 
-  /* Growth table */
-  .growth-row {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0.5rem 0; border-bottom: 1px solid var(--border);
-  }
-  .growth-row:last-child { border-bottom: none; }
-  .growth-date { font-size: 0.83rem; color: var(--text2); }
-  .growth-bar-wrap { flex: 1; margin: 0 12px; height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
-  .growth-bar-fill { height: 100%; background: var(--gold); border-radius: 99px; transition: width 0.4s; }
-  .growth-num { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--gold); min-width: 24px; text-align: right; }
-  .growth-empty { color: var(--text3); font-size: 0.85rem; padding: 0.75rem 0; }
+    /* Growth table */
+    .growth-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.5rem 0; border-bottom: 1px solid var(--border);
+    }
+    .growth-row:last-child { border-bottom: none; }
+    .growth-date { font-size: 0.83rem; color: var(--text2); }
+    .growth-bar-wrap { flex: 1; margin: 0 12px; height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
+    .growth-bar-fill { height: 100%; background: var(--gold); border-radius: 99px; transition: width 0.4s; }
+    .growth-num { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--gold); min-width: 24px; text-align: right; }
+    .growth-empty { color: var(--text3); font-size: 0.85rem; padding: 0.75rem 0; }
 
-  /* Paused badge */
-  .paused-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    background: rgba(245,101,101,0.12);
-    border: 1px solid rgba(245,101,101,0.3);
-    color: var(--red); border-radius: 99px;
-    padding: 2px 8px; font-size: 0.72rem; font-weight: 600;
-  }
-  .btn-pause {
-    background: rgba(249,115,22,0.12); color: #f97316;
-    border: 1px solid rgba(249,115,22,0.3); border-radius: 6px;
-    padding: 5px 10px; font-size: 0.8rem; cursor: pointer;
-    font-family: 'DM Sans', sans-serif; font-weight: 500;
-    transition: all 0.2s; white-space: nowrap;
-  }
-  .btn-pause:hover { background: rgba(249,115,22,0.22); border-color: #f97316; }
-  .btn-unpause {
-    background: rgba(62,207,142,0.12); color: var(--green);
-    border: 1px solid rgba(62,207,142,0.3); border-radius: 6px;
-    padding: 5px 10px; font-size: 0.8rem; cursor: pointer;
-    font-family: 'DM Sans', sans-serif; font-weight: 500;
-    transition: all 0.2s; white-space: nowrap;
-  }
-  .btn-unpause:hover { background: rgba(62,207,142,0.22); border-color: var(--green); }
-  /* Pro/Free badges */
-  .pro-badge-admin {
-    display: inline-block; font-size: 0.65rem; font-weight: 700;
-    background: rgba(245,200,66,0.15); color: var(--gold);
-    border: 1px solid rgba(245,200,66,0.3);
-    border-radius: 99px; padding: 1px 7px; margin-left: 5px;
-  }
-  .basic-badge-admin {
-    display: inline-block; font-size: 0.65rem; font-weight: 700;
-    background: rgba(150,150,150,0.1); color: var(--text3);
-    border: 1px solid var(--border); border-radius: 99px; padding: 1px 7px; margin-left: 5px;
-  }
-  /* Set Pro / Set Basic buttons */
-  .btn-grant-pro {
-    padding: 5px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
-    border-radius: 6px; transition: all 0.15s;
-    background: rgba(245,200,66,0.1); color: var(--gold);
-    border: 1px solid rgba(245,200,66,0.35);
-  }
-  .btn-grant-pro:hover { background: rgba(245,200,66,0.22); border-color: var(--gold); }
-  .btn-set-basic {
-    padding: 5px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
-    border-radius: 6px; transition: all 0.15s;
-    background: rgba(150,150,150,0.08); color: var(--text2);
-    border: 1px solid var(--border);
-  }
-  .btn-set-basic:hover { background: rgba(150,150,150,0.15); border-color: var(--text3); }
-  /* Plan buttons */
-  /* ── Toolbar ── */
-  .table-toolbar {
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    margin-bottom: 14px;
-  }
-  .toolbar-search-wrap {
-    flex: 1; min-width: 200px;
-    display: flex; align-items: center; gap: 8px;
-    background: var(--bg3); border: 1px solid var(--border2);
-    border-radius: var(--radius-sm); padding: 0.55rem 0.85rem;
-  }
-  .toolbar-search-icon { font-size: 0.85rem; color: var(--text3); flex-shrink: 0; }
-  .toolbar-search {
-    flex: 1; background: transparent; border: none; outline: none;
-    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.88rem;
-  }
-  .toolbar-search::placeholder { color: var(--text3); }
-  .toolbar-sort {
-    background: var(--bg3); border: 1px solid var(--border2);
-    border-radius: var(--radius-sm); padding: 0.5rem 0.75rem;
-    color: var(--text2); font-family: 'DM Sans', sans-serif;
-    font-size: 0.82rem; outline: none; cursor: pointer;
-  }
-  .toolbar-sort:focus { border-color: var(--gold); }
+    /* Paused badge */
+    .paused-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(245,101,101,0.12);
+      border: 1px solid rgba(245,101,101,0.3);
+      color: var(--red); border-radius: 99px;
+      padding: 2px 8px; font-size: 0.72rem; font-weight: 600;
+    }
+    .btn-pause {
+      background: rgba(249,115,22,0.12); color: #f97316;
+      border: 1px solid rgba(249,115,22,0.3); border-radius: 6px;
+      padding: 5px 10px; font-size: 0.8rem; cursor: pointer;
+      font-family: 'DM Sans', sans-serif; font-weight: 500;
+      transition: all 0.2s; white-space: nowrap;
+    }
+    .btn-pause:hover { background: rgba(249,115,22,0.22); border-color: #f97316; }
+    .btn-unpause {
+      background: rgba(62,207,142,0.12); color: var(--green);
+      border: 1px solid rgba(62,207,142,0.3); border-radius: 6px;
+      padding: 5px 10px; font-size: 0.8rem; cursor: pointer;
+      font-family: 'DM Sans', sans-serif; font-weight: 500;
+      transition: all 0.2s; white-space: nowrap;
+    }
+    .btn-unpause:hover { background: rgba(62,207,142,0.22); border-color: var(--green); }
+    /* Pro/Free badges */
+    .pro-badge-admin {
+      display: inline-block; font-size: 0.65rem; font-weight: 700;
+      background: rgba(245,200,66,0.15); color: var(--gold);
+      border: 1px solid rgba(245,200,66,0.3);
+      border-radius: 99px; padding: 1px 7px; margin-left: 5px;
+    }
+    .basic-badge-admin {
+      display: inline-block; font-size: 0.65rem; font-weight: 700;
+      background: rgba(150,150,150,0.1); color: var(--text3);
+      border: 1px solid var(--border); border-radius: 99px; padding: 1px 7px; margin-left: 5px;
+    }
+    /* Set Pro / Set Basic buttons */
+    .btn-grant-pro {
+      padding: 5px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
+      border-radius: 6px; transition: all 0.15s;
+      background: rgba(245,200,66,0.1); color: var(--gold);
+      border: 1px solid rgba(245,200,66,0.35);
+    }
+    .btn-grant-pro:hover { background: rgba(245,200,66,0.22); border-color: var(--gold); }
+    .btn-set-basic {
+      padding: 5px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
+      border-radius: 6px; transition: all 0.15s;
+      background: rgba(150,150,150,0.08); color: var(--text2);
+      border: 1px solid var(--border);
+    }
+    .btn-set-basic:hover { background: rgba(150,150,150,0.15); border-color: var(--text3); }
+    /* Plan buttons */
+    /* ── Toolbar ── */
+    .table-toolbar {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .toolbar-search-wrap {
+      flex: 1; min-width: 200px;
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg3); border: 1px solid var(--border2);
+      border-radius: var(--radius-sm); padding: 0.55rem 0.85rem;
+    }
+    .toolbar-search-icon { font-size: 0.85rem; color: var(--text3); flex-shrink: 0; }
+    .toolbar-search {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.88rem;
+    }
+    .toolbar-search::placeholder { color: var(--text3); }
+    .toolbar-sort {
+      background: var(--bg3); border: 1px solid var(--border2);
+      border-radius: var(--radius-sm); padding: 0.5rem 0.75rem;
+      color: var(--text2); font-family: 'DM Sans', sans-serif;
+      font-size: 0.82rem; outline: none; cursor: pointer;
+    }
+    .toolbar-sort:focus { border-color: var(--gold); }
 
-  .btn-plan-pro {
-    padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
-    border-radius: 6px; transition: all 0.15s;
-    background: rgba(245,200,66,0.12); color: var(--gold);
-    border: 1px solid rgba(245,200,66,0.35);
-  }
-  .btn-plan-pro:hover { background: rgba(245,200,66,0.25); }
-  .btn-plan-basic {
-    padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
-    border-radius: 6px; transition: all 0.15s;
-    background: rgba(62,207,142,0.1); color: var(--green);
-    border: 1px solid rgba(62,207,142,0.3);
-  }
-  .btn-plan-basic:hover { background: rgba(62,207,142,0.2); }
-  .btn-plan-revoke {
-    padding: 4px 9px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
-    border-radius: 6px; transition: all 0.15s;
-    background: rgba(150,150,150,0.08); color: var(--text2);
-    border: 1px solid var(--border);
-  }
-  .btn-plan-revoke:hover { background: rgba(150,150,150,0.15); }
-  .btn-plan-pro-bonus {
-    padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
-    border-radius: 6px; transition: all 0.15s;
-    background: rgba(62,207,142,0.12); color: var(--green);
-    border: 1px solid rgba(62,207,142,0.35);
-  }
-  .btn-plan-pro-bonus:hover { background: rgba(62,207,142,0.22); }
-  .btn-plan-trial {
-    padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
-    border-radius: 6px; transition: all 0.15s;
-    background: rgba(96,165,250,0.12); color: #60a5fa;
-    border: 1px solid rgba(96,165,250,0.35);
-  }
-  .btn-plan-trial:hover { background: rgba(96,165,250,0.22); }
-  /* Expiry badge */
-  .expiry-badge-admin {
-    display: inline-block; font-size: 0.62rem; font-weight: 600;
-    background: rgba(249,115,22,0.1); color: #f97316;
-    border: 1px solid rgba(249,115,22,0.3);
-    border-radius: 99px; padding: 1px 7px; margin-left: 5px;
-  }
-  .row-paused td { opacity: 0.6; }
-  .row-paused td .action-menu-wrap,
-  .row-paused td .action-menu-wrap * { opacity: 1; }
+    .btn-plan-pro {
+      padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+      border-radius: 6px; transition: all 0.15s;
+      background: rgba(245,200,66,0.12); color: var(--gold);
+      border: 1px solid rgba(245,200,66,0.35);
+    }
+    .btn-plan-pro:hover { background: rgba(245,200,66,0.25); }
+    .btn-plan-basic {
+      padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+      border-radius: 6px; transition: all 0.15s;
+      background: rgba(62,207,142,0.1); color: var(--green);
+      border: 1px solid rgba(62,207,142,0.3);
+    }
+    .btn-plan-basic:hover { background: rgba(62,207,142,0.2); }
+    .btn-plan-revoke {
+      padding: 4px 9px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+      border-radius: 6px; transition: all 0.15s;
+      background: rgba(150,150,150,0.08); color: var(--text2);
+      border: 1px solid var(--border);
+    }
+    .btn-plan-revoke:hover { background: rgba(150,150,150,0.15); }
+    .btn-plan-pro-bonus {
+      padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+      border-radius: 6px; transition: all 0.15s;
+      background: rgba(62,207,142,0.12); color: var(--green);
+      border: 1px solid rgba(62,207,142,0.35);
+    }
+    .btn-plan-pro-bonus:hover { background: rgba(62,207,142,0.22); }
+    .btn-plan-trial {
+      padding: 4px 9px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+      border-radius: 6px; transition: all 0.15s;
+      background: rgba(96,165,250,0.12); color: #60a5fa;
+      border: 1px solid rgba(96,165,250,0.35);
+    }
+    .btn-plan-trial:hover { background: rgba(96,165,250,0.22); }
+    /* Expiry badge */
+    .expiry-badge-admin {
+      display: inline-block; font-size: 0.62rem; font-weight: 600;
+      background: rgba(249,115,22,0.1); color: #f97316;
+      border: 1px solid rgba(249,115,22,0.3);
+      border-radius: 99px; padding: 1px 7px; margin-left: 5px;
+    }
+    .row-paused td { opacity: 0.6; }
+    .row-paused td .action-menu-wrap,
+    .row-paused td .action-menu-wrap * { opacity: 1; }
 
-  @media (max-width: 640px) {
-    .admin-main { padding: 1rem; }
-    .analytics-grid { grid-template-columns: 1fr; }
-    .users-table th:nth-child(2), .users-table td:nth-child(2),
-    .users-table th:nth-child(4), .users-table td:nth-child(4),
-    .users-table th:nth-child(5), .users-table td:nth-child(5) { display: none; }
-  }
-</style>
-</head>
-<body>
+    @media (max-width: 640px) {
+      .admin-main { padding: 1rem; }
+      .analytics-grid { grid-template-columns: 1fr; }
+      .users-table th:nth-child(2), .users-table td:nth-child(2),
+      .users-table th:nth-child(4), .users-table td:nth-child(4),
+      .users-table th:nth-child(5), .users-table td:nth-child(5) { display: none; }
+    }
+  </style>
+  </head>
+  <body>
 
-<!-- ══ LOGIN ════════════════════════════════════════════════════════════════ -->
-<div id="loginScreen" class="login-wrap">
-  <div class="login-card">
-    <div class="login-badge">🔐 Admin Access</div>
-    <h1>BoardPrep PH</h1>
-    <p>Enter the admin password to manage all profiles.</p>
-    <label>Admin Password</label>
-    <input type="password" id="adminPwInput" placeholder="Enter admin password"
-           onkeydown="if(event.key==='Enter') doAdminLogin()"/>
-    <div class="error-msg" id="loginError"></div>
-    <button class="btn btn-gold btn-full" id="loginBtn" onclick="doAdminLogin()">Enter Admin Panel</button>
-    <div style="margin-top:1rem;text-align:center">
-      <a href="/" style="font-size:0.82rem;color:var(--text3);text-decoration:none">← Back to app</a>
+  <!-- ══ LOGIN ════════════════════════════════════════════════════════════════ -->
+  <div id="loginScreen" class="login-wrap">
+    <div class="login-card">
+      <div class="login-badge">🔐 Admin Access</div>
+      <h1>BoardPrep PH</h1>
+      <p>Enter the admin password to manage all profiles.</p>
+      <label>Admin Password</label>
+      <input type="password" id="adminPwInput" placeholder="Enter admin password"
+            onkeydown="if(event.key==='Enter') doAdminLogin()"/>
+      <div class="error-msg" id="loginError"></div>
+      <button class="btn btn-gold btn-full" id="loginBtn" onclick="doAdminLogin()">Enter Admin Panel</button>
+      <div style="margin-top:1rem;text-align:center">
+        <a href="/" style="font-size:0.82rem;color:var(--text3);text-decoration:none">← Back to app</a>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- ══ ADMIN PANEL ══════════════════════════════════════════════════════════ -->
-<div id="adminPanel">
+  <!-- ══ ADMIN PANEL ══════════════════════════════════════════════════════════ -->
+  <div id="adminPanel">
 
-  <header class="admin-header">
-    <div class="admin-header-inner">
-      <div class="admin-logo">
-        📚 BoardPrep <span>PH</span>
-        <span class="admin-tag">Admin</span>
+    <header class="admin-header">
+      <div class="admin-header-inner">
+        <div class="admin-logo">
+          📚 BoardPrep <span>PH</span>
+          <span class="admin-tag">Admin</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <a href="/" style="font-size:0.82rem;color:var(--text3);text-decoration:none">View App</a>
+          <button class="logout-btn" onclick="doAdminLogout()">Log Out</button>
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <a href="/" style="font-size:0.82rem;color:var(--text3);text-decoration:none">View App</a>
-        <button class="logout-btn" onclick="doAdminLogout()">Log Out</button>
-      </div>
-    </div>
-  </header>
+    </header>
 
-  <main class="admin-main">
+    <main class="admin-main">
 
-    <!-- Stats -->
-    <div class="stats-row" id="statsRow">
-      <div class="stat-card">
-        <div class="stat-label">Total Profiles</div>
-        <div class="stat-value" id="statUsers">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Subjects</div>
-        <div class="stat-value" id="statSubjects">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Avg. Progress</div>
-        <div class="stat-value" id="statAvgProgress">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Active Users</div>
-        <div class="stat-value" id="statActiveUsers">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Topics</div>
-        <div class="stat-value" id="statTopics">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Notes</div>
-        <div class="stat-value" id="statNotes">—</div>
-      </div>
-    </div>
-
-    <!-- Analytics: Funnel + Growth side by side -->
-    <div class="analytics-grid">
-
-      <!-- Drop-off Funnel -->
-      <div class="analytics-card">
-        <div class="analytics-card-title">📉 User Funnel / Drop-off</div>
-        <div id="funnelSection">
-          <div class="funnel-row">
-            <span class="funnel-label">Loading…</span>
-          </div>
+      <!-- Stats -->
+      <div class="stats-row" id="statsRow">
+        <div class="stat-card">
+          <div class="stat-label">Total Profiles</div>
+          <div class="stat-value" id="statUsers">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Subjects</div>
+          <div class="stat-value" id="statSubjects">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg. Progress</div>
+          <div class="stat-value" id="statAvgProgress">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active Users</div>
+          <div class="stat-value" id="statActiveUsers">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Topics</div>
+          <div class="stat-value" id="statTopics">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Notes</div>
+          <div class="stat-value" id="statNotes">—</div>
         </div>
       </div>
 
-      <!-- New Users Last 7 Days -->
-      <div class="analytics-card">
-        <div class="analytics-card-title">📈 New Users — Last 7 Days</div>
-        <div id="growthSection">
-          <div class="funnel-row">
-            <span class="funnel-label">Loading…</span>
-          </div>
-        </div>
-      </div>
+      <!-- Analytics: Funnel + Growth side by side -->
+      <div class="analytics-grid">
 
-    </div>
-
-    <!-- Users table -->
-    <div class="section-title">
-      All Profiles
-      <span class="user-count-badge" id="userCountBadge">0 users</span>
-    </div>
-
-    <!-- Search + Filter + Sort bar -->
-    <div class="table-toolbar">
-      <div class="toolbar-search-wrap">
-        <span class="toolbar-search-icon">🔍</span>
-        <input type="text" id="userSearchInput" class="toolbar-search"
-               placeholder="Search by name, username, or email…"
-               oninput="filterAndRenderUsers()"/>
-      </div>
-      <select class="toolbar-sort" id="filterSelect" onchange="setFilter(this.value)">
-        <optgroup label="— Plan —">
-          <option value="all">All Users</option>
-          <option value="pro">⭐ Pro</option>
-          <option value="basic">📦 Basic</option>
-          <option value="trial">🎉 Trial</option>
-          <option value="paused">⏸ Paused</option>
-        </optgroup>
-        <optgroup label="— Learner Type —">
-          <option value="type_board_exam">🎓 Board Exam</option>
-          <option value="type_ece">📡 ECE</option>
-          <option value="type_student">📚 Student</option>
-          <option value="type_college">🏫 College Entrance</option>
-          <option value="type_scholarship">🏆 Scholarship</option>
-        </optgroup>
-      </select>
-      <select class="toolbar-sort" onchange="setSortAndRender(this.value)">
-        <option value="newest">Newest first</option>
-        <option value="oldest">Oldest first</option>
-        <option value="name">Name A–Z</option>
-        <option value="progress">Progress ↓</option>
-        <option value="subjects">Subjects ↓</option>
-        <option value="expiry">Expiry soonest</option>
-      </select>
-    </div>
-
-    <div class="table-wrap">
-      <table class="users-table">
-        <thead>
-          <tr>
-            <th>User</th>
-            <th>Email</th>
-            <th>Learner</th>
-            <th>Subjects</th>
-            <th>Progress</th>
-            <th>Joined</th>
-            <th>Last Payment</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="usersTableBody">
-          <tr><td colspan="5" class="empty-users">Loading…</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-  </main>
-</div>
-
-<!-- ══ CONFIRM DELETE — Step 1: Confirm ═══════════════════════════════════ -->
-<div class="confirm-overlay" id="confirmOverlay">
-  <div class="confirm-box">
-    <h3>🗑️ Delete Profile</h3>
-    <p id="confirmText">Are you sure you want to delete this profile?</p>
-    <div class="confirm-actions">
-      <button class="btn-ghost-sm" onclick="closeConfirm()">Cancel</button>
-      <button class="btn-danger-sm" id="confirmDeleteBtn">Yes, Send OTP</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══ OTP VERIFY — Step 2: Enter OTP ═════════════════════════════════════ -->
-<div class="confirm-overlay" id="otpOverlay">
-  <div class="confirm-box">
-    <h3>🔐 Verify Deletion</h3>
-    <p style="font-size:0.85rem;color:var(--text2);margin-bottom:1rem">
-      An OTP was sent to <strong style="color:var(--text)">markjosephpbulan@gmail.com</strong>.<br/>
-      Enter it below to confirm deletion.
-    </p>
-    <input type="text" id="otpInput" maxlength="6" inputmode="numeric"
-           placeholder="Enter 6-digit OTP"
-           style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:0.7rem 0.9rem;color:var(--text);font-size:1.2rem;letter-spacing:0.3rem;text-align:center;outline:none;margin-bottom:8px;font-family:'DM Sans',sans-serif"
-           oninput="this.value=this.value.replace(/\D/g,'')"
-           onkeydown="if(event.key==='Enter') verifyOtpAndDelete()"/>
-    <div class="error-msg" id="otpError"></div>
-    <div class="confirm-actions">
-      <button class="btn-ghost-sm" onclick="closeOtp()">Cancel</button>
-      <button class="btn-danger-sm" id="otpVerifyBtn" onclick="verifyOtpAndDelete()">🗑️ Delete Now</button>
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<script>
-let pendingDeleteId = null;
-let pendingDeleteName = null;
-let adminPassword = '';
-let allUsers = [];          // full user list cached
-let allPayments = {};       // user_id → {last_paid_at, last_plan} from payments table
-let currentFilter = 'all';
-let currentSort = 'newest';
-
-// Helper — every admin API call includes the password as a header
-function adminFetch(url, options = {}) {
-  const headers = { ...(options.headers || {}), 'X-Admin-Password': adminPassword };
-  return fetch(url, { ...options, headers });
-}
-
-// ── Boot ────────────────────────────────────────────────────────────────────
-async function boot() {
-  // Can't auto-restore password from memory on page load — always show login
-  // (This is intentional: admin must re-enter password each visit for security)
-}
-
-// ── Login ────────────────────────────────────────────────────────────────────
-async function doAdminLogin() {
-  const pw    = document.getElementById('adminPwInput').value;
-  const errEl = document.getElementById('loginError');
-  const btn   = document.getElementById('loginBtn');
-  errEl.textContent = '';
-  if (!pw) { errEl.textContent = 'Please enter the admin password.'; return; }
-
-  btn.textContent = 'Checking…'; btn.disabled = true;
-  try {
-    const r = await fetch('/api/admin/login', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ password: pw })
-    });
-    const d = await r.json();
-    if (!r.ok) { errEl.textContent = d.error; return; }
-    adminPassword = pw;  // store in memory — sent with every request
-    showPanel();
-    loadUsers();
-  } catch(e) {
-    errEl.textContent = 'Connection error. Please try again.';
-  } finally {
-    btn.textContent = 'Enter Admin Panel'; btn.disabled = false;
-  }
-}
-
-async function doAdminLogout() {
-  await adminFetch('/api/admin/logout', { method: 'POST' });
-  adminPassword = '';  // clear from memory
-  document.getElementById('adminPanel').style.display = 'none';
-  document.getElementById('loginScreen').style.display = 'flex';
-  document.getElementById('adminPwInput').value = '';
-}
-
-function showPanel() {
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('adminPanel').style.display  = 'block';
-}
-
-// ── Load Users ───────────────────────────────────────────────────────────────
-async function loadUsers() {
-  const tbody = document.getElementById('usersTableBody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-users">Loading…</td></tr>';
-  try {
-    const r = await adminFetch('/api/admin/users');
-    if (!r.ok) { tbody.innerHTML = '<tr><td colspan="7" class="empty-users">Failed to load users.</td></tr>'; return; }
-    allUsers = await r.json();
-
-    // Update stat cards
-    document.getElementById('statUsers').textContent    = allUsers.length;
-    document.getElementById('statSubjects').textContent = allUsers.reduce((a, u) => a + u.subject_count, 0);
-    const avgPct = allUsers.length === 0 ? 0 : Math.round(allUsers.reduce((a, u) => a + u.progress_pct, 0) / allUsers.length);
-    document.getElementById('statAvgProgress').textContent = avgPct + '%';
-
-    // Load last payments in parallel
-    try {
-      const pr = await adminFetch('/api/admin/payments');
-      if (pr.ok) allPayments = await pr.json();
-    } catch(e) {}
-
-    loadAnalytics();
-    filterAndRenderUsers();
-  } catch(e) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-users">Error loading users.</td></tr>';
-  }
-}
-
-function renderUsersTable(users) {
-  const tbody = document.getElementById('usersTableBody');
-  if (!tbody) return;
-  if (!users.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-users">No users found.</td></tr>'; return; }
-  tbody.innerHTML = users.map(u => {
-    const avatarHTML = u.avatar
-      ? `<img src="${u.avatar}" alt="">`
-      : `<span>${esc(u.display_name[0].toUpperCase())}</span>`;
-    const pmData = allPayments[u.id];
-    const lastPaidDisplay = pmData && pmData.last_paid_at
-      ? `<div style="color:var(--green);font-size:0.8rem;font-weight:600">${formatDate(pmData.last_paid_at)}</div>
-         <div style="color:var(--text3);font-size:0.72rem">${pmData.last_plan === 'pro_4mo' ? '⭐ Pro' : '📦 Basic'}</div>`
-      : `<span style="color:var(--text3);font-size:0.8rem">—</span>`;
-    return `
-    <tr id="row-${u.id}" class="${u.is_paused ? 'row-paused' : ''}">
-      <td>
-        <div class="user-avatar-cell">
-          <div class="user-avatar-sm">${avatarHTML}</div>
-          <div>
-            <div class="user-display-name">
-              ${esc(u.display_name)}
-              ${u.is_paused ? '<span class="paused-badge">⏸ Paused</span>' : ''}
-              ${u.is_pro ? '<span class="pro-badge-admin">⭐ Pro</span>' : '<span class="basic-badge-admin">Basic</span>'}
-              ${u.plan_expires ? '<span class="expiry-badge-admin" title="Plan expires">⏰ ' + formatDate(u.plan_expires) + '</span>' : ''}
+        <!-- Drop-off Funnel -->
+        <div class="analytics-card">
+          <div class="analytics-card-title">📉 User Funnel / Drop-off</div>
+          <div id="funnelSection">
+            <div class="funnel-row">
+              <span class="funnel-label">Loading…</span>
             </div>
-            <div class="user-username">@${esc(u.username)}</div>
           </div>
         </div>
-      </td>
-      <td>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="color:var(--text2);font-size:0.8rem">${esc(u.email || '—')}</span>
-          ${u.email ? `<button onclick="copyEmail('${esc(u.email)}')" title="Copy email"
-            style="background:transparent;border:none;cursor:pointer;color:var(--text3);font-size:0.75rem;padding:2px 5px;border-radius:4px;transition:all 0.15s"
-            onmouseover="this.style.color='var(--text)';this.style.background='var(--border)'"
-            onmouseout="this.style.color='var(--text3)';this.style.background='transparent'">📋</button>` : ''}
-        </div>
-      </td>
-      <td>${renderLearnerBadge(u)}</td>
-      <td>${u.subject_count}</td>
-      <td>
-        <div class="progress-inline">
-          <div class="bar-mini-wrap"><div class="bar-mini-fill" style="width:${u.progress_pct}%"></div></div>
-          <span class="pct-mini">${u.progress_pct}%</span>
-        </div>
-      </td>
-      <td style="color:var(--text3)">${formatDate(u.created_at)}</td>
-      <td>${lastPaidDisplay}</td>
-      <td>
-        <div class="action-menu-wrap">
-          <button class="action-menu-btn" onclick="toggleActionMenu('${u.id}', event)">⋯ Actions</button>
-          <div class="action-dropdown" id="action-menu-${u.id}">
-            <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_4mo');closeActionMenus()">⭐ Pro 4 months</button>
-            <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','basic_1yr');closeActionMenus()">📦 Basic 1yr</button>
-            <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_bonus');closeActionMenus()">🎁 Pro Bonus (1mo)</button>
-            <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','trial');closeActionMenus()">🔄 Reset Trial</button>
-            <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','revoke');closeActionMenus()">🔒 Set Basic</button>
-            <div class="action-dd-divider"></div>
-            <button class="action-dd-item" id="pause-btn-${u.id}" onclick="togglePause('${u.id}','${esc(u.display_name)}',${u.is_paused});closeActionMenus()">${u.is_paused ? '▶ Unpause' : '⏸ Pause'}</button>
-            <div class="action-dd-divider"></div>
-            <button class="action-dd-item action-dd-danger" onclick="confirmDelete('${u.id}','${esc(u.display_name)}');closeActionMenus()">🗑️ Delete</button>
+
+        <!-- New Users Last 7 Days -->
+        <div class="analytics-card">
+          <div class="analytics-card-title">📈 New Users — Last 7 Days</div>
+          <div id="growthSection">
+            <div class="funnel-row">
+              <span class="funnel-label">Loading…</span>
+            </div>
           </div>
         </div>
-      </td>
-    </tr>`;
-  }).join('');
-}
 
-// ── Action dropdown ────────────────────────────────────────────────────────────
-function toggleActionMenu(userId, event) {
-  event.stopPropagation();
-  const menu = document.getElementById('action-menu-' + userId);
-  const isOpen = menu.classList.contains('open');
-  closeActionMenus();
-  if (!isOpen) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const menuHeight = 280; // approx dropdown height
-    const spaceBelow = window.innerHeight - rect.bottom;
-    menu.style.right = (window.innerWidth - rect.right) + 'px';
-    if (spaceBelow < menuHeight) {
-      // flip upward
-      menu.style.top = '';
-      menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
-    } else {
-      menu.style.bottom = '';
-      menu.style.top = (rect.bottom + 4) + 'px';
-    }
-    menu.classList.add('open');
-  }
-}
-function closeActionMenus() {
-  document.querySelectorAll('.action-dropdown.open').forEach(m => m.classList.remove('open'));
-}
-document.addEventListener('click', closeActionMenus);
-
-// ── Search / Filter / Sort ────────────────────────────────────────────────────
-function setFilter(filter) {
-  currentFilter = filter;
-  filterAndRenderUsers();
-}
-
-function setSortAndRender(sort) {
-  currentSort = sort;
-  filterAndRenderUsers();
-}
-
-function filterAndRenderUsers() {
-  const q = (document.getElementById('userSearchInput')?.value || '').toLowerCase().trim();
-
-  let filtered = allUsers.filter(u => {
-    // Search
-    const matchSearch = !q ||
-      u.display_name.toLowerCase().includes(q) ||
-      u.username.toLowerCase().includes(q) ||
-      (u.email || '').toLowerCase().includes(q);
-
-    // Filter
-    let matchFilter = true;
-    if (currentFilter === 'pro')               matchFilter = u.is_pro && !u.is_paused && u.plan !== 'trial' && u.plan !== 'basic_pro_bonus';
-    if (currentFilter === 'basic')             matchFilter = (!u.is_pro || u.plan === 'basic_pro_bonus') && !u.is_paused && u.plan !== 'expired';
-    if (currentFilter === 'trial')             matchFilter = u.plan === 'trial' && !u.is_paused;
-    if (currentFilter === 'paused')            matchFilter = u.is_paused;
-    if (currentFilter === 'type_board_exam')   matchFilter = u.user_type === 'board_exam';
-    if (currentFilter === 'type_ece')          matchFilter = (u.profession || '').toLowerCase() === 'ece';
-    if (currentFilter === 'type_student')      matchFilter = u.user_type === 'student';
-    if (currentFilter === 'type_college')      matchFilter = u.user_type === 'college_entrance';
-    if (currentFilter === 'type_scholarship')  matchFilter = u.user_type === 'scholarship';
-
-    return matchSearch && matchFilter;
-  });
-
-  // Sort
-  filtered.sort((a, b) => {
-    if (currentSort === 'newest')   return new Date(b.created_at) - new Date(a.created_at);
-    if (currentSort === 'oldest')   return new Date(a.created_at) - new Date(b.created_at);
-    if (currentSort === 'name')     return a.display_name.localeCompare(b.display_name);
-    if (currentSort === 'progress') return b.progress_pct - a.progress_pct;
-    if (currentSort === 'subjects') return b.subject_count - a.subject_count;
-    if (currentSort === 'expiry') {
-      const ae = a.plan_expires ? new Date(a.plan_expires) : new Date('9999');
-      const be = b.plan_expires ? new Date(b.plan_expires) : new Date('9999');
-      return ae - be;
-    }
-    return 0;
-  });
-
-  renderUsersTable(filtered);
-  document.getElementById('userCountBadge').textContent =
-    `${filtered.length} of ${allUsers.length} users`;
-}
-
-// ── Delete — Step 1: Confirm ──────────────────────────────────────────────────
-function confirmDelete(userId, displayName) {
-  pendingDeleteId   = userId;
-  pendingDeleteName = displayName;
-  document.getElementById('confirmText').textContent =
-    `Delete "${displayName}"? This permanently removes all their data. An OTP will be sent to your email to confirm.`;
-  document.getElementById('confirmOverlay').classList.add('open');
-  document.getElementById('confirmDeleteBtn').onclick = requestDeleteOtp;
-}
-
-function closeConfirm() {
-  document.getElementById('confirmOverlay').classList.remove('open');
-}
-
-// ── Delete — Step 2: Request OTP ─────────────────────────────────────────────
-async function requestDeleteOtp() {
-  closeConfirm();
-  document.getElementById('otpInput').value = '';
-  document.getElementById('otpError').textContent = '';
-  document.getElementById('otpVerifyBtn').textContent = 'Sending OTP…';
-  document.getElementById('otpVerifyBtn').disabled = true;
-  document.getElementById('otpOverlay').classList.add('open');
-
-  try {
-    const r = await adminFetch('/api/admin/request-delete-otp', { method: 'POST' });
-    const d = await r.json();
-    if (!r.ok) {
-      document.getElementById('otpError').textContent = d.error || 'Failed to send OTP.';
-    } else {
-      showToast('📧 OTP sent to your email!');
-    }
-  } catch(e) {
-    document.getElementById('otpError').textContent = 'Connection error. Try again.';
-  } finally {
-    document.getElementById('otpVerifyBtn').textContent = '🗑️ Delete Now';
-    document.getElementById('otpVerifyBtn').disabled = false;
-    document.getElementById('otpInput').focus();
-  }
-}
-
-function closeOtp() {
-  document.getElementById('otpOverlay').classList.remove('open');
-  pendingDeleteId   = null;
-  pendingDeleteName = null;
-}
-
-// ── Delete — Step 3: Verify OTP and delete ────────────────────────────────────
-async function verifyOtpAndDelete() {
-  const otp = document.getElementById('otpInput').value.trim();
-  const errEl = document.getElementById('otpError');
-  errEl.textContent = '';
-
-  if (!otp || otp.length < 6) { errEl.textContent = 'Please enter the 6-digit OTP.'; return; }
-  if (!pendingDeleteId) { closeOtp(); return; }
-
-  const btn = document.getElementById('otpVerifyBtn');
-  btn.textContent = 'Verifying…'; btn.disabled = true;
-
-  try {
-    const r = await adminFetch(`/api/admin/users/${pendingDeleteId}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ otp })
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      errEl.textContent = d.error || 'Incorrect OTP. Try again.';
-      btn.textContent = '🗑️ Delete Now'; btn.disabled = false;
-      return;
-    }
-    const id = pendingDeleteId;
-    closeOtp();
-    document.getElementById(`row-${id}`)?.remove();
-    allUsers = allUsers.filter(u => u.id !== id);
-    filterAndRenderUsers();
-    showToast('✅ Profile deleted successfully.');
-  } catch(e) {
-    errEl.textContent = 'Connection error: ' + e.message;
-    btn.textContent = '🗑️ Delete Now'; btn.disabled = false;
-  }
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function copyEmail(email) {
-  navigator.clipboard.writeText(email).then(() => {
-    showToast('📋 Email copied: ' + email);
-  }).catch(() => {
-    // Fallback for older browsers
-    const el = document.createElement('textarea');
-    el.value = email;
-    document.body.appendChild(el);
-    el.select();
-    document.execCommand('copy');
-    document.body.removeChild(el);
-    showToast('📋 Email copied: ' + email);
-  });
-}
-
-function esc(str) {
-  if (!str) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function renderLearnerBadge(u) {
-  const typeMap = {
-    board_exam: { icon: '🎓', label: 'Board Exam' },
-    student: { icon: '📚', label: 'Student' },
-    college_entrance: { icon: '🏫', label: 'College Entrance' },
-    scholarship: { icon: '🏆', label: 'Scholarship' },
-  };
-  const t = typeMap[u.user_type] || typeMap['board_exam'];
-  const profLabel = u.profession ? `<div style="color:var(--gold);font-size:0.72rem;font-weight:700;margin-top:2px">${esc(u.profession.toUpperCase())}</div>` : '';
-  return `<div style="font-size:0.78rem;color:var(--text2);white-space:nowrap">${t.icon} ${t.label}</div>${profLabel}`;
-}
-
-function formatDate(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' });
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-// ── Set Plan ──────────────────────────────────────────────────────────────────
-const PLAN_LABELS = {
-  'pro_4mo':   'Pro for 4 months (₱100)',
-  'basic_1yr': 'Basic 1 year (₱70) + 1 month Pro bonus',
-  'pro_bonus': '1 month Pro bonus',
-  'trial':     'Trial reset for 7 days',
-  'revoke':    'Basic plan (no expiry)',
-};
-
-async function setPlan(userId, displayName, plan) {
-  const label = PLAN_LABELS[plan] || plan;
-  if (!confirm(`Set "${displayName}" → ${label}?`)) return;
-  try {
-    const r = await fetch(`/api/admin/users/${userId}/set-plan`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPassword },
-      body: JSON.stringify({ plan })
-    });
-    const data = await r.json();
-    if (!r.ok) { alert(data.error || 'Failed'); return; }
-    // Update pro badge
-    const row = document.getElementById(`row-${userId}`);
-    if (row) {
-      const badge = row.querySelector('.pro-badge-admin, .basic-badge-admin');
-      if (badge) {
-        badge.className   = data.is_pro ? 'pro-badge-admin' : 'basic-badge-admin';
-        badge.textContent = data.is_pro ? '⭐ Pro' : 'Basic';
-      }
-      // Update or add expiry badge
-      let exBadge = row.querySelector('.expiry-badge-admin');
-      if (data.plan_expires) {
-        const d = new Date(data.plan_expires).toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'numeric'});
-        if (exBadge) { exBadge.textContent = '⏰ ' + d; }
-        else {
-          const nameDiv = row.querySelector('.user-display-name');
-          if (nameDiv) {
-            const span = document.createElement('span');
-            span.className = 'expiry-badge-admin';
-            span.textContent = '⏰ ' + d;
-            nameDiv.appendChild(span);
-          }
-        }
-      } else if (exBadge) { exBadge.remove(); }
-    }
-    showToast(data.msg || '✅ Plan updated!');
-  } catch(e) {
-    alert('Connection error. Please try again.');
-  }
-}
-
-// ── Pause / Unpause ──────────────────────────────────────────────────────────
-async function togglePause(userId, displayName, currentlyPaused) {
-  const action = currentlyPaused ? 'unpause' : 'pause';
-  const msg    = currentlyPaused
-    ? `Unpause "${displayName}"? They will regain full access.`
-    : `Pause "${displayName}"? They will be locked out until you unpause them.`;
-
-  if (!confirm(msg)) return;
-
-  const btn = document.getElementById(`pause-btn-${userId}`);
-  if (btn) { btn.textContent = 'Updating…'; btn.disabled = true; }
-
-  try {
-    const r = await adminFetch(`/api/admin/users/${userId}/pause`, { method: 'POST' });
-    const d = await r.json();
-    if (!r.ok) { showToast(`❌ Error: ${d.error}`); return; }
-
-    const isPaused = d.is_paused;
-    const row = document.getElementById(`row-${userId}`);
-    if (row) row.className = isPaused ? 'row-paused' : '';
-
-    // Update pause button
-    if (btn) {
-      btn.textContent  = isPaused ? '▶ Unpause' : '⏸ Pause';
-      btn.className    = isPaused ? 'btn-unpause' : 'btn-pause';
-      btn.disabled     = false;
-      btn.setAttribute('onclick', `togglePause('${userId}','${displayName}',${isPaused})`);
-    }
-
-    // Update paused badge in name cell
-    const nameCell = row?.querySelector('.user-display-name');
-    if (nameCell) {
-      const existing = nameCell.querySelector('.paused-badge');
-      if (isPaused && !existing) {
-        nameCell.insertAdjacentHTML('beforeend', '<span class="paused-badge">⏸ Paused</span>');
-      } else if (!isPaused && existing) {
-        existing.remove();
-      }
-    }
-
-    showToast(isPaused ? `⏸ ${displayName} has been paused.` : `▶ ${displayName} has been unpaused.`);
-  } catch(e) {
-    showToast('❌ Connection error. Please try again.');
-    if (btn) { btn.textContent = currentlyPaused ? '▶ Unpause' : '⏸ Pause'; btn.disabled = false; }
-  }
-}
-
-// ── Analytics ────────────────────────────────────────────────────────────────
-async function loadAnalytics() {
-  try {
-    const r = await adminFetch('/api/admin/analytics');
-    if (!r.ok) return;
-    const d = await r.json();
-
-    // Fill new stat cards
-    document.getElementById('statActiveUsers').textContent = d.active_users;
-    document.getElementById('statTopics').textContent      = d.total_topics;
-    document.getElementById('statNotes').textContent       = d.total_notes;
-
-    // Funnel section
-    const funnel = d.funnel;
-    const totalU = d.total_users;
-    document.getElementById('funnelSection').innerHTML = `
-      <div class="funnel-row">
-        <span class="funnel-label">✅ Signed up</span>
-        <span class="funnel-count ok">${totalU}</span>
       </div>
-      <div class="funnel-row">
-        <span class="funnel-label">⚠️ No subjects added</span>
-        <span class="funnel-count ${funnel.no_subjects > 0 ? 'warn' : 'ok'}">${funnel.no_subjects}</span>
-      </div>
-      <div class="funnel-row">
-        <span class="funnel-label">⚠️ Has subjects, no sub-subjects</span>
-        <span class="funnel-count ${funnel.no_subsections > 0 ? 'warn' : 'ok'}">${funnel.no_subsections}</span>
-      </div>
-      <div class="funnel-row">
-        <span class="funnel-label">⚠️ Has sub-subjects, no topics</span>
-        <span class="funnel-count ${funnel.no_topics > 0 ? 'warn' : 'ok'}">${funnel.no_topics}</span>
-      </div>
-      <div class="funnel-row" style="margin-top:4px">
-        <span class="funnel-label" style="color:var(--text3);font-size:0.78rem">
-          Drop-off rate: ${totalU === 0 ? 0 : Math.round((funnel.no_subjects / totalU) * 100)}% never added a subject
-        </span>
-      </div>`;
 
-    // Growth section
-    const growth = d.growth;
-    if (!growth.length) {
-      document.getElementById('growthSection').innerHTML =
-        '<div class="growth-empty">No new users in the last 7 days.</div>';
-      return;
+      <!-- Users table -->
+      <div class="section-title">
+        All Profiles
+        <span class="user-count-badge" id="userCountBadge">0 users</span>
+      </div>
+
+      <!-- Search + Filter + Sort bar -->
+      <div class="table-toolbar">
+        <div class="toolbar-search-wrap">
+          <span class="toolbar-search-icon">🔍</span>
+          <input type="text" id="userSearchInput" class="toolbar-search"
+                placeholder="Search by name, username, or email…"
+                oninput="filterAndRenderUsers()"/>
+        </div>
+        <select class="toolbar-sort" id="filterSelect" onchange="setFilter(this.value)">
+          <optgroup label="— Plan —">
+            <option value="all">All Users</option>
+            <option value="pro">⭐ Pro</option>
+            <option value="basic">📦 Basic</option>
+            <option value="trial">🎉 Trial</option>
+            <option value="paused">⏸ Paused</option>
+          </optgroup>
+          <optgroup label="— Learner Type —">
+            <option value="type_board_exam">🎓 Board Exam</option>
+            <option value="type_ece">📡 ECE</option>
+            <option value="type_student">📚 Student</option>
+            <option value="type_college">🏫 College Entrance</option>
+            <option value="type_scholarship">🏆 Scholarship</option>
+          </optgroup>
+        </select>
+        <select class="toolbar-sort" onchange="setSortAndRender(this.value)">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="name">Name A–Z</option>
+          <option value="progress">Progress ↓</option>
+          <option value="subjects">Subjects ↓</option>
+          <option value="expiry">Expiry soonest</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Email</th>
+              <th>Learner</th>
+              <th>Subjects</th>
+              <th>Progress</th>
+              <th>Joined</th>
+              <th>Last Payment</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            <tr><td colspan="5" class="empty-users">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ══ CONFIRM DELETE — Step 1: Confirm ═══════════════════════════════════ -->
+  <div class="confirm-overlay" id="confirmOverlay">
+    <div class="confirm-box">
+      <h3>🗑️ Delete Profile</h3>
+      <p id="confirmText">Are you sure you want to delete this profile?</p>
+      <div class="confirm-actions">
+        <button class="btn-ghost-sm" onclick="closeConfirm()">Cancel</button>
+        <button class="btn-danger-sm" id="confirmDeleteBtn">Yes, Send OTP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ OTP VERIFY — Step 2: Enter OTP ═════════════════════════════════════ -->
+  <div class="confirm-overlay" id="otpOverlay">
+    <div class="confirm-box">
+      <h3>🔐 Verify Deletion</h3>
+      <p style="font-size:0.85rem;color:var(--text2);margin-bottom:1rem">
+        An OTP was sent to <strong style="color:var(--text)">markjosephpbulan@gmail.com</strong>.<br/>
+        Enter it below to confirm deletion.
+      </p>
+      <input type="text" id="otpInput" maxlength="6" inputmode="numeric"
+            placeholder="Enter 6-digit OTP"
+            style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:0.7rem 0.9rem;color:var(--text);font-size:1.2rem;letter-spacing:0.3rem;text-align:center;outline:none;margin-bottom:8px;font-family:'DM Sans',sans-serif"
+            oninput="this.value=this.value.replace(/\D/g,'')"
+            onkeydown="if(event.key==='Enter') verifyOtpAndDelete()"/>
+      <div class="error-msg" id="otpError"></div>
+      <div class="confirm-actions">
+        <button class="btn-ghost-sm" onclick="closeOtp()">Cancel</button>
+        <button class="btn-danger-sm" id="otpVerifyBtn" onclick="verifyOtpAndDelete()">🗑️ Delete Now</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+  let pendingDeleteId = null;
+  let pendingDeleteName = null;
+  let adminPassword = '';
+  let allUsers = [];          // full user list cached
+  let allPayments = {};       // user_id → {last_paid_at, last_plan} from payments table
+  let currentFilter = 'all';
+  let currentSort = 'newest';
+
+  // Helper — every admin API call includes the password as a header
+  function adminFetch(url, options = {}) {
+    const headers = { ...(options.headers || {}), 'X-Admin-Password': adminPassword };
+    return fetch(url, { ...options, headers });
+  }
+
+  // ── Boot ────────────────────────────────────────────────────────────────────
+  async function boot() {
+    // Can't auto-restore password from memory on page load — always show login
+    // (This is intentional: admin must re-enter password each visit for security)
+  }
+
+  // ── Login ────────────────────────────────────────────────────────────────────
+  async function doAdminLogin() {
+    const pw    = document.getElementById('adminPwInput').value;
+    const errEl = document.getElementById('loginError');
+    const btn   = document.getElementById('loginBtn');
+    errEl.textContent = '';
+    if (!pw) { errEl.textContent = 'Please enter the admin password.'; return; }
+
+    btn.textContent = 'Checking…'; btn.disabled = true;
+    try {
+      const r = await fetch('/api/admin/login', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ password: pw })
+      });
+      const d = await r.json();
+      if (!r.ok) { errEl.textContent = d.error; return; }
+      adminPassword = pw;  // store in memory — sent with every request
+      showPanel();
+      loadUsers();
+    } catch(e) {
+      errEl.textContent = 'Connection error. Please try again.';
+    } finally {
+      btn.textContent = 'Enter Admin Panel'; btn.disabled = false;
     }
-    const maxCount = Math.max(...growth.map(g => g.count));
-    document.getElementById('growthSection').innerHTML = growth.map(g => {
-      const pct  = maxCount === 0 ? 0 : Math.round((g.count / maxCount) * 100);
-      const date = new Date(g.day + 'T00:00:00');
-      const label = date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', weekday: 'short' });
+  }
+
+  async function doAdminLogout() {
+    await adminFetch('/api/admin/logout', { method: 'POST' });
+    adminPassword = '';  // clear from memory
+    document.getElementById('adminPanel').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('adminPwInput').value = '';
+  }
+
+  function showPanel() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('adminPanel').style.display  = 'block';
+  }
+
+  // ── Load Users ───────────────────────────────────────────────────────────────
+  async function loadUsers() {
+    const tbody = document.getElementById('usersTableBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-users">Loading…</td></tr>';
+    try {
+      const r = await adminFetch('/api/admin/users');
+      if (!r.ok) { tbody.innerHTML = '<tr><td colspan="7" class="empty-users">Failed to load users.</td></tr>'; return; }
+      allUsers = await r.json();
+
+      // Update stat cards
+      document.getElementById('statUsers').textContent    = allUsers.length;
+      document.getElementById('statSubjects').textContent = allUsers.reduce((a, u) => a + u.subject_count, 0);
+      const avgPct = allUsers.length === 0 ? 0 : Math.round(allUsers.reduce((a, u) => a + u.progress_pct, 0) / allUsers.length);
+      document.getElementById('statAvgProgress').textContent = avgPct + '%';
+
+      // Load last payments in parallel
+      try {
+        const pr = await adminFetch('/api/admin/payments');
+        if (pr.ok) allPayments = await pr.json();
+      } catch(e) {}
+
+      loadAnalytics();
+      filterAndRenderUsers();
+    } catch(e) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-users">Error loading users.</td></tr>';
+    }
+  }
+
+  function renderUsersTable(users) {
+    const tbody = document.getElementById('usersTableBody');
+    if (!tbody) return;
+    if (!users.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-users">No users found.</td></tr>'; return; }
+    tbody.innerHTML = users.map(u => {
+      const avatarHTML = u.avatar
+        ? `<img src="${u.avatar}" alt="">`
+        : `<span>${esc(u.display_name[0].toUpperCase())}</span>`;
+      const pmData = allPayments[u.id];
+      const lastPaidDisplay = pmData && pmData.last_paid_at
+        ? `<div style="color:var(--green);font-size:0.8rem;font-weight:600">${formatDate(pmData.last_paid_at)}</div>
+          <div style="color:var(--text3);font-size:0.72rem">${pmData.last_plan === 'pro_4mo' ? '⭐ Pro' : '📦 Basic'}</div>`
+        : `<span style="color:var(--text3);font-size:0.8rem">—</span>`;
       return `
-        <div class="growth-row">
-          <span class="growth-date">${label}</span>
-          <div class="growth-bar-wrap"><div class="growth-bar-fill" style="width:${pct}%"></div></div>
-          <span class="growth-num">+${g.count}</span>
-        </div>`;
+      <tr id="row-${u.id}" class="${u.is_paused ? 'row-paused' : ''}">
+        <td>
+          <div class="user-avatar-cell">
+            <div class="user-avatar-sm">${avatarHTML}</div>
+            <div>
+              <div class="user-display-name">
+                ${esc(u.display_name)}
+                ${u.is_paused ? '<span class="paused-badge">⏸ Paused</span>' : ''}
+                ${u.is_pro ? '<span class="pro-badge-admin">⭐ Pro</span>' : '<span class="basic-badge-admin">Basic</span>'}
+                ${u.plan_expires ? '<span class="expiry-badge-admin" title="Plan expires">⏰ ' + formatDate(u.plan_expires) + '</span>' : ''}
+              </div>
+              <div class="user-username">@${esc(u.username)}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="color:var(--text2);font-size:0.8rem">${esc(u.email || '—')}</span>
+            ${u.email ? `<button onclick="copyEmail('${esc(u.email)}')" title="Copy email"
+              style="background:transparent;border:none;cursor:pointer;color:var(--text3);font-size:0.75rem;padding:2px 5px;border-radius:4px;transition:all 0.15s"
+              onmouseover="this.style.color='var(--text)';this.style.background='var(--border)'"
+              onmouseout="this.style.color='var(--text3)';this.style.background='transparent'">📋</button>` : ''}
+          </div>
+        </td>
+        <td>${renderLearnerBadge(u)}</td>
+        <td>${u.subject_count}</td>
+        <td>
+          <div class="progress-inline">
+            <div class="bar-mini-wrap"><div class="bar-mini-fill" style="width:${u.progress_pct}%"></div></div>
+            <span class="pct-mini">${u.progress_pct}%</span>
+          </div>
+        </td>
+        <td style="color:var(--text3)">${formatDate(u.created_at)}</td>
+        <td>${lastPaidDisplay}</td>
+        <td>
+          <div class="action-menu-wrap">
+            <button class="action-menu-btn" onclick="toggleActionMenu('${u.id}', event)">⋯ Actions</button>
+            <div class="action-dropdown" id="action-menu-${u.id}">
+              <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_4mo');closeActionMenus()">⭐ Pro 4 months</button>
+              <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','basic_1yr');closeActionMenus()">📦 Basic 1yr</button>
+              <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_bonus');closeActionMenus()">🎁 Pro Bonus (1mo)</button>
+              <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','trial');closeActionMenus()">🔄 Reset Trial</button>
+              <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','revoke');closeActionMenus()">🔒 Set Basic</button>
+              <div class="action-dd-divider"></div>
+              <button class="action-dd-item" id="pause-btn-${u.id}" onclick="togglePause('${u.id}','${esc(u.display_name)}',${u.is_paused});closeActionMenus()">${u.is_paused ? '▶ Unpause' : '⏸ Pause'}</button>
+              <div class="action-dd-divider"></div>
+              <button class="action-dd-item action-dd-danger" onclick="confirmDelete('${u.id}','${esc(u.display_name)}');closeActionMenus()">🗑️ Delete</button>
+            </div>
+          </div>
+        </td>
+      </tr>`;
     }).join('');
+  }
 
-  } catch(e) { /* silent — analytics are non-critical */ }
-}
+  // ── Action dropdown ────────────────────────────────────────────────────────────
+  function toggleActionMenu(userId, event) {
+    event.stopPropagation();
+    const menu = document.getElementById('action-menu-' + userId);
+    const isOpen = menu.classList.contains('open');
+    closeActionMenus();
+    if (!isOpen) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const menuHeight = 280; // approx dropdown height
+      const spaceBelow = window.innerHeight - rect.bottom;
+      menu.style.right = (window.innerWidth - rect.right) + 'px';
+      if (spaceBelow < menuHeight) {
+        // flip upward
+        menu.style.top = '';
+        menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+      } else {
+        menu.style.bottom = '';
+        menu.style.top = (rect.bottom + 4) + 'px';
+      }
+      menu.classList.add('open');
+    }
+  }
+  function closeActionMenus() {
+    document.querySelectorAll('.action-dropdown.open').forEach(m => m.classList.remove('open'));
+  }
+  document.addEventListener('click', closeActionMenus);
 
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeConfirm();
-});
+  // ── Search / Filter / Sort ────────────────────────────────────────────────────
+  function setFilter(filter) {
+    currentFilter = filter;
+    filterAndRenderUsers();
+  }
 
-boot();
-</script>
-</body>
-</html>
+  function setSortAndRender(sort) {
+    currentSort = sort;
+    filterAndRenderUsers();
+  }
+
+  function filterAndRenderUsers() {
+    const q = (document.getElementById('userSearchInput')?.value || '').toLowerCase().trim();
+
+    let filtered = allUsers.filter(u => {
+      // Search
+      const matchSearch = !q ||
+        u.display_name.toLowerCase().includes(q) ||
+        u.username.toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q);
+
+      // Filter
+      let matchFilter = true;
+      if (currentFilter === 'pro')               matchFilter = u.is_pro && !u.is_paused && u.plan !== 'trial' && u.plan !== 'basic_pro_bonus';
+      if (currentFilter === 'basic')             matchFilter = (!u.is_pro || u.plan === 'basic_pro_bonus') && !u.is_paused && u.plan !== 'expired';
+      if (currentFilter === 'trial')             matchFilter = u.plan === 'trial' && !u.is_paused;
+      if (currentFilter === 'paused')            matchFilter = u.is_paused;
+      if (currentFilter === 'type_board_exam')   matchFilter = u.user_type === 'board_exam';
+      if (currentFilter === 'type_ece')          matchFilter = (u.profession || '').toLowerCase() === 'ece';
+      if (currentFilter === 'type_student')      matchFilter = u.user_type === 'student';
+      if (currentFilter === 'type_college')      matchFilter = u.user_type === 'college_entrance';
+      if (currentFilter === 'type_scholarship')  matchFilter = u.user_type === 'scholarship';
+
+      return matchSearch && matchFilter;
+    });
+
+    // Sort
+    filtered.sort((a, b) => {
+      if (currentSort === 'newest')   return new Date(b.created_at) - new Date(a.created_at);
+      if (currentSort === 'oldest')   return new Date(a.created_at) - new Date(b.created_at);
+      if (currentSort === 'name')     return a.display_name.localeCompare(b.display_name);
+      if (currentSort === 'progress') return b.progress_pct - a.progress_pct;
+      if (currentSort === 'subjects') return b.subject_count - a.subject_count;
+      if (currentSort === 'expiry') {
+        const ae = a.plan_expires ? new Date(a.plan_expires) : new Date('9999');
+        const be = b.plan_expires ? new Date(b.plan_expires) : new Date('9999');
+        return ae - be;
+      }
+      return 0;
+    });
+
+    renderUsersTable(filtered);
+    document.getElementById('userCountBadge').textContent =
+      `${filtered.length} of ${allUsers.length} users`;
+  }
+
+  // ── Delete — Step 1: Confirm ──────────────────────────────────────────────────
+  function confirmDelete(userId, displayName) {
+    pendingDeleteId   = userId;
+    pendingDeleteName = displayName;
+    document.getElementById('confirmText').textContent =
+      `Delete "${displayName}"? This permanently removes all their data. An OTP will be sent to your email to confirm.`;
+    document.getElementById('confirmOverlay').classList.add('open');
+    document.getElementById('confirmDeleteBtn').onclick = requestDeleteOtp;
+  }
+
+  function closeConfirm() {
+    document.getElementById('confirmOverlay').classList.remove('open');
+  }
+
+  // ── Delete — Step 2: Request OTP ─────────────────────────────────────────────
+  async function requestDeleteOtp() {
+    closeConfirm();
+    document.getElementById('otpInput').value = '';
+    document.getElementById('otpError').textContent = '';
+    document.getElementById('otpVerifyBtn').textContent = 'Sending OTP…';
+    document.getElementById('otpVerifyBtn').disabled = true;
+    document.getElementById('otpOverlay').classList.add('open');
+
+    try {
+      const r = await adminFetch('/api/admin/request-delete-otp', { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) {
+        document.getElementById('otpError').textContent = d.error || 'Failed to send OTP.';
+      } else {
+        showToast('📧 OTP sent to your email!');
+      }
+    } catch(e) {
+      document.getElementById('otpError').textContent = 'Connection error. Try again.';
+    } finally {
+      document.getElementById('otpVerifyBtn').textContent = '🗑️ Delete Now';
+      document.getElementById('otpVerifyBtn').disabled = false;
+      document.getElementById('otpInput').focus();
+    }
+  }
+
+  function closeOtp() {
+    document.getElementById('otpOverlay').classList.remove('open');
+    pendingDeleteId   = null;
+    pendingDeleteName = null;
+  }
+
+  // ── Delete — Step 3: Verify OTP and delete ────────────────────────────────────
+  async function verifyOtpAndDelete() {
+    const otp = document.getElementById('otpInput').value.trim();
+    const errEl = document.getElementById('otpError');
+    errEl.textContent = '';
+
+    if (!otp || otp.length < 6) { errEl.textContent = 'Please enter the 6-digit OTP.'; return; }
+    if (!pendingDeleteId) { closeOtp(); return; }
+
+    const btn = document.getElementById('otpVerifyBtn');
+    btn.textContent = 'Verifying…'; btn.disabled = true;
+
+    try {
+      const r = await adminFetch(`/api/admin/users/${pendingDeleteId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otp })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        errEl.textContent = d.error || 'Incorrect OTP. Try again.';
+        btn.textContent = '🗑️ Delete Now'; btn.disabled = false;
+        return;
+      }
+      const id = pendingDeleteId;
+      closeOtp();
+      document.getElementById(`row-${id}`)?.remove();
+      allUsers = allUsers.filter(u => u.id !== id);
+      filterAndRenderUsers();
+      showToast('✅ Profile deleted successfully.');
+    } catch(e) {
+      errEl.textContent = 'Connection error: ' + e.message;
+      btn.textContent = '🗑️ Delete Now'; btn.disabled = false;
+    }
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────────
+  function copyEmail(email) {
+    navigator.clipboard.writeText(email).then(() => {
+      showToast('📋 Email copied: ' + email);
+    }).catch(() => {
+      // Fallback for older browsers
+      const el = document.createElement('textarea');
+      el.value = email;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      showToast('📋 Email copied: ' + email);
+    });
+  }
+
+  function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderLearnerBadge(u) {
+    const typeMap = {
+      board_exam: { icon: '🎓', label: 'Board Exam' },
+      student: { icon: '📚', label: 'Student' },
+      college_entrance: { icon: '🏫', label: 'College Entrance' },
+      scholarship: { icon: '🏆', label: 'Scholarship' },
+    };
+    const t = typeMap[u.user_type] || typeMap['board_exam'];
+    const profLabel = u.profession ? `<div style="color:var(--gold);font-size:0.72rem;font-weight:700;margin-top:2px">${esc(u.profession.toUpperCase())}</div>` : '';
+    return `<div style="font-size:0.78rem;color:var(--text2);white-space:nowrap">${t.icon} ${t.label}</div>${profLabel}`;
+  }
+
+  function formatDate(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' });
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  // ── Set Plan ──────────────────────────────────────────────────────────────────
+  const PLAN_LABELS = {
+    'pro_4mo':   'Pro for 4 months (₱100)',
+    'basic_1yr': 'Basic 1 year (₱70) + 1 month Pro bonus',
+    'pro_bonus': '1 month Pro bonus',
+    'trial':     'Trial reset for 7 days',
+    'revoke':    'Basic plan (no expiry)',
+  };
+
+  async function setPlan(userId, displayName, plan) {
+    const label = PLAN_LABELS[plan] || plan;
+    if (!confirm(`Set "${displayName}" → ${label}?`)) return;
+    try {
+      const r = await fetch(`/api/admin/users/${userId}/set-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPassword },
+        body: JSON.stringify({ plan })
+      });
+      const data = await r.json();
+      if (!r.ok) { alert(data.error || 'Failed'); return; }
+      // Update pro badge
+      const row = document.getElementById(`row-${userId}`);
+      if (row) {
+        const badge = row.querySelector('.pro-badge-admin, .basic-badge-admin');
+        if (badge) {
+          badge.className   = data.is_pro ? 'pro-badge-admin' : 'basic-badge-admin';
+          badge.textContent = data.is_pro ? '⭐ Pro' : 'Basic';
+        }
+        // Update or add expiry badge
+        let exBadge = row.querySelector('.expiry-badge-admin');
+        if (data.plan_expires) {
+          const d = new Date(data.plan_expires).toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'numeric'});
+          if (exBadge) { exBadge.textContent = '⏰ ' + d; }
+          else {
+            const nameDiv = row.querySelector('.user-display-name');
+            if (nameDiv) {
+              const span = document.createElement('span');
+              span.className = 'expiry-badge-admin';
+              span.textContent = '⏰ ' + d;
+              nameDiv.appendChild(span);
+            }
+          }
+        } else if (exBadge) { exBadge.remove(); }
+      }
+      showToast(data.msg || '✅ Plan updated!');
+    } catch(e) {
+      alert('Connection error. Please try again.');
+    }
+  }
+
+  // ── Pause / Unpause ──────────────────────────────────────────────────────────
+  async function togglePause(userId, displayName, currentlyPaused) {
+    const action = currentlyPaused ? 'unpause' : 'pause';
+    const msg    = currentlyPaused
+      ? `Unpause "${displayName}"? They will regain full access.`
+      : `Pause "${displayName}"? They will be locked out until you unpause them.`;
+
+    if (!confirm(msg)) return;
+
+    const btn = document.getElementById(`pause-btn-${userId}`);
+    if (btn) { btn.textContent = 'Updating…'; btn.disabled = true; }
+
+    try {
+      const r = await adminFetch(`/api/admin/users/${userId}/pause`, { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) { showToast(`❌ Error: ${d.error}`); return; }
+
+      const isPaused = d.is_paused;
+      const row = document.getElementById(`row-${userId}`);
+      if (row) row.className = isPaused ? 'row-paused' : '';
+
+      // Update pause button
+      if (btn) {
+        btn.textContent  = isPaused ? '▶ Unpause' : '⏸ Pause';
+        btn.className    = isPaused ? 'btn-unpause' : 'btn-pause';
+        btn.disabled     = false;
+        btn.setAttribute('onclick', `togglePause('${userId}','${displayName}',${isPaused})`);
+      }
+
+      // Update paused badge in name cell
+      const nameCell = row?.querySelector('.user-display-name');
+      if (nameCell) {
+        const existing = nameCell.querySelector('.paused-badge');
+        if (isPaused && !existing) {
+          nameCell.insertAdjacentHTML('beforeend', '<span class="paused-badge">⏸ Paused</span>');
+        } else if (!isPaused && existing) {
+          existing.remove();
+        }
+      }
+
+      showToast(isPaused ? `⏸ ${displayName} has been paused.` : `▶ ${displayName} has been unpaused.`);
+    } catch(e) {
+      showToast('❌ Connection error. Please try again.');
+      if (btn) { btn.textContent = currentlyPaused ? '▶ Unpause' : '⏸ Pause'; btn.disabled = false; }
+    }
+  }
+
+  // ── Analytics ────────────────────────────────────────────────────────────────
+  async function loadAnalytics() {
+    try {
+      const r = await adminFetch('/api/admin/analytics');
+      if (!r.ok) return;
+      const d = await r.json();
+
+      // Fill new stat cards
+      document.getElementById('statActiveUsers').textContent = d.active_users;
+      document.getElementById('statTopics').textContent      = d.total_topics;
+      document.getElementById('statNotes').textContent       = d.total_notes;
+
+      // Funnel section
+      const funnel = d.funnel;
+      const totalU = d.total_users;
+      document.getElementById('funnelSection').innerHTML = `
+        <div class="funnel-row">
+          <span class="funnel-label">✅ Signed up</span>
+          <span class="funnel-count ok">${totalU}</span>
+        </div>
+        <div class="funnel-row">
+          <span class="funnel-label">⚠️ No subjects added</span>
+          <span class="funnel-count ${funnel.no_subjects > 0 ? 'warn' : 'ok'}">${funnel.no_subjects}</span>
+        </div>
+        <div class="funnel-row">
+          <span class="funnel-label">⚠️ Has subjects, no sub-subjects</span>
+          <span class="funnel-count ${funnel.no_subsections > 0 ? 'warn' : 'ok'}">${funnel.no_subsections}</span>
+        </div>
+        <div class="funnel-row">
+          <span class="funnel-label">⚠️ Has sub-subjects, no topics</span>
+          <span class="funnel-count ${funnel.no_topics > 0 ? 'warn' : 'ok'}">${funnel.no_topics}</span>
+        </div>
+        <div class="funnel-row" style="margin-top:4px">
+          <span class="funnel-label" style="color:var(--text3);font-size:0.78rem">
+            Drop-off rate: ${totalU === 0 ? 0 : Math.round((funnel.no_subjects / totalU) * 100)}% never added a subject
+          </span>
+        </div>`;
+
+      // Growth section
+      const growth = d.growth;
+      if (!growth.length) {
+        document.getElementById('growthSection').innerHTML =
+          '<div class="growth-empty">No new users in the last 7 days.</div>';
+        return;
+      }
+      const maxCount = Math.max(...growth.map(g => g.count));
+      document.getElementById('growthSection').innerHTML = growth.map(g => {
+        const pct  = maxCount === 0 ? 0 : Math.round((g.count / maxCount) * 100);
+        const date = new Date(g.day + 'T00:00:00');
+        const label = date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', weekday: 'short' });
+        return `
+          <div class="growth-row">
+            <span class="growth-date">${label}</span>
+            <div class="growth-bar-wrap"><div class="growth-bar-fill" style="width:${pct}%"></div></div>
+            <span class="growth-num">+${g.count}</span>
+          </div>`;
+      }).join('');
+
+    } catch(e) { /* silent — analytics are non-critical */ }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeConfirm();
+  });
+
+  boot();
+  </script>
+  </body>
+  </html>

@@ -308,10 +308,17 @@ function onUserTypeChange() {
 }
 
 const TEMPLATE_INFO = {
-  ece: '4 subjects, 34 sub-subjects',
-  ee:  '3 subjects, 40 sub-subjects',
-  ce:  '3 subjects, 34 sub-subjects',
-  me:  '3 subjects, 42 sub-subjects',
+  ece:          '4 subjects, 34 sub-subjects',
+  ee:           '3 subjects, 40 sub-subjects',
+  ce:           '3 subjects, 34 sub-subjects',
+  me:           '3 subjects, 42 sub-subjects',
+  nursing:      '5 subjects, 29 sub-subjects',
+  pharmacy:     '6 subjects, 24 sub-subjects',
+  cpa:          '6 subjects, 57 sub-subjects',
+  architecture: '3 subjects, 29 sub-subjects',
+  mining:       '3 subjects, 18 sub-subjects',
+  che:          '3 subjects, 16 sub-subjects',
+  ge:           '5 subjects, 38 sub-subjects',
 };
 
 function onProfessionChange() {
@@ -384,7 +391,7 @@ function toggleStudyProfileEdit() {
     });
     onProfileTypeChange();
     const sel = document.getElementById('profileProfessionSelect');
-    const knownProfessions = ['ece', 'ee', 'ce', 'me'];
+    const knownProfessions = ['ece','ee','ce','me','nursing','pharmacy','cpa','architecture','mining','che','ge'];
     if (knownProfessions.includes(prof)) {
       sel.value = prof;
     } else if (prof) {

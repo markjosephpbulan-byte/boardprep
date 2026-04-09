@@ -147,7 +147,7 @@
   .action-menu-wrap { position: relative; display: inline-block; }
   .action-menu-btn { background: var(--surface2); border: 1px solid var(--border2); color: var(--text); border-radius: 8px; padding: 5px 14px; cursor: pointer; font-size: 0.82rem; font-family: 'DM Sans', sans-serif; white-space: nowrap; transition: border-color 0.15s; }
   .action-menu-btn:hover { border-color: var(--text2); }
-  .action-dropdown { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; padding: 5px; z-index: 200; min-width: 190px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: none; }
+  .action-dropdown { position: fixed; background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; padding: 5px; z-index: 999; min-width: 190px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: none; }
   .action-dropdown.open { display: block; }
   .action-dd-item { display: block; width: 100%; text-align: left; padding: 8px 12px; border-radius: 6px; border: none; background: transparent; color: var(--text2); cursor: pointer; font-size: 0.83rem; font-family: 'DM Sans', sans-serif; transition: all 0.12s; }
   .action-dd-item:hover { background: var(--surface2); color: var(--text); }
@@ -700,7 +700,12 @@ function toggleActionMenu(userId, event) {
   const menu = document.getElementById('action-menu-' + userId);
   const isOpen = menu.classList.contains('open');
   closeActionMenus();
-  if (!isOpen) menu.classList.add('open');
+  if (!isOpen) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 4) + 'px';
+    menu.style.right = (window.innerWidth - rect.right) + 'px';
+    menu.classList.add('open');
+  }
 }
 function closeActionMenus() {
   document.querySelectorAll('.action-dropdown.open').forEach(m => m.classList.remove('open'));

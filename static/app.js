@@ -3848,7 +3848,8 @@ async function doStandaloneLogin() {
     const data = await r.json();
     if (!r.ok) {
       if (r.status === 403) {
-        // Account paused — show dedicated paused view
+        // Account paused — set currentUser so payment calls work
+        if (data.user) currentUser = data.user;
         showView('paused');
         return;
       }

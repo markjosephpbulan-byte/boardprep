@@ -944,9 +944,8 @@ def login():
     if not user or not check_password_hash(user["password_hash"], password):
         return jsonify({"error": "Incorrect username/email or password."}), 401
     if user.get("is_paused"):
-        return jsonify({
-            "error": "Your account has been paused. Please contact the admin."
-        }), 403
+        session["user_id"] = user["id"]  # allow checkout API calls from paused view
+        return jsonify({"error": "paused", "user": safe_user(user)}), 403
     session["user_id"] = user["id"]
     return jsonify(safe_user(user))
 

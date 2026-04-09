@@ -340,6 +340,8 @@
     border-radius: 99px; padding: 1px 7px; margin-left: 5px;
   }
   .row-paused td { opacity: 0.6; }
+  .row-paused td .action-menu-wrap,
+  .row-paused td .action-menu-wrap * { opacity: 1; }
 
   @media (max-width: 640px) {
     .admin-main { padding: 1rem; }
@@ -702,8 +704,17 @@ function toggleActionMenu(userId, event) {
   closeActionMenus();
   if (!isOpen) {
     const rect = event.currentTarget.getBoundingClientRect();
-    menu.style.top = (rect.bottom + 4) + 'px';
+    const menuHeight = 280; // approx dropdown height
+    const spaceBelow = window.innerHeight - rect.bottom;
     menu.style.right = (window.innerWidth - rect.right) + 'px';
+    if (spaceBelow < menuHeight) {
+      // flip upward
+      menu.style.top = '';
+      menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+    } else {
+      menu.style.bottom = '';
+      menu.style.top = (rect.bottom + 4) + 'px';
+    }
     menu.classList.add('open');
   }
 }

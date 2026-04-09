@@ -1072,6 +1072,10 @@ async function saveProfile() {
           : (sel || null);
       }
       const studyPw = document.getElementById('profileStudyPw').value;
+      if (!studyPw) {
+        errEl.textContent = 'Please enter your password to change your study profile.';
+        return;
+      }
       const r3 = await fetch(`/api/profiles/${uid}/setup-profile`, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

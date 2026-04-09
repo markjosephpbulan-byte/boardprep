@@ -1191,11 +1191,17 @@ def setup_profile(user_id):
     )
     existing_count = row["c"] if row else 0
 
-    # Require password only for existing users changing their study profile
-    if existing_count > 0:
+    # Always require password when a password is submitted (profile modal)
+    # Skip only for fresh registrations (0 subjects, no password sent)
+    if password:
         user = get_user_by_id(user_id)
         if not user or not check_password_hash(user["password_hash"], password):
             return jsonify({"error": "Incorrect password"}), 403
+    elif existing_count > 0:
+        # Has subjects but sent no password — reject (registration flow always has 0 subjects)
+        return jsonify({
+            "error": "Password is required to change your study profile."
+        }), 403
 
     db_execute(
         "UPDATE users SET user_type=%s, profession=%s WHERE id=%s",

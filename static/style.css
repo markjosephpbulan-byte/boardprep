@@ -360,7 +360,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .color-swatch.selected { border-color: white; box-shadow: 0 0 0 2px rgba(255,255,255,0.3); }
 
 /* ══ TOAST ════════════════════════════════════════════════════════════════ */
-.toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 0.65rem 1.25rem; font-size: 0.85rem; color: var(--text); box-shadow: var(--shadow); z-index: 400; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; }
+.toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 0.65rem 1.25rem; font-size: 0.85rem; color: var(--text); box-shadow: var(--shadow); z-index: 99999; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ══ RESPONSIVE ═══════════════════════════════════════════════════════════ */

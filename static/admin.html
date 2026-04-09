@@ -278,15 +278,6 @@
     color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.88rem;
   }
   .toolbar-search::placeholder { color: var(--text3); }
-  .toolbar-filters { display: flex; gap: 5px; flex-wrap: wrap; }
-  .filter-btn {
-    padding: 5px 12px; font-size: 0.75rem; font-weight: 600;
-    border-radius: 99px; cursor: pointer; transition: all 0.15s;
-    background: transparent; border: 1px solid var(--border2);
-    color: var(--text2); font-family: 'DM Sans', sans-serif;
-  }
-  .filter-btn:hover { border-color: var(--text2); color: var(--text); }
-  .filter-btn.active { background: var(--gold); border-color: var(--gold); color: #0d1117; }
   .toolbar-sort {
     background: var(--bg3); border: 1px solid var(--border2);
     border-radius: var(--radius-sm); padding: 0.5rem 0.75rem;
@@ -452,13 +443,22 @@
                placeholder="Search by name, username, or email…"
                oninput="filterAndRenderUsers()"/>
       </div>
-      <div class="toolbar-filters">
-        <button class="filter-btn active" data-filter="all"     onclick="setFilter('all',this)">All</button>
-        <button class="filter-btn"        data-filter="pro"     onclick="setFilter('pro',this)">⭐ Pro</button>
-        <button class="filter-btn"        data-filter="basic"   onclick="setFilter('basic',this)">📦 Basic</button>
-        <button class="filter-btn"        data-filter="trial"   onclick="setFilter('trial',this)">🎉 Trial</button>
-        <button class="filter-btn"        data-filter="paused"  onclick="setFilter('paused',this)">⏸ Paused</button>
-      </div>
+      <select class="toolbar-sort" id="filterSelect" onchange="setFilter(this.value)">
+        <optgroup label="— Plan —">
+          <option value="all">All Users</option>
+          <option value="pro">⭐ Pro</option>
+          <option value="basic">📦 Basic</option>
+          <option value="trial">🎉 Trial</option>
+          <option value="paused">⏸ Paused</option>
+        </optgroup>
+        <optgroup label="— Learner Type —">
+          <option value="type_board_exam">🎓 Board Exam</option>
+          <option value="type_ece">📡 ECE</option>
+          <option value="type_student">📚 Student</option>
+          <option value="type_college">🏫 College Entrance</option>
+          <option value="type_scholarship">🏆 Scholarship</option>
+        </optgroup>
+      </select>
       <select class="toolbar-sort" onchange="setSortAndRender(this.value)">
         <option value="newest">Newest first</option>
         <option value="oldest">Oldest first</option>
@@ -475,9 +475,11 @@
           <tr>
             <th>User</th>
             <th>Email</th>
+            <th>Learner</th>
             <th>Subjects</th>
             <th>Progress</th>
             <th>Joined</th>
+            <th>Last Payment</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -530,6 +532,7 @@ let pendingDeleteId = null;
 let pendingDeleteName = null;
 let adminPassword = '';
 let allUsers = [];          // full user list cached
+let allPayments = {};       // user_id → {last_paid_at, last_plan} from payments table
 let currentFilter = 'all';
 let currentSort = 'newest';
 
@@ -587,10 +590,10 @@ function showPanel() {
 // ── Load Users ───────────────────────────────────────────────────────────────
 async function loadUsers() {
   const tbody = document.getElementById('usersTableBody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-users">Loading…</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-users">Loading…</td></tr>';
   try {
     const r = await adminFetch('/api/admin/users');
-    if (!r.ok) { tbody.innerHTML = '<tr><td colspan="6" class="empty-users">Failed to load users.</td></tr>'; return; }
+    if (!r.ok) { tbody.innerHTML = '<tr><td colspan="7" class="empty-users">Failed to load users.</td></tr>'; return; }
     allUsers = await r.json();
 
     // Update stat cards
@@ -599,21 +602,32 @@ async function loadUsers() {
     const avgPct = allUsers.length === 0 ? 0 : Math.round(allUsers.reduce((a, u) => a + u.progress_pct, 0) / allUsers.length);
     document.getElementById('statAvgProgress').textContent = avgPct + '%';
 
+    // Load last payments in parallel
+    try {
+      const pr = await adminFetch('/api/admin/payments');
+      if (pr.ok) allPayments = await pr.json();
+    } catch(e) {}
+
     loadAnalytics();
     filterAndRenderUsers();
   } catch(e) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-users">Error loading users.</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-users">Error loading users.</td></tr>';
   }
 }
 
 function renderUsersTable(users) {
   const tbody = document.getElementById('usersTableBody');
   if (!tbody) return;
-  if (!users.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-users">No users found.</td></tr>'; return; }
+  if (!users.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-users">No users found.</td></tr>'; return; }
   tbody.innerHTML = users.map(u => {
     const avatarHTML = u.avatar
       ? `<img src="${u.avatar}" alt="">`
       : `<span>${esc(u.display_name[0].toUpperCase())}</span>`;
+    const pmData = allPayments[u.id];
+    const lastPaidDisplay = pmData && pmData.last_paid_at
+      ? `<div style="color:var(--green);font-size:0.8rem;font-weight:600">${formatDate(pmData.last_paid_at)}</div>
+         <div style="color:var(--text3);font-size:0.72rem">${pmData.last_plan === 'pro_4mo' ? '⭐ Pro' : '📦 Basic'}</div>`
+      : `<span style="color:var(--text3);font-size:0.8rem">—</span>`;
     return `
     <tr id="row-${u.id}" class="${u.is_paused ? 'row-paused' : ''}">
       <td>
@@ -639,6 +653,7 @@ function renderUsersTable(users) {
             onmouseout="this.style.color='var(--text3)';this.style.background='transparent'">📋</button>` : ''}
         </div>
       </td>
+      <td>${renderLearnerBadge(u)}</td>
       <td>${u.subject_count}</td>
       <td>
         <div class="progress-inline">
@@ -647,6 +662,7 @@ function renderUsersTable(users) {
         </div>
       </td>
       <td style="color:var(--text3)">${formatDate(u.created_at)}</td>
+      <td>${lastPaidDisplay}</td>
       <td>
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
           <button class="btn-plan-pro" title="Pro for 4 months (₱100)"
@@ -684,10 +700,8 @@ function renderUsersTable(users) {
 }
 
 // ── Search / Filter / Sort ────────────────────────────────────────────────────
-function setFilter(filter, btn) {
+function setFilter(filter) {
   currentFilter = filter;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
   filterAndRenderUsers();
 }
 
@@ -708,10 +722,15 @@ function filterAndRenderUsers() {
 
     // Filter
     let matchFilter = true;
-    if (currentFilter === 'pro')    matchFilter = u.is_pro && !u.is_paused && u.plan !== 'trial' && u.plan !== 'basic_pro_bonus';
-    if (currentFilter === 'basic')  matchFilter = (!u.is_pro || u.plan === 'basic_pro_bonus') && !u.is_paused && u.plan !== 'expired';
-    if (currentFilter === 'trial')  matchFilter = u.plan === 'trial' && !u.is_paused;
-    if (currentFilter === 'paused') matchFilter = u.is_paused;
+    if (currentFilter === 'pro')               matchFilter = u.is_pro && !u.is_paused && u.plan !== 'trial' && u.plan !== 'basic_pro_bonus';
+    if (currentFilter === 'basic')             matchFilter = (!u.is_pro || u.plan === 'basic_pro_bonus') && !u.is_paused && u.plan !== 'expired';
+    if (currentFilter === 'trial')             matchFilter = u.plan === 'trial' && !u.is_paused;
+    if (currentFilter === 'paused')            matchFilter = u.is_paused;
+    if (currentFilter === 'type_board_exam')   matchFilter = u.user_type === 'board_exam';
+    if (currentFilter === 'type_ece')          matchFilter = (u.profession || '').toLowerCase() === 'ece';
+    if (currentFilter === 'type_student')      matchFilter = u.user_type === 'student';
+    if (currentFilter === 'type_college')      matchFilter = u.user_type === 'college_entrance';
+    if (currentFilter === 'type_scholarship')  matchFilter = u.user_type === 'scholarship';
 
     return matchSearch && matchFilter;
   });
@@ -837,6 +856,18 @@ function copyEmail(email) {
 function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderLearnerBadge(u) {
+  const typeMap = {
+    board_exam: { icon: '🎓', label: 'Board Exam' },
+    student: { icon: '📚', label: 'Student' },
+    college_entrance: { icon: '🏫', label: 'College Entrance' },
+    scholarship: { icon: '🏆', label: 'Scholarship' },
+  };
+  const t = typeMap[u.user_type] || typeMap['board_exam'];
+  const profLabel = u.profession ? `<div style="color:var(--gold);font-size:0.72rem;font-weight:700;margin-top:2px">${esc(u.profession.toUpperCase())}</div>` : '';
+  return `<div style="font-size:0.78rem;color:var(--text2);white-space:nowrap">${t.icon} ${t.label}</div>${profLabel}`;
 }
 
 function formatDate(iso) {

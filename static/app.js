@@ -278,13 +278,124 @@ async function doVerifyCode() {
     }
     currentUser = data;
     subjects = []; notes = [];
-    await enterTracker();
+    showView('profile-setup');
+    initUserTypeCards();
   } catch(e) {
     errEl.textContent = 'Connection error. Please try again.';
   } finally {
     btn.textContent = 'Verify & Create Profile';
     btn.disabled = false;
   }
+}
+
+// ── Study Profile Setup (Step 3 of registration) ──
+function initUserTypeCards() {
+  document.querySelectorAll('input[name="userType"]').forEach(radio => {
+    const card = document.getElementById('typeCard-' + radio.value);
+    if (card) card.classList.toggle('selected', radio.checked);
+  });
+  onUserTypeChange();
+}
+
+function onUserTypeChange() {
+  const selected = document.querySelector('input[name="userType"]:checked')?.value;
+  document.querySelectorAll('input[name="userType"]').forEach(radio => {
+    const card = document.getElementById('typeCard-' + radio.value);
+    if (card) card.classList.toggle('selected', radio.value === selected);
+  });
+  const profSection = document.getElementById('professionSection');
+  if (profSection) profSection.style.display = selected === 'board_exam' ? 'block' : 'none';
+}
+
+function onProfessionChange() {
+  const val = document.getElementById('professionSelect').value;
+  document.getElementById('professionOther').style.display = val === 'others' ? 'block' : 'none';
+  document.getElementById('professionTemplateNote').style.display = val === 'ece' ? 'block' : 'none';
+}
+
+async function doSetupProfile() {
+  const errEl = document.getElementById('setup-error');
+  const btn   = document.getElementById('setup-btn');
+  errEl.textContent = '';
+  btn.textContent = 'Setting up…';
+  btn.disabled = true;
+
+  const userType = document.querySelector('input[name="userType"]:checked')?.value || 'board_exam';
+  let profession = null;
+  if (userType === 'board_exam') {
+    const sel = document.getElementById('professionSelect').value;
+    if (sel === 'others') {
+      profession = document.getElementById('professionOther').value.trim() || null;
+    } else {
+      profession = sel || null;
+    }
+  }
+
+  try {
+    const r = await fetch(`/api/profiles/${currentUser.id}/setup-profile`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_type: userType, profession })
+    });
+    const data = await r.json();
+    if (!r.ok) { errEl.textContent = data.error || 'Setup failed.'; return; }
+    currentUser = data;
+    await enterTracker();
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+  } finally {
+    btn.textContent = 'Get Started →';
+    btn.disabled = false;
+  }
+}
+
+async function skipProfileSetup() {
+  await enterTracker();
+}
+
+// ── Profile modal study profile section ──
+function toggleStudyProfileEdit() {
+  const edit = document.getElementById('studyProfileEdit');
+  const isOpen = edit.style.display !== 'none';
+  edit.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    // Pre-select current values
+    const ut = currentUser.user_type || 'board_exam';
+    const prof = currentUser.profession || '';
+    document.querySelectorAll('input[name="profileUserType"]').forEach(r => {
+      r.checked = r.value === ut;
+      const card = document.getElementById('profileTypeCard-' + r.value);
+      if (card) card.classList.toggle('selected', r.value === ut);
+    });
+    onProfileTypeChange();
+    const sel = document.getElementById('profileProfessionSelect');
+    const knownProfessions = ['ece'];
+    if (knownProfessions.includes(prof)) {
+      sel.value = prof;
+    } else if (prof) {
+      sel.value = 'others';
+      document.getElementById('profileProfessionOther').value = prof;
+      document.getElementById('profileProfessionOther').style.display = 'block';
+    } else {
+      sel.value = '';
+    }
+    document.getElementById('profileStudyPw').value = '';
+  }
+}
+
+function onProfileTypeChange() {
+  const selected = document.querySelector('input[name="profileUserType"]:checked')?.value;
+  document.querySelectorAll('input[name="profileUserType"]').forEach(radio => {
+    const card = document.getElementById('profileTypeCard-' + radio.value);
+    if (card) card.classList.toggle('selected', radio.value === selected);
+  });
+  const sec = document.getElementById('profileProfessionSection');
+  if (sec) sec.style.display = selected === 'board_exam' ? 'block' : 'none';
+}
+
+function onProfileProfessionChange() {
+  const val = document.getElementById('profileProfessionSelect').value;
+  document.getElementById('profileProfessionOther').style.display = val === 'others' ? 'block' : 'none';
 }
 
 async function doResendCode() {
@@ -837,6 +948,14 @@ function openProfileModal() {
     prev.innerHTML = `<span>${currentUser.display_name[0].toUpperCase()}</span>`;
     removeBtn.style.display = 'none';
   }
+  // Study profile badge
+  const typeLabels = { board_exam: '🎓 Board Exam', student: '📚 Student', college_entrance: '🏫 College Entrance', scholarship: '🏆 Scholarship' };
+  const ut = currentUser.user_type || 'board_exam';
+  const prof = currentUser.profession ? ` — ${currentUser.profession.toUpperCase()}` : '';
+  const badgeText = document.getElementById('studyProfileBadgeText');
+  if (badgeText) badgeText.textContent = (typeLabels[ut] || ut) + prof;
+  const editSection = document.getElementById('studyProfileEdit');
+  if (editSection) editSection.style.display = 'none';
   openModal('profileModal');
 }
 
@@ -918,6 +1037,29 @@ async function saveProfile() {
 
     updateHeaderProfile();
     updateCountdown();
+
+    // Handle study profile change if edit section is open
+    const studyEdit = document.getElementById('studyProfileEdit');
+    if (studyEdit && studyEdit.style.display !== 'none') {
+      const profileUserType = document.querySelector('input[name="profileUserType"]:checked')?.value || 'board_exam';
+      let profileProfession = null;
+      if (profileUserType === 'board_exam') {
+        const sel = document.getElementById('profileProfessionSelect').value;
+        profileProfession = sel === 'others'
+          ? (document.getElementById('profileProfessionOther').value.trim() || null)
+          : (sel || null);
+      }
+      const studyPw = document.getElementById('profileStudyPw').value;
+      const r3 = await fetch(`/api/profiles/${uid}/setup-profile`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_type: profileUserType, profession: profileProfession, password: studyPw })
+      });
+      const d3 = await r3.json();
+      if (!r3.ok) { errEl.textContent = d3.error || 'Could not update study profile.'; return; }
+      currentUser = { ...currentUser, ...d3 };
+    }
+
     closeModal('profileModal');
     showToast('Profile updated! ✅');
 

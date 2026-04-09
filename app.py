@@ -718,6 +718,8 @@ def safe_user(u):
         if u.get("last_study_date")
         else None,
         "created_at": str(u.get("created_at", "")),
+        "user_type": u.get("user_type") or "board_exam",
+        "profession": u.get("profession"),
     }
 
 
@@ -1174,6 +1176,40 @@ def get_profile(user_id):
 # ══════════════════════════════════════════════════════════════════════════════
 #  PROFILE SETTINGS  (owner only)
 # ══════════════════════════════════════════════════════════════════════════════
+
+
+@app.route("/api/profiles/<user_id>/setup-profile", methods=["POST"])
+@owner_required
+def setup_profile(user_id):
+    body = request.json or {}
+    user_type = (body.get("user_type") or "board_exam").strip()
+    profession = (body.get("profession") or "").strip() or None
+    password = body.get("password", "")
+
+    # Check if user already has subjects (existing user flow)
+    row = db_execute(
+        "SELECT COUNT(*) as c FROM subjects WHERE user_id=%s", (user_id,), fetch="one"
+    )
+    existing_count = row["c"] if row else 0
+
+    # Require password only for existing users changing their study profile
+    if existing_count > 0:
+        user = get_user_by_id(user_id)
+        if not user or not check_password_hash(user["password_hash"], password):
+            return jsonify({"error": "Incorrect password"}), 403
+
+    db_execute(
+        "UPDATE users SET user_type=%s, profession=%s WHERE id=%s",
+        (user_type, profession, user_id),
+    )
+    invalidate_user_cache(user_id)
+
+    # Seed subjects only if user has none yet
+    if existing_count == 0 and profession:
+        seed_profession_subjects(user_id, profession)
+
+    user = get_user_by_id(user_id)
+    return jsonify(safe_user(user)), 200
 
 
 @app.route("/api/profiles/<user_id>/settings", methods=["PUT"])
@@ -1684,6 +1720,8 @@ def admin_list_users():
             else None,
             "pro_since": str(u.get("pro_since", "")),
             "created_at": str(u["created_at"]),
+            "user_type": u.get("user_type") or "board_exam",
+            "profession": u.get("profession"),
         })
     return jsonify(result)
 
@@ -2344,6 +2382,88 @@ PAYMONGO_SECRET_KEY = os.environ.get("PAYMONGO_SECRET_KEY", "")
 PAYMONGO_PUBLIC_KEY = os.environ.get("PAYMONGO_PUBLIC_KEY", "")
 PAYMONGO_WEBHOOK_SECRET = os.environ.get("PAYMONGO_WEBHOOK_SECRET", "")
 PAYMONGO_API = "https://api.paymongo.com/v1"
+
+# ── Subject Templates ──
+SUBJECT_TEMPLATES = {
+    "ece": [
+        {
+            "name": "Mathematics",
+            "color": "#4f8ef7",
+            "subsections": [
+                "Differential Calculus",
+                "Integral Calculus",
+                "Differential Equation",
+                "Advanced Engineering Mathematics for ECE",
+                "Engineering Data Analysis",
+                "Electromagnetics",
+                "Signals, Spectra & Signal Processing",
+                "Feedback and Control Systems",
+            ],
+        },
+        {
+            "name": "General Engineering and Applied Sciences",
+            "color": "#3ecf8e",
+            "subsections": [
+                "Chemistry for Engineers",
+                "Physics for Engineers",
+                "Engineering Economics",
+                "Engineering Management",
+                "Technopreneurship 101",
+                "Physics 2",
+                "Materials Science and Engineering",
+                "Computer Programming",
+                "Environment Science and Engineering",
+                "ECE Laws, Contracts, Ethics, Standards & Safety",
+                "CAD",
+            ],
+        },
+        {
+            "name": "Electronics Engineering",
+            "color": "#f5c842",
+            "subsections": [
+                "DC Electrical Circuits",
+                "AC Electrical Circuits",
+                "Electromagnetics",
+                "Electronic Devices and Circuits",
+                "Electronic Circuit Analysis and Design",
+                "Electronic Systems and Design",
+                "Logic Circuits and Switching Theory",
+                "Microprocessor & Microcontroller Systems and Design",
+                "Feedback and Control Systems",
+            ],
+        },
+        {
+            "name": "Electronics Systems and Technologies",
+            "color": "#a78bfa",
+            "subsections": [
+                "Signals, Spectra, Signal Processing",
+                "Principles of Communications",
+                "Digital Communications",
+                "Transmission and Antenna Systems",
+                "Electronics 3: Electronic Systems and Design",
+                "Data Communications",
+            ],
+        },
+    ]
+}
+
+
+def seed_profession_subjects(user_id, profession):
+    template = SUBJECT_TEMPLATES.get((profession or "").lower())
+    if not template:
+        return
+    for pos, subj in enumerate(template):
+        sid = str(uuid.uuid4())
+        db_execute(
+            "INSERT INTO subjects (id, user_id, name, color, position) VALUES (%s,%s,%s,%s,%s)",
+            (sid, user_id, subj["name"], subj["color"], pos),
+        )
+        for sspos, ssname in enumerate(subj["subsections"]):
+            db_execute(
+                "INSERT INTO subsections (id, subject_id, user_id, name, position) VALUES (%s,%s,%s,%s,%s)",
+                (str(uuid.uuid4()), sid, user_id, ssname, sspos),
+            )
+
 
 # ── Vertex AI Express Mode (bills to GCP $300 credit) ──
 VERTEX_AI_EXPRESS_KEY = os.environ.get("VERTEX_AI_EXPRESS_KEY", "")

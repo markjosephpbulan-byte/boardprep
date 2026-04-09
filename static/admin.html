@@ -86,7 +86,7 @@
     position: sticky; top: 0; z-index: 100;
   }
   .admin-header-inner {
-    max-width: 1100px; margin: 0 auto; padding: 0 2rem;
+    max-width: 100%; padding: 0 2rem;
     height: 64px; display: flex; align-items: center; justify-content: space-between;
   }
   .admin-logo { font-family: 'Syne', sans-serif; font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 10px; }
@@ -104,7 +104,7 @@
   }
   .logout-btn:hover { color: var(--text); border-color: var(--text2); }
 
-  .admin-main { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+  .admin-main { max-width: 100%; padding: 2rem; }
 
   /* Stats row */
   .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
@@ -141,8 +141,18 @@
   }
   .user-avatar-sm img { width: 100%; height: 100%; object-fit: cover; }
   .user-display-name { font-weight: 500; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .users-table td:last-child { white-space: nowrap; }
   .user-username { font-size: 0.78rem; color: var(--text3); }
+
+  /* ── Action dropdown ── */
+  .action-menu-wrap { position: relative; display: inline-block; }
+  .action-menu-btn { background: var(--surface2); border: 1px solid var(--border2); color: var(--text); border-radius: 8px; padding: 5px 14px; cursor: pointer; font-size: 0.82rem; font-family: 'DM Sans', sans-serif; white-space: nowrap; transition: border-color 0.15s; }
+  .action-menu-btn:hover { border-color: var(--text2); }
+  .action-dropdown { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; padding: 5px; z-index: 200; min-width: 190px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: none; }
+  .action-dropdown.open { display: block; }
+  .action-dd-item { display: block; width: 100%; text-align: left; padding: 8px 12px; border-radius: 6px; border: none; background: transparent; color: var(--text2); cursor: pointer; font-size: 0.83rem; font-family: 'DM Sans', sans-serif; transition: all 0.12s; }
+  .action-dd-item:hover { background: var(--surface2); color: var(--text); }
+  .action-dd-divider { height: 1px; background: var(--border); margin: 4px 0; }
+  .action-dd-danger { color: var(--red) !important; }
 
   .progress-inline { display: flex; align-items: center; gap: 8px; }
   .bar-mini-wrap { width: 70px; height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
@@ -665,40 +675,37 @@ function renderUsersTable(users) {
       <td style="color:var(--text3)">${formatDate(u.created_at)}</td>
       <td>${lastPaidDisplay}</td>
       <td>
-        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
-          <button class="btn-plan-pro" title="Pro for 4 months (₱100)"
-                  onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_4mo')">
-            ⭐ Pro 4mo
-          </button>
-          <button class="btn-plan-basic" title="Basic 1yr (₱70) + 1mo Pro bonus"
-                  onclick="setPlan('${u.id}','${esc(u.display_name)}','basic_1yr')">
-            📦 Basic 1yr
-          </button>
-          <button class="btn-plan-pro-bonus" title="Give 1 month Pro bonus"
-                  onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_bonus')">
-            🎁 Pro B
-          </button>
-          <button class="btn-plan-trial" title="Reset trial for 7 days"
-                  onclick="setPlan('${u.id}','${esc(u.display_name)}','trial')">
-            🔄 Trial
-          </button>
-          <button class="btn-plan-revoke" title="Set to Basic (no expiry)"
-                  onclick="setPlan('${u.id}','${esc(u.display_name)}','revoke')">
-            🔒 Basic
-          </button>
-          <button class="${u.is_paused ? 'btn-unpause' : 'btn-pause'}"
-                  id="pause-btn-${u.id}"
-                  onclick="togglePause('${u.id}','${esc(u.display_name)}',${u.is_paused})">
-            ${u.is_paused ? '▶ Unpause' : '⏸ Pause'}
-          </button>
-          <button class="btn-danger-sm" onclick="confirmDelete('${u.id}','${esc(u.display_name)}')">
-            🗑️ Delete
-          </button>
+        <div class="action-menu-wrap">
+          <button class="action-menu-btn" onclick="toggleActionMenu('${u.id}', event)">⋯ Actions</button>
+          <div class="action-dropdown" id="action-menu-${u.id}">
+            <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_4mo');closeActionMenus()">⭐ Pro 4 months</button>
+            <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','basic_1yr');closeActionMenus()">📦 Basic 1yr</button>
+            <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','pro_bonus');closeActionMenus()">🎁 Pro Bonus (1mo)</button>
+            <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','trial');closeActionMenus()">🔄 Reset Trial</button>
+            <button class="action-dd-item" onclick="setPlan('${u.id}','${esc(u.display_name)}','revoke');closeActionMenus()">🔒 Set Basic</button>
+            <div class="action-dd-divider"></div>
+            <button class="action-dd-item" id="pause-btn-${u.id}" onclick="togglePause('${u.id}','${esc(u.display_name)}',${u.is_paused});closeActionMenus()">${u.is_paused ? '▶ Unpause' : '⏸ Pause'}</button>
+            <div class="action-dd-divider"></div>
+            <button class="action-dd-item action-dd-danger" onclick="confirmDelete('${u.id}','${esc(u.display_name)}');closeActionMenus()">🗑️ Delete</button>
+          </div>
         </div>
       </td>
     </tr>`;
   }).join('');
 }
+
+// ── Action dropdown ────────────────────────────────────────────────────────────
+function toggleActionMenu(userId, event) {
+  event.stopPropagation();
+  const menu = document.getElementById('action-menu-' + userId);
+  const isOpen = menu.classList.contains('open');
+  closeActionMenus();
+  if (!isOpen) menu.classList.add('open');
+}
+function closeActionMenus() {
+  document.querySelectorAll('.action-dropdown.open').forEach(m => m.classList.remove('open'));
+}
+document.addEventListener('click', closeActionMenus);
 
 // ── Search / Filter / Sort ────────────────────────────────────────────────────
 function setFilter(filter) {

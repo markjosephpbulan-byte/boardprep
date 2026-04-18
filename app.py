@@ -360,6 +360,17 @@ try:
             )
         except Exception:
             pass
+        # done_at columns for analytics (tracks WHEN topics/subsections were completed)
+        try:
+            db_execute(
+                "ALTER TABLE topics ADD COLUMN IF NOT EXISTS done_at TIMESTAMPTZ"
+            )
+            db_execute(
+                "ALTER TABLE subsections ADD COLUMN IF NOT EXISTS done_at TIMESTAMPTZ"
+            )
+            print("[DB] done_at columns ready ✅")
+        except Exception as e:
+            print(f"[DB] done_at migration: {e}")
         print("[DB] Ready ✅ (tables already exist)")
 except Exception as e:
     print(f"[DB] ❌ FAILED: {e}")
@@ -1414,11 +1425,18 @@ def update_subsection(user_id, subject_id, sub_id):
             (body["name"], sub_id, user_id),
         )
     if "done" in body:
-        db_execute(
-            "UPDATE subsections SET done=%s WHERE id=%s AND user_id=%s",
-            (bool(body["done"]), sub_id, user_id),
-        )
-        if bool(body["done"]):
+        done_val = bool(body["done"])
+        if done_val:
+            db_execute(
+                "UPDATE subsections SET done=%s, done_at=NOW() WHERE id=%s AND user_id=%s",
+                (done_val, sub_id, user_id),
+            )
+        else:
+            db_execute(
+                "UPDATE subsections SET done=%s, done_at=NULL WHERE id=%s AND user_id=%s",
+                (done_val, sub_id, user_id),
+            )
+        if done_val:
             update_streak(user_id)
     ss = db_execute("SELECT * FROM subsections WHERE id=%s", (sub_id,), fetch="one")
     if not ss:
@@ -1478,11 +1496,18 @@ def update_topic(user_id, subject_id, sub_id, topic_id):
             (body["name"], topic_id, user_id),
         )
     if "done" in body:
-        db_execute(
-            "UPDATE topics SET done=%s WHERE id=%s AND user_id=%s",
-            (bool(body["done"]), topic_id, user_id),
-        )
-        if bool(body["done"]):
+        done_val = bool(body["done"])
+        if done_val:
+            db_execute(
+                "UPDATE topics SET done=%s, done_at=NOW() WHERE id=%s AND user_id=%s",
+                (done_val, topic_id, user_id),
+            )
+        else:
+            db_execute(
+                "UPDATE topics SET done=%s, done_at=NULL WHERE id=%s AND user_id=%s",
+                (done_val, topic_id, user_id),
+            )
+        if done_val:
             update_streak(user_id)
     if "note" in body:
         db_execute(
@@ -3043,17 +3068,37 @@ def seed_profession_subjects(user_id, profession):
     template = SUBJECT_TEMPLATES.get((profession or "").lower())
     if not template:
         return
+    # Build all rows first, then bulk-insert in 2 queries (avoids N round trips)
+    subject_rows = []
+    subsection_rows = []
     for pos, subj in enumerate(template):
         sid = str(uuid.uuid4())
-        db_execute(
-            "INSERT INTO subjects (id, user_id, name, color, position) VALUES (%s,%s,%s,%s,%s)",
-            (sid, user_id, subj["name"], subj["color"], pos),
-        )
+        subject_rows.append((sid, user_id, subj["name"], subj["color"], pos))
         for sspos, ssname in enumerate(subj["subsections"]):
-            db_execute(
-                "INSERT INTO subsections (id, subject_id, user_id, name, position) VALUES (%s,%s,%s,%s,%s)",
-                (str(uuid.uuid4()), sid, user_id, ssname, sspos),
-            )
+            subsection_rows.append((str(uuid.uuid4()), sid, user_id, ssname, sspos))
+
+    pool = get_pool()
+    conn = pool.getconn()
+    try:
+        conn.autocommit = False
+        cur = conn.cursor()
+        psycopg2.extras.execute_values(
+            cur,
+            "INSERT INTO subjects (id, user_id, name, color, position) VALUES %s",
+            subject_rows,
+        )
+        psycopg2.extras.execute_values(
+            cur,
+            "INSERT INTO subsections (id, subject_id, user_id, name, position) VALUES %s",
+            subsection_rows,
+        )
+        conn.commit()
+        cur.close()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
 
 
 # ── Vertex AI Express Mode (bills to GCP $300 credit) ──
@@ -3855,6 +3900,423 @@ Required format:
     except Exception as e:
         print(f"[Chat Error] {e}")
         return jsonify({"error": f"Server error: {str(e)[:100]}"}), 500
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  STUDY ANALYTICS DASHBOARD
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@app.route("/api/profiles/<user_id>/analytics", methods=["GET"])
+@owner_required
+def get_analytics(user_id):
+    """
+    Returns all data needed to render the Study Analytics Dashboard.
+    Computes: overall stats, per-subject breakdown, readiness score,
+    achievement badges, weekly velocity, heatmap, pace projection.
+    """
+    from datetime import date as _date
+
+    user = get_user_by_id(user_id)
+    if not user:
+        return jsonify({"error": "Not found"}), 404
+
+    today = _date.today()
+
+    # ── 1. Overall topic stats ──────────────────────────────────────────────
+    topic_stats = (
+        db_execute(
+            """
+        SELECT COUNT(t.id) as total,
+               SUM(CASE WHEN t.done THEN 1 ELSE 0 END) as done
+        FROM topics t
+        JOIN subsections ss ON ss.id = t.subsection_id
+        JOIN subjects s ON s.id = ss.subject_id
+        WHERE s.user_id = %s
+    """,
+            (user_id,),
+            fetch="one",
+        )
+        or {}
+    )
+    topics_total = int(topic_stats.get("total") or 0)
+    topics_done = int(topic_stats.get("done") or 0)
+
+    # Subsection-only (no topics) stats
+    ss_stats = (
+        db_execute(
+            """
+        SELECT COUNT(ss.id) as total,
+               SUM(CASE WHEN ss.done THEN 1 ELSE 0 END) as done
+        FROM subsections ss
+        WHERE ss.user_id = %s
+          AND NOT EXISTS (SELECT 1 FROM topics t WHERE t.subsection_id = ss.id)
+    """,
+            (user_id,),
+            fetch="one",
+        )
+        or {}
+    )
+    ss_only_total = int(ss_stats.get("total") or 0)
+    ss_only_done = int(ss_stats.get("done") or 0)
+
+    grand_total = topics_total + ss_only_total
+    grand_done = topics_done + ss_only_done
+    overall_pct = round((grand_done / grand_total) * 100) if grand_total > 0 else 0
+
+    # ── 2. Per-subject breakdown ────────────────────────────────────────────
+    subjects_raw = (
+        db_execute(
+            """
+        SELECT s.id, s.name, s.color,
+               COUNT(t.id)                                      AS topic_total,
+               SUM(CASE WHEN t.done THEN 1 ELSE 0 END)         AS topic_done,
+               COUNT(DISTINCT ss.id)                            AS ss_total,
+               SUM(CASE WHEN ss.done THEN 1 ELSE 0 END)        AS ss_done
+        FROM subjects s
+        LEFT JOIN subsections ss ON ss.subject_id = s.id
+        LEFT JOIN topics t ON t.subsection_id = ss.id
+        WHERE s.user_id = %s
+        GROUP BY s.id, s.name, s.color
+        ORDER BY s.position, s.created_at
+    """,
+            (user_id,),
+            fetch="all",
+        )
+        or []
+    )
+
+    fc_rows = (
+        db_execute(
+            """
+        SELECT subject_id, COUNT(*) as cnt
+        FROM flashcards WHERE user_id = %s GROUP BY subject_id
+    """,
+            (user_id,),
+            fetch="all",
+        )
+        or []
+    )
+    fc_map = {r["subject_id"]: int(r["cnt"]) for r in fc_rows}
+
+    subject_list = []
+    any_subject_100 = False
+    for s in subjects_raw:
+        t_total = int(s.get("topic_total") or 0)
+        t_done = int(s.get("topic_done") or 0)
+        ss_t = int(s.get("ss_total") or 0)
+        ss_d = int(s.get("ss_done") or 0)
+        if t_total > 0:
+            pct = round((t_done / t_total) * 100)
+        elif ss_t > 0:
+            pct = round((ss_d / ss_t) * 100)
+        else:
+            pct = 0
+        if pct >= 100:
+            any_subject_100 = True
+        subject_list.append({
+            "id": s["id"],
+            "name": s["name"],
+            "color": s["color"] or "#4f8ef7",
+            "topics_done": t_done,
+            "topics_total": t_total,
+            "subsections_done": ss_d,
+            "subsections_total": ss_t,
+            "flashcards": fc_map.get(s["id"], 0),
+            "pct": pct,
+        })
+
+    # ── 3. Weekly velocity (last 8 weeks, needs done_at) ───────────────────
+    velocity_rows = []
+    try:
+        velocity_rows = (
+            db_execute(
+                """
+            SELECT DATE_TRUNC('week', done_at) AS week_start, COUNT(*) AS cnt
+            FROM topics
+            WHERE user_id = %s AND done_at IS NOT NULL
+              AND done_at >= NOW() - INTERVAL '8 weeks'
+            GROUP BY week_start ORDER BY week_start
+        """,
+                (user_id,),
+                fetch="all",
+            )
+            or []
+        )
+    except Exception:
+        pass
+
+    velocity_map = {}
+    for r in velocity_rows:
+        if r.get("week_start"):
+            velocity_map[str(r["week_start"])[:10]] = int(r["cnt"])
+
+    velocity_data = []
+    velocity_labels = []
+    dow = today.weekday()  # 0=Mon … 6=Sun
+    for i in range(7, -1, -1):
+        wk_start = today - timedelta(days=dow + i * 7)
+        velocity_data.append(velocity_map.get(str(wk_start), 0))
+        velocity_labels.append(wk_start.strftime("%b %d"))
+
+    # ── 4. Heatmap (last 84 days, needs done_at) ───────────────────────────
+    heatmap = {}
+    try:
+        hm_topic_rows = (
+            db_execute(
+                """
+            SELECT DATE(done_at) AS study_date, COUNT(*) AS cnt
+            FROM topics
+            WHERE user_id = %s AND done_at IS NOT NULL
+              AND done_at >= NOW() - INTERVAL '84 days'
+            GROUP BY DATE(done_at)
+        """,
+                (user_id,),
+                fetch="all",
+            )
+            or []
+        )
+        hm_ss_rows = (
+            db_execute(
+                """
+            SELECT DATE(done_at) AS study_date, COUNT(*) AS cnt
+            FROM subsections
+            WHERE user_id = %s AND done_at IS NOT NULL
+              AND done_at >= NOW() - INTERVAL '84 days'
+              AND NOT EXISTS (SELECT 1 FROM topics t WHERE t.subsection_id = subsections.id)
+            GROUP BY DATE(done_at)
+        """,
+                (user_id,),
+                fetch="all",
+            )
+            or []
+        )
+        for r in hm_topic_rows:
+            if r.get("study_date"):
+                heatmap[str(r["study_date"])] = int(r["cnt"])
+        for r in hm_ss_rows:
+            if r.get("study_date"):
+                d = str(r["study_date"])
+                heatmap[d] = heatmap.get(d, 0) + int(r["cnt"])
+    except Exception:
+        pass
+
+    # ── 5. Pace projection ─────────────────────────────────────────────────
+    streak = int(user.get("streak") or 0)
+    exam_date_str = user.get("exam_date")
+    days_to_exam = None
+    pace_pct = None
+    daily_target = None
+
+    if exam_date_str:
+        try:
+            exam_dt = datetime.strptime(exam_date_str, "%Y-%m-%d").date()
+            days_to_exam = (exam_dt - today).days
+            if days_to_exam > 0 and grand_total > 0:
+                # Average topics/day over last 14 days
+                recent_row = (
+                    db_execute(
+                        """
+                    SELECT COUNT(*) AS cnt FROM topics
+                    WHERE user_id = %s AND done_at IS NOT NULL
+                      AND done_at >= NOW() - INTERVAL '14 days'
+                """,
+                        (user_id,),
+                        fetch="one",
+                    )
+                    or {}
+                )
+                recent_cnt = int(recent_row.get("cnt") or 0)
+                avg_daily = recent_cnt / 14.0 if recent_cnt > 0 else 0
+
+                if avg_daily > 0:
+                    projected = grand_done + avg_daily * days_to_exam
+                    pace_pct = min(round((projected / grand_total) * 100), 100)
+                else:
+                    # No done_at velocity data yet — show current completion as baseline
+                    pace_pct = overall_pct
+
+                remaining = max(grand_total - grand_done, 0)
+                daily_target = (
+                    max(1, round(remaining / days_to_exam)) if remaining > 0 else 0
+                )
+        except Exception:
+            pass
+
+    # ── 6. Readiness score ─────────────────────────────────────────────────
+    completion_f = grand_done / max(grand_total, 1)
+    streak_f = min(streak / 30.0, 1.0)
+    pace_f = (pace_pct / 100.0) if pace_pct is not None else completion_f
+    readiness = round((completion_f * 0.6 + streak_f * 0.2 + pace_f * 0.2) * 100)
+
+    if readiness >= 90:
+        readiness_label = "You're ready. Exam? Bring it. 🔥"
+        readiness_color = "gold"
+    elif readiness >= 71:
+        readiness_label = "You're on track! Keep it up."
+        readiness_color = "green"
+    elif readiness >= 41:
+        readiness_label = "Good start. Push harder."
+        readiness_color = "yellow"
+    else:
+        readiness_label = "Let's get moving. Your exam is coming."
+        readiness_color = "red"
+
+    # ── 7. Total flashcards ────────────────────────────────────────────────
+    fc_total_row = (
+        db_execute(
+            "SELECT COUNT(*) as cnt FROM flashcards WHERE user_id=%s",
+            (user_id,),
+            fetch="one",
+        )
+        or {}
+    )
+    total_flashcards = int(fc_total_row.get("cnt") or 0)
+
+    # ── 8. Badge helpers (max topics/day, night owl) ───────────────────────
+    max_topics_day = 0
+    studied_at_night = False
+    try:
+        mx_row = (
+            db_execute(
+                """
+            SELECT MAX(cnt) AS mx FROM (
+                SELECT COUNT(*) AS cnt FROM topics
+                WHERE user_id=%s AND done_at IS NOT NULL
+                GROUP BY DATE(done_at)
+            ) sub
+        """,
+                (user_id,),
+                fetch="one",
+            )
+            or {}
+        )
+        max_topics_day = int(mx_row.get("mx") or 0)
+
+        owl_row = (
+            db_execute(
+                """
+            SELECT COUNT(*) AS cnt FROM topics
+            WHERE user_id=%s AND done_at IS NOT NULL
+              AND EXTRACT(HOUR FROM done_at) >= 22
+        """,
+                (user_id,),
+                fetch="one",
+            )
+            or {}
+        )
+        studied_at_night = int(owl_row.get("cnt") or 0) > 0
+    except Exception:
+        pass
+
+    # ── 9. Achievement badges ──────────────────────────────────────────────
+    badges = [
+        {
+            "id": "first_step",
+            "name": "First Step",
+            "icon": "👣",
+            "desc": "Completed your first topic",
+            "earned": grand_done >= 1,
+        },
+        {
+            "id": "getting_started",
+            "name": "Getting Started",
+            "icon": "🚀",
+            "desc": "10 topics completed",
+            "earned": grand_done >= 10,
+        },
+        {
+            "id": "streak_3",
+            "name": "Streak Starter",
+            "icon": "🔥",
+            "desc": "3-day study streak",
+            "earned": streak >= 3,
+        },
+        {
+            "id": "streak_7",
+            "name": "On Fire",
+            "icon": "🔥",
+            "desc": "7-day study streak",
+            "earned": streak >= 7,
+        },
+        {
+            "id": "streak_30",
+            "name": "Legendary",
+            "icon": "⚡",
+            "desc": "30-day study streak",
+            "earned": streak >= 30,
+        },
+        {
+            "id": "flashcard_fan",
+            "name": "Flashcard Fan",
+            "icon": "🎴",
+            "desc": "50+ flashcards created",
+            "earned": total_flashcards >= 50,
+        },
+        {
+            "id": "subject_master",
+            "name": "Subject Master",
+            "icon": "🎓",
+            "desc": "100% on any subject",
+            "earned": any_subject_100,
+        },
+        {
+            "id": "half_way",
+            "name": "Half Way Hero",
+            "icon": "🏅",
+            "desc": "50% overall topics done",
+            "earned": overall_pct >= 50,
+        },
+        {
+            "id": "almost_there",
+            "name": "Almost There",
+            "icon": "🎯",
+            "desc": "90% overall done",
+            "earned": overall_pct >= 90,
+        },
+        {
+            "id": "champion",
+            "name": "Champion",
+            "icon": "🏆",
+            "desc": "100% overall — incredible!",
+            "earned": overall_pct >= 100,
+        },
+        {
+            "id": "speed_studier",
+            "name": "Speed Studier",
+            "icon": "⚡",
+            "desc": "10+ topics in one day",
+            "earned": max_topics_day >= 10,
+        },
+        {
+            "id": "night_owl",
+            "name": "Night Owl",
+            "icon": "🦉",
+            "desc": "Studied after 10 PM",
+            "earned": studied_at_night,
+        },
+    ]
+
+    return jsonify({
+        "overall": {
+            "topics_done": grand_done,
+            "topics_total": grand_total,
+            "pct": overall_pct,
+        },
+        "streak": streak,
+        "exam_date": exam_date_str,
+        "days_to_exam": days_to_exam,
+        "readiness": readiness,
+        "readiness_label": readiness_label,
+        "readiness_color": readiness_color,
+        "subjects": subject_list,
+        "velocity": {"data": velocity_data, "labels": velocity_labels},
+        "heatmap": heatmap,
+        "pace_pct": pace_pct,
+        "daily_target": daily_target,
+        "badges": badges,
+        "total_flashcards": total_flashcards,
+    })
 
 
 @app.route("/api/profiles/<user_id>/chat-history", methods=["DELETE"])

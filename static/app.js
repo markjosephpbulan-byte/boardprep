@@ -4017,4 +4017,466 @@ document.addEventListener('click', function(e) {
   }
 })();
 
+/* ══════════════════════════════════════════════════════════════
+   STUDY ANALYTICS DASHBOARD
+   ══════════════════════════════════════════════════════════════ */
+
+let analyticsData        = null;   // cached analytics response
+let _radarChartInst      = null;   // Chart.js radar instance
+let _velocityChartInst   = null;   // Chart.js velocity instance
+
+// ── Tab Switcher ────────────────────────────────────────────────────────────
+function switchTrackerTab(tab) {
+  const studyContent = document.getElementById('studyMainContent');
+  const analyticsEl  = document.getElementById('analyticsSection');
+  const tabStudy     = document.getElementById('tabBtnStudy');
+  const tabAnalytics = document.getElementById('tabBtnAnalytics');
+  if (!studyContent || !analyticsEl) return;
+
+  if (tab === 'analytics') {
+    studyContent.style.display  = 'none';
+    analyticsEl.style.display   = 'block';
+    tabStudy.classList.remove('active');
+    tabAnalytics.classList.add('active');
+    // Load analytics data if not yet loaded (or force-refresh)
+    if (!analyticsData) loadAnalytics(false);
+  } else {
+    studyContent.style.display  = '';
+    analyticsEl.style.display   = 'none';
+    tabStudy.classList.add('active');
+    tabAnalytics.classList.remove('active');
+  }
+}
+
+// ── Fetch Analytics Data ─────────────────────────────────────────────────────
+async function loadAnalytics(force) {
+  if (!currentUser) return;
+  if (analyticsData && !force) { renderAnalytics(analyticsData); return; }
+
+  // Show loading, hide content
+  const loading = document.getElementById('analyticsLoading');
+  const content = document.getElementById('analyticsContent');
+  if (loading) loading.style.display = 'flex';
+  if (content) content.style.display = 'none';
+
+  // Destroy old chart instances before re-render
+  if (_radarChartInst)    { _radarChartInst.destroy();    _radarChartInst    = null; }
+  if (_velocityChartInst) { _velocityChartInst.destroy(); _velocityChartInst = null; }
+
+  try {
+    const r = await fetch(`/api/profiles/${currentUser.id}/analytics`, { credentials: 'include' });
+    if (!r.ok) throw new Error('Failed to load analytics');
+    analyticsData = await r.json();
+    renderAnalytics(analyticsData);
+  } catch (e) {
+    if (loading) loading.innerHTML = '<div style="color:var(--text3);text-align:center">Failed to load analytics.<br/><button class="btn-ghost btn-sm" onclick="loadAnalytics(true)" style="margin-top:10px">Try again</button></div>';
+  }
+}
+
+// ── Main Render ──────────────────────────────────────────────────────────────
+function renderAnalytics(d) {
+  const loading = document.getElementById('analyticsLoading');
+  const content = document.getElementById('analyticsContent');
+  if (loading) loading.style.display = 'none';
+  if (content) content.style.display = 'block';
+
+  const pro = isPro();
+
+  // ── Overall stats ──────────────────────────────────────────────────────
+  const overall = d.overall || {};
+  const pct     = overall.pct || 0;
+  const done    = overall.topics_done   || 0;
+  const total   = overall.topics_total  || 0;
+
+  _setText('acTopicsHint', `${done} / ${total} topics`);
+  countUp(document.getElementById('acOverallPct'), pct, '%');
+
+  // Streak
+  const streak = d.streak || 0;
+  countUp(document.getElementById('acStreakVal'), streak);
+  _setText('acStreakHint', streak >= 7 ? '🔥 You\'re on fire!' : streak >= 3 ? 'Great consistency!' : 'Keep studying daily!');
+
+  // Days to exam
+  const days = d.days_to_exam;
+  if (days !== null && days !== undefined) {
+    if (days < 0) {
+      _setText('acDaysExam', 'Done!');
+      _setText('acExamHint', 'Exam day has passed');
+    } else if (days === 0) {
+      _setText('acDaysExam', 'Today!');
+      _setText('acExamHint', '🎓 Exam day! Good luck!');
+    } else {
+      countUp(document.getElementById('acDaysExam'), days);
+      _setText('acExamHint', d.exam_date ? new Date(d.exam_date).toLocaleDateString('en-PH', {month:'short', day:'numeric', year:'numeric'}) : '');
+    }
+  } else {
+    _setText('acDaysExam', '—');
+    _setText('acExamHint', 'Set exam date in profile');
+  }
+
+  // ── Readiness Score ────────────────────────────────────────────────────
+  const readinessPctEl  = document.getElementById('readinessPct');
+  const readinessArcEl  = document.getElementById('readinessArc');
+  const readinessLblEl  = document.getElementById('readinessLabel');
+  const readinessLockEl = document.getElementById('readinessLock');
+
+  if (pro) {
+    if (readinessLockEl) readinessLockEl.style.display = 'none';
+    const r = d.readiness || 0;
+    if (readinessPctEl) readinessPctEl.textContent = r + '%';
+    if (readinessLblEl) readinessLblEl.textContent  = d.readiness_label || '';
+
+    // Color the arc based on readiness level
+    const arcColor = d.readiness_color === 'gold'   ? '#f5c842'
+                   : d.readiness_color === 'green'  ? '#3ecf8e'
+                   : d.readiness_color === 'yellow' ? '#f59e0b'
+                   : '#f56565';
+    if (readinessArcEl) readinessArcEl.style.stroke = arcColor;
+    if (readinessPctEl) readinessPctEl.style.color   = arcColor;
+
+    // Animate the SVG arc (circumference of r=50 = 2π×50 ≈ 314)
+    const circumference = 314;
+    const offset = circumference - (r / 100) * circumference;
+    // Force reflow then animate
+    if (readinessArcEl) {
+      readinessArcEl.style.strokeDashoffset = circumference; // reset
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          readinessArcEl.style.transition = 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)';
+          readinessArcEl.style.strokeDashoffset = offset;
+        });
+      });
+    }
+  } else {
+    if (readinessLockEl) readinessLockEl.style.display = 'flex';
+    if (readinessPctEl)  readinessPctEl.textContent = '?%';
+    if (readinessLblEl)  readinessLblEl.textContent  = 'Pro only';
+  }
+
+  // ── Badges ─────────────────────────────────────────────────────────────
+  renderBadges(d.badges || []);
+
+  // ── Subject breakdown + weak subjects ──────────────────────────────────
+  renderSubjectBreakdown(d.subjects || []);
+  renderWeakSubjects(d.subjects || []);
+
+  // ── Pace projection ────────────────────────────────────────────────────
+  const paceLock    = document.getElementById('paceLock');
+  const paceContent = document.getElementById('paceContent');
+
+  if (!pro) {
+    // Not Pro → show upgrade lock overlay
+    if (paceLock)    paceLock.style.display    = 'flex';
+    if (paceContent) paceContent.style.display = 'none';
+  } else if (d.pace_pct !== null && d.pace_pct !== undefined) {
+    // Pro + exam date set → show full projection
+    if (paceLock)    paceLock.style.display    = 'none';
+    if (paceContent) paceContent.style.display = 'block';
+    _setText('pacePct', d.pace_pct + '%');
+    _setText('paceTargetNum', d.daily_target !== null ? d.daily_target : '—');
+    const remaining = (d.overall?.topics_total || 0) - (d.overall?.topics_done || 0);
+    _setText('paceRemaining', remaining);
+  } else {
+    // Pro but no exam date → friendly prompt, no lock
+    if (paceLock) paceLock.style.display = 'none';
+    if (paceContent) {
+      paceContent.style.display = 'block';
+      paceContent.innerHTML = `
+        <div style="text-align:center;padding:2rem 1rem;">
+          <div style="font-size:2.5rem;margin-bottom:12px">📅</div>
+          <div style="font-size:0.88rem;color:var(--text2);margin-bottom:14px;line-height:1.5">
+            Set your board exam date to see<br/>your pace projection and daily targets.
+          </div>
+          <button class="btn-ghost btn-sm" onclick="openProfileModal()">Set Exam Date →</button>
+        </div>
+      `;
+    }
+  }
+
+  // ── Radar chart (Pro) ──────────────────────────────────────────────────
+  const radarLock = document.getElementById('radarLock');
+  if (pro && d.subjects && d.subjects.length > 0) {
+    if (radarLock) radarLock.style.display = 'none';
+    renderRadarChart(d.subjects);
+  } else if (!pro) {
+    if (radarLock) radarLock.style.display = 'flex';
+  } else {
+    if (radarLock) radarLock.style.display = 'flex';
+  }
+
+  // ── Heatmap calendar (Pro) ────────────────────────────────────────────
+  const heatmapLock = document.getElementById('heatmapLock');
+  if (pro) {
+    if (heatmapLock) heatmapLock.style.display = 'none';
+    renderHeatmap(d.heatmap || {});
+  } else {
+    if (heatmapLock) heatmapLock.style.display = 'flex';
+  }
+
+  // ── Velocity chart (Pro) ───────────────────────────────────────────────
+  const velocityLock = document.getElementById('velocityLock');
+  if (pro) {
+    if (velocityLock) velocityLock.style.display = 'none';
+    renderVelocityChart(d.velocity || {data: [], labels: []});
+  } else {
+    if (velocityLock) velocityLock.style.display = 'flex';
+  }
+}
+
+// ── Achievement Badges ────────────────────────────────────────────────────────
+function renderBadges(badges) {
+  const container = document.getElementById('analyticsBadgeList');
+  if (!container) return;
+  container.innerHTML = '';
+  badges.forEach(b => {
+    const card = document.createElement('div');
+    card.className = 'analytics-badge-card' + (b.earned ? ' earned' : '');
+    card.title = b.desc;
+    card.innerHTML = `
+      <div class="badge-icon ${b.earned ? '' : 'locked'}">${b.icon}</div>
+      <div class="badge-name">${b.name}</div>
+      <div class="badge-desc">${b.earned ? '✓ Earned' : b.desc}</div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+// ── Subject Breakdown ─────────────────────────────────────────────────────────
+function renderSubjectBreakdown(subjects) {
+  const container = document.getElementById('subjectBreakdownList');
+  if (!container) return;
+  if (!subjects.length) {
+    container.innerHTML = '<div class="analytics-empty-state">No subjects added yet. Add your first subject to see a breakdown.</div>';
+    return;
+  }
+  const sorted = [...subjects].sort((a, b) => b.pct - a.pct);
+  container.innerHTML = '';
+  sorted.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'analytics-subject-row';
+    const barColor = s.color || '#4f8ef7';
+    const topicsText = s.topics_total > 0
+      ? `${s.topics_done}/${s.topics_total} topics`
+      : `${s.subsections_done}/${s.subsections_total} subsections`;
+    const fcText = s.flashcards > 0 ? ` · ${s.flashcards} cards` : '';
+    row.innerHTML = `
+      <div class="analytics-subject-dot" style="background:${barColor}"></div>
+      <div class="analytics-subject-name" title="${s.name}">${s.name}</div>
+      <div class="analytics-subject-bar-wrap">
+        <div class="analytics-subject-bar-fill" style="width:${s.pct}%;background:linear-gradient(90deg,${barColor},${barColor}cc)"></div>
+      </div>
+      <div class="analytics-subject-pct">${s.pct}%</div>
+      <div class="analytics-subject-meta">${topicsText}${fcText}</div>
+      <button class="analytics-subject-study-btn" onclick="switchTrackerTab('study')">Study →</button>
+    `;
+    container.appendChild(row);
+  });
+}
+
+// ── Weak Subjects Panel ───────────────────────────────────────────────────────
+function renderWeakSubjects(subjects) {
+  const container = document.getElementById('weakSubjectsList');
+  const section   = document.getElementById('weakSubjectsSection');
+  if (!container) return;
+
+  const weak = [...subjects].filter(s => s.pct < 80).sort((a, b) => a.pct - b.pct).slice(0, 3);
+
+  if (!weak.length) {
+    if (section) section.style.display = 'none';
+    return;
+  }
+  if (section) section.style.display = 'block';
+  container.innerHTML = '';
+  weak.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'analytics-subject-row';
+    const barColor = s.color || '#4f8ef7';
+    const urgency  = s.pct < 20 ? 'Needs attention' : s.pct < 50 ? 'Behind' : 'In progress';
+    row.innerHTML = `
+      <div class="analytics-subject-dot" style="background:${barColor}"></div>
+      <div class="analytics-subject-name" title="${s.name}">${s.name}</div>
+      <div class="analytics-subject-bar-wrap">
+        <div class="analytics-subject-bar-fill" style="width:${s.pct}%;background:linear-gradient(90deg,${barColor},${barColor}cc)"></div>
+      </div>
+      <div class="analytics-subject-pct">${s.pct}%</div>
+      <div class="analytics-weak-badge">${urgency}</div>
+      <button class="analytics-subject-study-btn" onclick="switchTrackerTab('study')">Study →</button>
+    `;
+    container.appendChild(row);
+  });
+}
+
+// ── Heatmap Calendar ──────────────────────────────────────────────────────────
+function renderHeatmap(heatmapData) {
+  const grid = document.getElementById('heatmapGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  const today = new Date();
+  // Find the most recent Monday, then go back 11 more weeks
+  const dow = today.getDay(); // 0=Sun … 6=Sat
+  const daysToLastMon = (dow === 0) ? 6 : dow - 1;
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - daysToLastMon - 11 * 7);
+
+  const todayStr = today.toISOString().split('T')[0];
+
+  for (let week = 0; week < 12; week++) {
+    const col = document.createElement('div');
+    col.className = 'hm-col';
+    for (let day = 0; day < 7; day++) {
+      const d = new Date(startDate);
+      d.setDate(startDate.getDate() + week * 7 + day);
+      const dateStr = d.toISOString().split('T')[0];
+      const count   = heatmapData[dateStr] || 0;
+      const isFuture = d > today;
+
+      const cell = document.createElement('div');
+      cell.className = 'hm-cell';
+      if (dateStr === todayStr) cell.classList.add('today');
+
+      if (!isFuture) {
+        let bg = 'rgba(255,255,255,0.06)';
+        if      (count >= 15) bg = '#3ecf8e';
+        else if (count >= 8)  bg = '#2ea86a';
+        else if (count >= 4)  bg = '#1e6b48';
+        else if (count >= 1)  bg = '#1a4a32';
+        cell.style.background = bg;
+        cell.title = `${dateStr}: ${count} topic${count !== 1 ? 's' : ''} done`;
+      } else {
+        cell.style.opacity = '0';
+        cell.style.pointerEvents = 'none';
+      }
+      col.appendChild(cell);
+    }
+    grid.appendChild(col);
+  }
+}
+
+// ── Radar Chart ───────────────────────────────────────────────────────────────
+function renderRadarChart(subjects) {
+  const canvas = document.getElementById('radarChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  // Destroy old instance
+  if (_radarChartInst) { _radarChartInst.destroy(); _radarChartInst = null; }
+
+  const labels = subjects.map(s => s.name.length > 14 ? s.name.substring(0, 14) + '…' : s.name);
+  const data   = subjects.map(s => s.pct);
+  const colors = subjects.map(s => s.color || '#4f8ef7');
+
+  _radarChartInst = new Chart(canvas, {
+    type: 'radar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Completion %',
+        data,
+        backgroundColor: 'rgba(245,200,66,0.18)',
+        borderColor: '#f5c842',
+        borderWidth: 2.5,
+        pointBackgroundColor: colors,
+        pointBorderColor: '#f5c842',
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        r: {
+          min: 0, max: 100,
+          ticks: { stepSize: 25, color: '#5a6678', font: { size: 10 }, backdropColor: 'transparent' },
+          grid:  { color: 'rgba(255,255,255,0.09)' },
+          angleLines: { color: 'rgba(255,255,255,0.09)' },
+          pointLabels: { color: '#8b97a8', font: { size: 10, family: "'DM Sans', sans-serif" } },
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.raw}% complete`
+          }
+        }
+      }
+    }
+  });
+}
+
+// ── Velocity Bar Chart ────────────────────────────────────────────────────────
+function renderVelocityChart(velocity) {
+  const canvas = document.getElementById('velocityChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  // Destroy old instance
+  if (_velocityChartInst) { _velocityChartInst.destroy(); _velocityChartInst = null; }
+
+  const labels = velocity.labels || [];
+  const data   = velocity.data   || [];
+
+  // Canvas gradient fill: gold at top → dim at bottom
+  const ctx2d = canvas.getContext('2d');
+  const grad = ctx2d.createLinearGradient(0, 0, 0, 220);
+  grad.addColorStop(0, 'rgba(245,200,66,0.85)');
+  grad.addColorStop(1, 'rgba(245,200,66,0.12)');
+
+  _velocityChartInst = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Topics done',
+        data,
+        backgroundColor: grad,
+        borderColor: '#f5c842',
+        borderWidth: 1,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          grid:  { color: 'rgba(255,255,255,0.07)' },
+          ticks: { color: '#5a6678', font: { size: 10 } },
+        },
+        y: {
+          beginAtZero: true,
+          grid:  { color: 'rgba(255,255,255,0.07)' },
+          ticks: { color: '#5a6678', font: { size: 10 }, precision: 0 },
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.raw} topics done`
+          }
+        }
+      }
+    }
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function countUp(el, target, suffix = '', duration = 700) {
+  if (!el || isNaN(target) || target <= 0) return;
+  const start = performance.now();
+  const step = (now) => {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+    el.textContent = Math.round(ease * target) + suffix;
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function _setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
 boot();

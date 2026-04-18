@@ -32,6 +32,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css"/>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<!-- Chart.js for analytics charts -->
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -692,8 +694,18 @@
     <div class="subject-progress-strip" id="subjectProgressStrip"></div>
   </section>
 
+  <!-- ── Tracker Tab Navigation ── -->
+  <div class="tracker-tab-nav" id="trackerTabNav">
+    <button class="tracker-tab-btn active" id="tabBtnStudy" onclick="switchTrackerTab('study')">
+      📚 Study
+    </button>
+    <button class="tracker-tab-btn" id="tabBtnAnalytics" onclick="switchTrackerTab('analytics')">
+      📊 Analytics
+    </button>
+  </div>
+
   <!-- Two-column layout: AI motivation left, subjects right -->
-  <main class="main-content">
+  <main class="main-content" id="studyMainContent">
     <div class="tracker-layout">
 
       <!-- ── LEFT: AI Motivation Sidebar ── -->
@@ -774,6 +786,201 @@
     <div class="notes-list" id="notesList"></div>
   </aside>
   <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleNotesSidebar()"></div>
+
+  <!-- ══ ANALYTICS SECTION ══════════════════════════════════════════════════ -->
+  <section id="analyticsSection" style="display:none">
+    <div class="analytics-container">
+
+      <!-- Loading state -->
+      <div class="analytics-loading-wrap" id="analyticsLoading">
+        <div class="analytics-spinner-ring"></div>
+        <div class="analytics-loading-text">Loading your analytics…</div>
+      </div>
+
+      <!-- Main content (revealed after load) -->
+      <div id="analyticsContent" style="display:none">
+
+        <!-- Page header -->
+        <div class="analytics-page-header">
+          <div>
+            <div class="analytics-page-title">📊 Study Analytics</div>
+            <div class="analytics-page-sub">Your learning progress at a glance</div>
+          </div>
+          <button class="btn-ghost btn-sm" onclick="loadAnalytics(true)">↺ Refresh</button>
+        </div>
+
+        <!-- ── Hero Stats Row ──────────────────────────────────────────── -->
+        <div class="analytics-hero-row">
+
+          <!-- Exam Readiness Score (Pro only) -->
+          <div class="analytics-card analytics-readiness-card" id="acReadinessCard">
+            <div class="ac-readiness-inner">
+              <div class="ac-circle-wrap">
+                <svg viewBox="0 0 120 120" class="ac-circle-svg">
+                  <circle cx="60" cy="60" r="50" fill="none"
+                          stroke="rgba(255,255,255,0.07)" stroke-width="10"/>
+                  <circle cx="60" cy="60" r="50" fill="none"
+                          stroke="#f5c842" stroke-width="10"
+                          stroke-linecap="round"
+                          stroke-dasharray="314" stroke-dashoffset="314"
+                          id="readinessArc" transform="rotate(-90 60 60)"/>
+                </svg>
+                <div class="ac-circle-inner">
+                  <div class="ac-circle-pct" id="readinessPct">0%</div>
+                  <div class="ac-circle-sub">Ready</div>
+                </div>
+              </div>
+              <div class="ac-readiness-info">
+                <div class="ac-readiness-title">Exam Readiness</div>
+                <div class="ac-readiness-label" id="readinessLabel">—</div>
+              </div>
+            </div>
+            <!-- Lock overlay for non-Pro -->
+            <div class="analytics-lock-overlay" id="readinessLock" style="display:none">
+              <div class="analytics-lock-icon">🔒</div>
+              <div class="analytics-lock-text">Pro Feature</div>
+              <button class="btn-primary btn-sm" onclick="openUpgradeModal('pro_4mo')">Upgrade →</button>
+            </div>
+          </div>
+
+          <!-- Days to Exam -->
+          <div class="analytics-card analytics-stat-card">
+            <div class="ac-stat-emoji-wrap"><div class="ac-stat-emoji">📅</div></div>
+            <div class="ac-stat-big" id="acDaysExam">—</div>
+            <div class="ac-stat-name">Days to Exam</div>
+            <div class="ac-stat-hint" id="acExamHint">Set exam date in profile</div>
+          </div>
+
+          <!-- Study Streak -->
+          <div class="analytics-card analytics-stat-card">
+            <div class="ac-stat-emoji-wrap"><div class="ac-stat-emoji">🔥</div></div>
+            <div class="ac-stat-big" id="acStreakVal">0</div>
+            <div class="ac-stat-name">Day Streak</div>
+            <div class="ac-stat-hint" id="acStreakHint">Keep studying daily!</div>
+          </div>
+
+          <!-- Overall Progress -->
+          <div class="analytics-card analytics-stat-card">
+            <div class="ac-stat-emoji-wrap"><div class="ac-stat-emoji">✅</div></div>
+            <div class="ac-stat-big" id="acOverallPct">0%</div>
+            <div class="ac-stat-name">Overall Done</div>
+            <div class="ac-stat-hint" id="acTopicsHint">0 / 0 topics</div>
+          </div>
+
+        </div>
+
+        <!-- ── Achievement Badges ──────────────────────────────────────── -->
+        <div class="analytics-card analytics-badges-section">
+          <div class="analytics-section-title">🏆 Achievements</div>
+          <div class="analytics-badges-row" id="analyticsBadgeList"></div>
+        </div>
+
+        <!-- ── Charts Row: Radar + Pace ───────────────────────────────── -->
+        <div class="analytics-two-col">
+
+          <!-- Subject Balance Radar (Pro) -->
+          <div class="analytics-card analytics-chart-card" id="radarCard">
+            <div class="analytics-section-title">📊 Subject Balance</div>
+            <div id="radarWrap" style="position:relative;height:260px;display:flex;align-items:center;justify-content:center;">
+              <canvas id="radarChart"></canvas>
+            </div>
+            <div class="analytics-lock-overlay" id="radarLock" style="display:none">
+              <div class="analytics-lock-icon">📊</div>
+              <div class="analytics-lock-text">Upgrade to Pro to see your subject balance radar chart</div>
+              <button class="btn-primary btn-sm" onclick="openUpgradeModal('pro_4mo')">Upgrade to Pro →</button>
+            </div>
+          </div>
+
+          <!-- Pace Projection (Pro) -->
+          <div class="analytics-card analytics-pace-card" id="paceCard">
+            <div class="analytics-section-title">⚡ Pace Projection</div>
+            <div id="paceContent">
+              <div class="pace-circle-wrap">
+                <div class="pace-big-num" id="pacePct">—%</div>
+                <div class="pace-big-label">of topics by exam day</div>
+              </div>
+              <div class="pace-target-row" id="paceTargetRow">
+                <div class="pace-target-box">
+                  <div class="pace-target-num" id="paceTargetNum">—</div>
+                  <div class="pace-target-label">topics/day needed</div>
+                </div>
+                <div class="pace-target-box">
+                  <div class="pace-target-num" id="paceRemaining">—</div>
+                  <div class="pace-target-label">topics remaining</div>
+                </div>
+              </div>
+            </div>
+            <div class="analytics-lock-overlay" id="paceLock" style="display:none">
+              <div class="analytics-lock-icon">⚡</div>
+              <div class="analytics-lock-text">Set your exam date and upgrade to Pro to see your study pace projection</div>
+              <button class="btn-primary btn-sm" onclick="openUpgradeModal('pro_4mo')">Upgrade to Pro →</button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ── Focus Here (Weak Subjects) ─────────────────────────────── -->
+        <div class="analytics-card" id="weakSubjectsSection">
+          <div class="analytics-section-title">📉 Focus Here</div>
+          <div id="weakSubjectsList"></div>
+        </div>
+
+        <!-- ── Full Subject Breakdown ──────────────────────────────────── -->
+        <div class="analytics-card">
+          <div class="analytics-section-title">📋 Subject Breakdown</div>
+          <div id="subjectBreakdownList"></div>
+        </div>
+
+        <!-- ── Calendar + Velocity Row ────────────────────────────────── -->
+        <div class="analytics-two-col">
+
+          <!-- Study Heatmap Calendar (Pro) -->
+          <div class="analytics-card analytics-chart-card" id="heatmapCard">
+            <div class="analytics-section-title">🗓️ Study Calendar
+              <span class="analytics-hint-text">last 12 weeks</span>
+            </div>
+            <div id="heatmapContent">
+              <div class="heatmap-wrap">
+                <div class="heatmap-day-labels">
+                  <span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span>
+                </div>
+                <div class="heatmap-grid" id="heatmapGrid"></div>
+              </div>
+              <div class="heatmap-legend">
+                <span>Less</span>
+                <div class="hm-leg-cell" style="background:rgba(255,255,255,0.06)"></div>
+                <div class="hm-leg-cell" style="background:#1a4a32"></div>
+                <div class="hm-leg-cell" style="background:#1e6b48"></div>
+                <div class="hm-leg-cell" style="background:#2ea86a"></div>
+                <div class="hm-leg-cell" style="background:#3ecf8e"></div>
+                <span>More</span>
+              </div>
+            </div>
+            <div class="analytics-lock-overlay" id="heatmapLock" style="display:none">
+              <div class="analytics-lock-icon">🗓️</div>
+              <div class="analytics-lock-text">Upgrade to Pro to see your study calendar</div>
+              <button class="btn-primary btn-sm" onclick="openUpgradeModal('pro_4mo')">Upgrade to Pro →</button>
+            </div>
+          </div>
+
+          <!-- Weekly Velocity Chart (Pro) -->
+          <div class="analytics-card analytics-chart-card" id="velocityCard">
+            <div class="analytics-section-title">📈 Weekly Velocity</div>
+            <div id="velocityWrap" style="position:relative;height:220px;">
+              <canvas id="velocityChart"></canvas>
+            </div>
+            <div class="analytics-lock-overlay" id="velocityLock" style="display:none">
+              <div class="analytics-lock-icon">📈</div>
+              <div class="analytics-lock-text">Upgrade to Pro to see your weekly study velocity</div>
+              <button class="btn-primary btn-sm" onclick="openUpgradeModal('pro_4mo')">Upgrade to Pro →</button>
+            </div>
+          </div>
+
+        </div>
+
+      </div><!-- /analyticsContent -->
+    </div><!-- /analytics-container -->
+  </section><!-- /analyticsSection -->
 
 </div><!-- /view-tracker -->
 

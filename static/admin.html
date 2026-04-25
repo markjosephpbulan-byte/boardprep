@@ -891,7 +891,7 @@
     };
     const t = typeMap[u.user_type] || typeMap['board_exam'];
     const profLabels = { cee: 'CEE (UPCAT/ACET/DCAT)' };
-    const profDisplay = profLabels[(u.profession||'').toLowerCase()] || u.profession.toUpperCase();
+    const profDisplay = profLabels[(u.profession||'').toLowerCase()] || (u.profession||'').toUpperCase();
     const profLabel = u.profession ? `<div style="color:var(--gold);font-size:0.72rem;font-weight:700;margin-top:2px">${esc(profDisplay)}</div>` : '';
     return `<div style="font-size:0.78rem;color:var(--text2);white-space:nowrap">${t.icon} ${t.label}</div>${profLabel}`;
   }

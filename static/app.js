@@ -305,6 +305,8 @@ function onUserTypeChange() {
   });
   const profSection = document.getElementById('professionSection');
   if (profSection) profSection.style.display = selected === 'board_exam' ? 'block' : 'none';
+  const ceeNote = document.getElementById('ceeTemplateNote');
+  if (ceeNote) ceeNote.style.display = selected === 'college_entrance' ? 'block' : 'none';
 }
 
 const TEMPLATE_INFO = {
@@ -319,6 +321,7 @@ const TEMPLATE_INFO = {
   mining:       '3 subjects, 18 sub-subjects',
   che:          '3 subjects, 16 sub-subjects',
   ge:           '5 subjects, 38 sub-subjects',
+  cee:          '6 subjects, 40 sub-subjects',
 };
 
 function onProfessionChange() {
@@ -351,6 +354,8 @@ async function doSetupProfile() {
     } else {
       profession = sel || null;
     }
+  } else if (userType === 'college_entrance') {
+    profession = 'cee';
   }
 
   try {
@@ -391,7 +396,7 @@ function toggleStudyProfileEdit() {
     });
     onProfileTypeChange();
     const sel = document.getElementById('profileProfessionSelect');
-    const knownProfessions = ['ece','ee','ce','me','nursing','pharmacy','cpa','architecture','mining','che','ge'];
+    const knownProfessions = ['ece','ee','ce','me','nursing','pharmacy','cpa','architecture','mining','che','ge','cee'];
     if (knownProfessions.includes(prof)) {
       sel.value = prof;
     } else if (prof) {
@@ -1062,6 +1067,7 @@ async function saveProfile() {
 
     // Handle study profile change if edit section is open
     const studyEdit = document.getElementById('studyProfileEdit');
+    let subjectsReplaced = false;
     if (studyEdit && studyEdit.style.display !== 'none') {
       const profileUserType = document.querySelector('input[name="profileUserType"]:checked')?.value || 'board_exam';
       let profileProfession = null;
@@ -1070,24 +1076,43 @@ async function saveProfile() {
         profileProfession = sel === 'others'
           ? (document.getElementById('profileProfessionOther').value.trim() || null)
           : (sel || null);
+      } else if (profileUserType === 'college_entrance') {
+        profileProfession = 'cee';
       }
       const studyPw = document.getElementById('profileStudyPw').value;
       if (!studyPw) {
         errEl.textContent = 'Please enter your password to change your study profile.';
         return;
       }
+      // Offer to replace subjects when switching to a type that has a template
+      let replaceSubjects = false;
+      if (profileProfession && TEMPLATE_INFO[profileProfession] && subjects.length > 0) {
+        const tInfo = TEMPLATE_INFO[profileProfession];
+        const ok = window.confirm(
+          `Replace your current subjects with the ${profileProfession.toUpperCase()} template?\n\n` +
+          `This will delete all ${subjects.length} of your current subject(s) and load the ${tInfo}.\n\n` +
+          `Your progress will be lost. This cannot be undone.`
+        );
+        if (!ok) { errEl.textContent = 'Cancelled.'; return; }
+        replaceSubjects = true;
+      }
       const r3 = await fetch(`/api/profiles/${uid}/setup-profile`, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_type: profileUserType, profession: profileProfession, password: studyPw })
+        body: JSON.stringify({ user_type: profileUserType, profession: profileProfession, password: studyPw, replace_subjects: replaceSubjects })
       });
       const d3 = await r3.json();
       if (!r3.ok) { errEl.textContent = d3.error || 'Could not update study profile.'; return; }
       currentUser = { ...currentUser, ...d3 };
+      subjectsReplaced = replaceSubjects;
     }
 
     closeModal('profileModal');
     showToast('Profile updated! ✅');
+    if (subjectsReplaced) {
+      await loadSubjects();
+      renderSubjectsGrid();
+    }
 
   } catch(e) {
     errEl.textContent = 'Connection error. Please try again.';

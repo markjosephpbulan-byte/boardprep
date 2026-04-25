@@ -1195,6 +1195,7 @@ def setup_profile(user_id):
     user_type = (body.get("user_type") or "board_exam").strip()
     profession = (body.get("profession") or "").strip() or None
     password = body.get("password", "")
+    replace_subjects = bool(body.get("replace_subjects", False))
 
     # Check if user already has subjects (existing user flow)
     row = db_execute(
@@ -1219,6 +1220,11 @@ def setup_profile(user_id):
         (user_type, profession, user_id),
     )
     invalidate_user_cache(user_id)
+
+    # Replace subjects if requested (user switching learner type)
+    if replace_subjects and existing_count > 0:
+        db_execute("DELETE FROM subjects WHERE user_id=%s", (user_id,))
+        existing_count = 0
 
     # Seed subjects only if user has none yet
     if existing_count == 0 and profession:
@@ -3058,6 +3064,84 @@ SUBJECT_TEMPLATES = {
                 "GIS Mapping",
                 "Photogrammetric Plotting",
                 "Unmanned Aerial Systems (UAS) / Drone Mapping",
+            ],
+        },
+    ],
+    "cee": [
+        {
+            "name": "Mathematics",
+            "color": "#4f8ef7",
+            "subsections": [
+                "Arithmetic & Number Sense",
+                "Algebra",
+                "Linear Equations & Inequalities",
+                "Quadratic Equations & Functions",
+                "Geometry",
+                "Trigonometry",
+                "Statistics & Probability",
+                "Word Problems & Problem Solving",
+            ],
+        },
+        {
+            "name": "English Language Proficiency",
+            "color": "#22c55e",
+            "subsections": [
+                "Vocabulary & Word Meanings",
+                "Grammar & Correct Usage",
+                "Reading Comprehension",
+                "Figures of Speech & Literary Devices",
+                "Verbal Analogies",
+                "Writing & Composition",
+            ],
+        },
+        {
+            "name": "Science",
+            "color": "#f59e0b",
+            "subsections": [
+                "Biology \u2013 Cells & Life Processes",
+                "Biology \u2013 Genetics & Evolution",
+                "Biology \u2013 Ecology",
+                "Chemistry \u2013 Matter & Atoms",
+                "Chemistry \u2013 Chemical Reactions",
+                "Chemistry \u2013 Acids, Bases & Solutions",
+                "Physics \u2013 Motion & Forces",
+                "Physics \u2013 Energy & Waves",
+                "Physics \u2013 Electricity & Magnetism",
+                "Earth Science & Astronomy",
+            ],
+        },
+        {
+            "name": "Filipino / Wika at Panitikan",
+            "color": "#ef4444",
+            "subsections": [
+                "Tamang Gamit ng Wika",
+                "Bahagi ng Pananalita",
+                "Sawikain at Idioma",
+                "Tayutay / Pigura ng Pananalita",
+                "Pagbabasa at Pag-unawa",
+                "Panitikang Pilipino",
+            ],
+        },
+        {
+            "name": "Abstract Reasoning & Mental Ability",
+            "color": "#8b5cf6",
+            "subsections": [
+                "Logical Reasoning & Problem Solving",
+                "Pattern Recognition",
+                "Verbal Analogies",
+                "Data Interpretation",
+                "Spatial Reasoning & Visualization",
+            ],
+        },
+        {
+            "name": "General Knowledge",
+            "color": "#06b6d4",
+            "subsections": [
+                "Philippine History",
+                "Philippine Government & Constitution",
+                "World History & Geography",
+                "Current Events & Contemporary Issues",
+                "Philippine Culture, Arts & Literature",
             ],
         },
     ],
